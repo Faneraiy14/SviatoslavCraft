@@ -21,7 +21,11 @@ public class LwjglWindow implements Window {
         glfwDefaultWindowHints();
         glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-        glfwWindowHint(GLFW_SAMPLES, 4);
+        // РЕАЛЬНА ОПТИМІЗАЦІЯ: 4x MSAA коштовне на слабкій/інтегрованій
+        // графіці (кожен піксель рахується вчетверо) - Sviatoslav попросив
+        // "тягнуло навіть на сміттєвому відрі", 2x лишає прийнятне
+        // згладжування країв за половину вартості.
+        glfwWindowHint(GLFW_SAMPLES, 2);
         // РЕАЛЬНИЙ ФІКС (був відсутній у чернетці DeepSeek): рендерер увесь
         // на immediate-mode (glBegin/glVertex3f), який існує ЛИШЕ в
         // compatibility-профілі. Без явної версії GLFW бере "яку дасть

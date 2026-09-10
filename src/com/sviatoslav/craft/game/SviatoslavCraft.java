@@ -50,15 +50,45 @@ public class SviatoslavCraft {
 
             // Контур навколо блока, на який дивишся - той самий raycast, що
             // й для ламання/постановки, лише для відображення (реальна
-            // фіча, якої в чернетці не було взагалі).
+            // фіча, якої в чернетці не було взагалі). Рахуємо ОДИН раз тут
+            // і віддаємо той самий hit у F3-оверлей нижче (TARGET: x y z
+            // тип) - раніше debug.render() рахував (чи то й не рахував
+            // узагалі) окремо, тепер курсор і цифри на екрані завжди про
+            // ОДИН і той самий блок, зручно звіряти "чи дотягнувся туди,
+            // куди не мав би" по РЕАЛЬНИХ координатах, а не на око.
+            BlockRayCast.Hit hit = null;
             if (player != null && world != null) {
-                var hit = BlockRayCast.cast(player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch(), world);
-                if (hit != null) renderer.renderWireCube(hit.hitX() + 0.5f, hit.hitY() + 0.5f, hit.hitZ() + 0.5f, 1.02f);
+                hit = BlockRayCast.cast(player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch(), world);
+                // grid-координата hit -> світова float-позиція (той самий
+                // масштаб Chunk.BLOCK_SIZE, що й рендер блоків у World).
+                if (hit != null) renderer.renderWireCube(
+                    (hit.hitX() + 0.5f) * Chunk.BLOCK_SIZE, (hit.hitY() + 0.5f) * Chunk.BLOCK_SIZE, (hit.hitZ() + 0.5f) * Chunk.BLOCK_SIZE,
+                    Chunk.BLOCK_SIZE * 1.02f);
             }
 
+            // Приціл по центру екрана (Sviatoslav попросив) - без нього
+            // незрозуміло, куди саме дивишся, коли в межах досяжності
+            // немає жодного блока (renderWireCube тоді взагалі не малюється).
+            renderer.renderCrosshair(1280, 720);
+
             if (debug.isVisible() && player != null) {
+                String targetInfo;
+                if (hit == null) {
+                    targetInfo = "NONE";
+                } else {
+                    Block hb = world.getBlock(hit.hitX(), hit.hitY(), hit.hitZ());
+                    // (grid+0.5)*BLOCK_SIZE - та сама світова позиція
+                    // центру блока, що й для рендеру/прицільного куба вище.
+                    float dist = (float) Math.sqrt(
+                        Math.pow((hit.hitX() + 0.5f) * Chunk.BLOCK_SIZE - player.getX(), 2) +
+                        Math.pow((hit.hitY() + 0.5f) * Chunk.BLOCK_SIZE - player.getY(), 2) +
+                        Math.pow((hit.hitZ() + 0.5f) * Chunk.BLOCK_SIZE - player.getZ(), 2));
+                    targetInfo = hit.hitX() + "," + hit.hitY() + "," + hit.hitZ()
+                        + " " + (hb != null ? hb.getType() : "?") + " D=" + ((int)(dist*10))/10.0f;
+                }
                 debug.render(player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch(),
-                             gameLoop.getFPS(), world != null ? world.getChunks().values().stream().mapToInt(c -> c.getBlocks().size()).sum() : 0);
+                             gameLoop.getFPS(), world != null ? world.getChunks().values().stream().mapToInt(c -> c.getBlocks().size()).sum() : 0,
+                             targetInfo);
             }
         }
         window.swapBuffers();
@@ -72,9 +102,14 @@ public class SviatoslavCraft {
         inventory = new Inventory();
         for (int i = 0; i < 20; i++) { world.update(player.getX(), player.getZ()); try { Thread.sleep(50); } catch (InterruptedException e) {} }
         boolean found = false;
+        // player.getX()/getZ() - СВІТОВІ float-координати; getBlock()
+        // очікує ЦІЛІ grid-координати, тому ділимо на BLOCK_SIZE перед
+        // округленням - інакше на новому масштабі шукали б не в тій
+        // клітинці світу взагалі.
+        int gridX = (int) (player.getX() / Chunk.BLOCK_SIZE), gridZ = (int) (player.getZ() / Chunk.BLOCK_SIZE);
         for (int y = 50; y > 0; y--) {
-            Block b = world.getBlock((int)player.getX(), y, (int)player.getZ());
-            if (b != null && b.getType() != Block.Type.AIR) { renderer.getCamera().setY(y+2.0f); player = new Player(renderer.getCamera(), world); found = true; break; }
+            Block b = world.getBlock(gridX, y, gridZ);
+            if (b != null && b.getType() != Block.Type.AIR) { renderer.getCamera().setY((y+2.0f) * Chunk.BLOCK_SIZE); player = new Player(renderer.getCamera(), world); found = true; break; }
         }
         if (!found) { renderer.getCamera().setY(50.0f); player = new Player(renderer.getCamera(), world); }
         System.out.println("Гра починається!");
@@ -106,7 +141,8 @@ public class SviatoslavCraft {
         if (input.consumeMouseButtonJustPressed(GLFW_MOUSE_BUTTON_RIGHT)) {
             var hit = BlockRayCast.cast(player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch(), world);
             Block.Type selected = inventory.getSelectedBlockType();
-            if (hit != null && selected != null) {
+            if (hit != null && selected != null
+                    && !player.wouldOverlapPlacedBlock(hit.placeX(), hit.placeY(), hit.placeZ())) {
                 world.setBlock(hit.placeX(), hit.placeY(), hit.placeZ(), new Block(selected, 0, 0, 0));
                 inventory.removeSelectedItem();
             }

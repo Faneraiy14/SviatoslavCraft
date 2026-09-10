@@ -32,9 +32,22 @@ public class Player {
     private static final float HEIGHT = 1.8f * Chunk.BLOCK_SIZE;
     private static final float EYE_HEIGHT = 1.6f * Chunk.BLOCK_SIZE;
     private static final float EYE_OFFSET = HEIGHT / 2f - EYE_HEIGHT; // від'ємне - центр AABB нижче очей
-    private float width = 0.6f * Chunk.BLOCK_SIZE, speed = 8.0f * Chunk.BLOCK_SIZE, jumpSpeed = 9.0f * Chunk.BLOCK_SIZE;
+    // speed зменшено (Sviatoslav попросив - "не така різка і не така
+    // швидка") з 8.0 до 5.5.
+    private float width = 0.6f * Chunk.BLOCK_SIZE, speed = 5.5f * Chunk.BLOCK_SIZE, jumpSpeed = 9.0f * Chunk.BLOCK_SIZE;
     private float verticalVelocity = 0;
     private boolean onGround = false;
+    // РЕАЛЬНА фіча (Sviatoslav попросив - "не така різка ходьба... в
+    // майні мене це бісило"): раніше рух був миттєвим - кожен кадр позиція
+    // стрибала прямо на speed*dt у напрямку затиснутих клавіш, і зупинка
+    // теж миттєва в момент відпускання. Тепер горизонтальна швидкість
+    // (velX/velZ) - ОКРЕМИЙ стан, що плавно "доганяє" бажаний напрямок
+    // (експоненційне згладжування, ACCEL_RATE - наскільки швидко) замість
+    // стрибка прямо на неї - і так само плавно гасне до нуля, коли клавіші
+    // відпущені, а не зупиняється миттєво. Швидкий тап-і-відпустити тепер
+    // дає короткий плавний "розгін+гальмування", а не один різкий крок.
+    private float velX = 0, velZ = 0;
+    private static final float ACCEL_RATE = 9f;
 
     public Player(Camera camera, World world) {
         this.camera = camera; this.world = world;
@@ -44,10 +57,46 @@ public class Player {
     // Центр AABB (не рівень очей) для заданого Y камери.
     private float boxCenterY(float eyeY) { return eyeY + EYE_OFFSET; }
 
-    public void moveForward(float d) { float nx = camera.getX() + (float)Math.sin(Math.toRadians(camera.getYaw()))*d; float nz = camera.getZ() - (float)Math.cos(Math.toRadians(camera.getYaw()))*d; moveTo(nx, nz); }
-    public void moveBackward(float d) { float nx = camera.getX() - (float)Math.sin(Math.toRadians(camera.getYaw()))*d; float nz = camera.getZ() + (float)Math.cos(Math.toRadians(camera.getYaw()))*d; moveTo(nx, nz); }
-    public void moveLeft(float d) { float nx = camera.getX() - (float)Math.cos(Math.toRadians(camera.getYaw()))*d; float nz = camera.getZ() - (float)Math.sin(Math.toRadians(camera.getYaw()))*d; moveTo(nx, nz); }
-    public void moveRight(float d) { float nx = camera.getX() + (float)Math.cos(Math.toRadians(camera.getYaw()))*d; float nz = camera.getZ() + (float)Math.sin(Math.toRadians(camera.getYaw()))*d; moveTo(nx, nz); }
+    // Один метод замість 4 окремих moveForward/Backward/Left/Right,
+    // викликаних кожен окремо для затиснутих клавіш - той підхід мав
+    // ПОБІЧНИЙ REAL BUG: якщо затиснуті 2 клавіші одразу (наприклад W+D),
+    // обидва виклики застосовували СВІЙ ПОВНИЙ крок незалежно, тому рух по
+    // діагоналі був у sqrt(2) раз швидший за рух по одній осі (класична,
+    // майже завжди непомітна помилка нормалізації). Тут напрямок від УСІХ
+    // затиснутих клавіш складається в один вектор і нормалізується ОДИН
+    // раз - діагональ тепер із тією самою швидкістю, що й пряма лінія.
+    public void updateMovement(float dt, boolean forward, boolean backward, boolean left, boolean right) {
+        float yawRad = (float) Math.toRadians(camera.getYaw());
+        float fx = (float) Math.sin(yawRad), fz = -(float) Math.cos(yawRad);
+        float rx = (float) Math.cos(yawRad), rz = (float) Math.sin(yawRad);
+
+        float dirX = 0, dirZ = 0;
+        if (forward) { dirX += fx; dirZ += fz; }
+        if (backward) { dirX -= fx; dirZ -= fz; }
+        if (right) { dirX += rx; dirZ += rz; }
+        if (left) { dirX -= rx; dirZ -= rz; }
+
+        boolean hasInput = dirX != 0 || dirZ != 0;
+        float targetVelX = 0, targetVelZ = 0;
+        if (hasInput) {
+            float len = (float) Math.sqrt(dirX*dirX + dirZ*dirZ);
+            targetVelX = dirX / len * speed;
+            targetVelZ = dirZ / len * speed;
+        }
+
+        // Експоненційне згладжування до цільової швидкості (0, якщо
+        // клавіші відпущені) - той самий код "доганяє" і розгін, і
+        // гальмування, лише ціль різна.
+        float t = Math.min(1f, ACCEL_RATE * dt);
+        velX += (targetVelX - velX) * t;
+        velZ += (targetVelZ - velZ) * t;
+
+        // Дуже маленькі залишки швидкості (майже нуль, але не точно)
+        // інакше ніколи повністю не зупинили б гравця - обнуляємо поріг.
+        if (!hasInput && Math.abs(velX) < 0.01f && Math.abs(velZ) < 0.01f) { velX = 0; velZ = 0; }
+
+        moveTo(camera.getX() + velX * dt, camera.getZ() + velZ * dt);
+    }
 
     private void moveTo(float nx, float nz) {
         AABB testX = new AABB(nx, boxCenterY(camera.getY()), camera.getZ(), width, HEIGHT);
@@ -119,7 +168,6 @@ public class Player {
         return false;
     }
 
-    public float getSpeed() { return speed; }
     public float getX() { return camera.getX(); } public float getY() { return camera.getY(); } public float getZ() { return camera.getZ(); }
     public float getYaw() { return camera.getYaw(); } public float getPitch() { return camera.getPitch(); }
 }

@@ -12,6 +12,7 @@ public class SviatoslavCraft {
     private Renderer renderer;
     private GameLoop gameLoop;
     private DebugOverlay debug;
+    private InventoryUI inventoryUI;
     private GameState state = GameState.MENU;
     private boolean running = true;
     private World world;
@@ -25,6 +26,7 @@ public class SviatoslavCraft {
         input = new InputHandler(window.getHandle());
         renderer = new Renderer();
         debug = new DebugOverlay();
+        inventoryUI = new InventoryUI();
         menu = new MenuManager(window, input, 1280, 720);
         gameLoop = new GameLoop();
         gameLoop.start(this::update, this::render, this::shouldClose);
@@ -70,6 +72,15 @@ public class SviatoslavCraft {
             // незрозуміло, куди саме дивишся, коли в межах досяжності
             // немає жодного блока (renderWireCube тоді взагалі не малюється).
             renderer.renderCrosshair(1280, 720);
+
+            // Хотбар (Sviatoslav попросив) - раніше перемикання 1-5 вже
+            // працювало, але НІДЕ на екрані не було видно, що саме вибрано.
+            // Повноекранне вікно (E) - поверх усього іншого, тому в самому
+            // кінці рендеру.
+            if (inventory != null) {
+                inventoryUI.renderHotbar(inventory, 1280, 720);
+                inventoryUI.renderFullScreen(inventory, 1280, 720);
+            }
 
             if (debug.isVisible() && player != null) {
                 String targetInfo;
@@ -117,17 +128,51 @@ public class SviatoslavCraft {
 
     private void updateGame(double deltaTime) {
         float dt = (float) deltaTime;
+        // consumeKeyJustPressed - не isKeyPressed+sleep(200) (був REAL BUG:
+        // isKeyPressed опитувався раз на кадр, швидкий тап міг статись і
+        // скінчитись МІЖ двома опитуваннями, тому натискання іноді
+        // взагалі не реєструвалось - "не з першого разу, не з третього").
+        if (input.consumeKeyJustPressed(GLFW_KEY_F3)) debug.toggle();
+
+        if (input.consumeKeyJustPressed(GLFW_KEY_E)) {
+            inventoryUI.toggle();
+            window.setMouseGrabbed(!inventoryUI.isOpen());
+        }
+
+        // Поки інвентар відкритий - гра на паузі (рух/огляд/клік), як і в
+        // звичайних іграх з інвентарем поверх екрана.
+        if (inventoryUI.isOpen()) {
+            // consumeKeyJustPressed - той самий фікс, що й нижче/у
+            // MenuManager: якщо лишити isKeyPressed, той самий Escape, що
+            // закрив інвентар, міг би на НАСТУПНОМУ кадрі (ще затиснутий)
+            // одразу й перекинути в меню теж.
+            if (input.consumeKeyJustPressed(GLFW_KEY_ESCAPE)) { inventoryUI.close(); window.setMouseGrabbed(true); }
+            // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "закрив інвентар,
+            // дивлюсь геть в інший бік"): ранній return тут пропускав
+            // resetMouse() нижче, тому весь рух миші, накопичений ЗА ВЕСЬ
+            // час, поки інвентар відкритий, лишався в deltaX/deltaY - і в
+            // момент закриття одним різким стрибком застосовувався до
+            // камери. Скидати треба щокадру, незалежно від того, чи
+            // взагалі застосовуємо рух до камери цього кадру.
+            input.resetMouse();
+            return;
+        }
+
         renderer.getCamera().rotate((float)input.getMouseDX()*0.12f, (float)-input.getMouseDY()*0.12f);
         input.resetMouse();
-        if (input.isKeyPressed(GLFW_KEY_F3)) { debug.toggle(); sleep(200); }
         for (int i = 0; i < 5; i++) if (input.isKeyPressed(GLFW_KEY_1 + i)) inventory.selectSlot(i);
+        // Колесо миші (Sviatoslav попросив) - той самий вибір слота, що й
+        // клавіші 1-5, лише прокруткою. Один "нотч" = один слот, знак
+        // накопиченого зсуву визначає напрямок (кілька нотчів за кадр -
+        // рідкість, але про всяк випадок рахуємо саме знак, не суму).
+        double scroll = input.consumeScrollDelta();
+        if (scroll > 0) inventory.previousSlot();
+        else if (scroll < 0) inventory.nextSlot();
         player.updatePhysics(dt);
         if (input.isKeyPressed(GLFW_KEY_SPACE)) player.jump();
-        float speed = player.getSpeed() * dt;
-        if (input.isKeyPressed(GLFW_KEY_W)) player.moveForward(speed);
-        if (input.isKeyPressed(GLFW_KEY_S)) player.moveBackward(speed);
-        if (input.isKeyPressed(GLFW_KEY_A)) player.moveLeft(speed);
-        if (input.isKeyPressed(GLFW_KEY_D)) player.moveRight(speed);
+        player.updateMovement(dt,
+            input.isKeyPressed(GLFW_KEY_W), input.isKeyPressed(GLFW_KEY_S),
+            input.isKeyPressed(GLFW_KEY_A), input.isKeyPressed(GLFW_KEY_D));
         world.update(player.getX(), player.getZ());
 
         // РЕАЛЬНА фіча - ламання (ЛКМ) і постановка (ПКМ) блоків. У
@@ -149,10 +194,13 @@ public class SviatoslavCraft {
         }
 
         if (player.getY() < -10) { renderer.getCamera().setY(50.0f); player = new Player(renderer.getCamera(), world); }
-        if (input.isKeyPressed(GLFW_KEY_ESCAPE)) { state = GameState.MENU; window.setMouseGrabbed(false); }
+        // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "Escape кидає в меню, а
+        // потім гра закривається"): isKeyPressed тут не "з'їдав" натиск,
+        // тому MenuManager.update() наступного кадру бачив ТОЙ САМИЙ ще
+        // затиснутий Escape і трактував як "Вихід". consumeKeyJustPressed.
+        if (input.consumeKeyJustPressed(GLFW_KEY_ESCAPE)) { state = GameState.MENU; window.setMouseGrabbed(false); }
     }
 
     private boolean shouldClose() { return window.shouldClose() || !running; }
-    private void sleep(int ms) { try { Thread.sleep(ms); } catch (InterruptedException e) {} }
     public static void main(String[] args) { new SviatoslavCraft().start(); }
 }

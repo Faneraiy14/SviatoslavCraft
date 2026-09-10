@@ -36,7 +36,16 @@ public class MenuManager {
         if (canNav && (input.isKeyPressed(GLFW_KEY_UP) || input.isKeyPressed(GLFW_KEY_W))) { selected = 0; lastNavTimeMs = now; }
         if (canNav && (input.isKeyPressed(GLFW_KEY_DOWN) || input.isKeyPressed(GLFW_KEY_S))) { selected = 1; lastNavTimeMs = now; }
         if (input.isKeyPressed(GLFW_KEY_ENTER) || input.isKeyPressed(GLFW_KEY_SPACE)) return selected == 0 ? "PLAY" : "EXIT";
-        if (input.isKeyPressed(GLFW_KEY_ESCAPE)) return "EXIT";
+        // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "Escape з гри кидає в
+        // меню, а потім гра взагалі закривається"): тут стояв isKeyPressed
+        // (утримується ЗАРАЗ) - той самий фізичний натиск Escape, яким
+        // SviatoslavCraft.updateGame() щойно перевів стан гра->меню, ще
+        // лишався "затиснутим" на наступному кадрі (людина не встигає
+        // відпустити клавішу за 1/60с) - і ЦЕЙ метод бачив ту саму Escape
+        // ще раз і одразу трактував як "Вихід" із застосунку. consumeKeyJustPressed
+        // "з'їдає" прапорець - хто перевірить першим (тут чи updateGame),
+        // той його й використає, другий уже не побачить того самого натиску.
+        if (input.consumeKeyJustPressed(GLFW_KEY_ESCAPE)) return "EXIT";
 
         double mx = input.getMouseX(), my = input.getMouseY();
         if (isOver(0, mx, my)) selected = 0;

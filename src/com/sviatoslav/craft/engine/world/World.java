@@ -47,16 +47,25 @@ public class World {
                 });
             }
         }
+        // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "просто йду і можу
+        // зависнути", те саме, що й у ванільному Minecraft): saveChunkToDisk
+        // (файловий запис через Java Serialization) викликався ТУТ, а цей
+        // метод сам викликається з update() ГОЛОВНИМ потоком (тим самим,
+        // що й render()) - на відміну від генерації нових чанків
+        // (chunkExecutor.submit вище), збереження вивантажених чанків було
+        // СИНХРОННИМ, блокуючи кадр диском щоразу, як перетнута межа
+        // loadDistance вивантажувала одразу кілька чанків. glDeleteLists
+        // МУСИТЬ лишитись на головному потоці (GL-виклик), а от сам запис
+        // на диск - ні, переносимо в chunkExecutor.
         chunks.entrySet().removeIf(e -> {
             String[] p = e.getKey().split(",");
             int x = Integer.parseInt(p[0]), z = Integer.parseInt(p[1]);
             if (Math.abs(x - cx) > loadDistance || Math.abs(z - cz) > loadDistance) {
-                saveChunkToDisk(e.getValue());
-                // Виклик ЛИШЕ з update() (головний потік, той самий, що й
-                // render()) - безпечно звільняти GL-ресурс тут.
-                if (e.getValue().displayListId > 0) {
-                    org.lwjgl.opengl.GL11.glDeleteLists(e.getValue().displayListId, 1);
+                Chunk chunk = e.getValue();
+                if (chunk.displayListId > 0) {
+                    org.lwjgl.opengl.GL11.glDeleteLists(chunk.displayListId, 1);
                 }
+                chunkExecutor.submit(() -> saveChunkToDisk(chunk));
                 return true;
             }
             return false;
@@ -111,7 +120,11 @@ public class World {
         if (c != null) {
             int localX = x - cx*Chunk.SIZE, localZ = z - cz*Chunk.SIZE;
             c.setBlock(localX, y, localZ, new Block(block.getType(), localX, y, localZ));
-            saveChunkToDisk(c);
+            // Той самий фікс, що й у loadChunksAsync вище - запис на диск
+            // ПІСЛЯ кожного зламаного/поставленого блока теж синхронно
+            // блокував кадр (setBlock викликається прямо з обробника
+            // кліку в головному потоці).
+            chunkExecutor.submit(() -> saveChunkToDisk(c));
             // Зміна блока на самій межі чанка може розкрити/сховати грань і
             // в СУСІДНЬОМУ чанку - його display list теж застаріває.
             if (localX == 0) markDirtyIfLoaded(cx - 1, cz);
@@ -196,15 +209,8 @@ public class World {
             boolean front = isBlockVisible((int)x, (int)y, (int)z+1), back = isBlockVisible((int)x, (int)y, (int)z-1);
             boolean left = isBlockVisible((int)x-1, (int)y, (int)z), right = isBlockVisible((int)x+1, (int)y, (int)z);
             if (!top && !bottom && !front && !back && !left && !right) continue;
-            float r=0.2f, g=0.6f, b=0.2f;
-            switch (block.getType()) {
-                case GRASS: r=0.2f; g=0.7f; b=0.1f; break;
-                case DIRT: r=0.5f; g=0.3f; b=0.1f; break;
-                case STONE: r=0.5f; g=0.5f; b=0.5f; break;
-                case WOOD: r=0.4f; g=0.2f; b=0.05f; break;
-                case LEAVES: r=0.0f; g=0.5f; b=0.0f; break;
-                default: break;
-            }
+            float[] color = Block.colorFor(block.getType());
+            float r = color[0], g = color[1], b = color[2];
             // grid-координата (x,y,z) -> світова float-позиція через
             // Chunk.BLOCK_SIZE (див. коментар при константі) - розмір
             // куба теж BLOCK_SIZE, не 1.0, щоб суцільно стикався із

@@ -13,7 +13,14 @@ public class World {
     private int loadDistance = 4, renderDistance = 2;
     private int lastChunkX = Integer.MAX_VALUE, lastChunkZ = Integer.MAX_VALUE;
     private String saveFolder = "saves/world1/";
-    private ExecutorService chunkExecutor = Executors.newFixedThreadPool(4);
+    // РЕАЛЬНИЙ ФІКС (Sviatoslav - "все ще трохи підлагує"): на 4-ядерному
+    // ноутбуці пул був теж на 4 потоки - перетин межі loadDistance
+    // одразу ставить у чергу ~7-9 задач генерації чанків, і пул міг
+    // зайняти ВСІ 4 ядра одночасно САМЕ в момент, коли головному
+    // потоку (рендер+фізика+ввід) теж треба виконуватись - реальна
+    // конкуренція за CPU, не просто "фонова" робота. 2 потоки лишають
+    // ядра вільними для головного потоку й GC.
+    private ExecutorService chunkExecutor = Executors.newFixedThreadPool(2);
 
     public World() { new File(saveFolder).mkdirs(); }
 
@@ -202,12 +209,24 @@ public class World {
     }
 
     private void buildChunkGeometry(Chunk chunk, Renderer renderer) {
-        for (Block block : chunk.getBlocks().values()) {
-            if (block == null || block.getType() == Block.Type.AIR) continue;
-            float x = block.getX() + chunk.getChunkX()*Chunk.SIZE, y = block.getY(), z = block.getZ() + chunk.getChunkZ()*Chunk.SIZE;
-            boolean top = isBlockVisible((int)x, (int)y+1, (int)z), bottom = isBlockVisible((int)x, (int)y-1, (int)z);
-            boolean front = isBlockVisible((int)x, (int)y, (int)z+1), back = isBlockVisible((int)x, (int)y, (int)z-1);
-            boolean left = isBlockVisible((int)x-1, (int)y, (int)z), right = isBlockVisible((int)x+1, (int)y, (int)z);
+        // Плаский масив (Chunk.getBlocksArray) замість HashMap.values() -
+        // ітеруємо за індексом і рахуємо lx/ly/lz назад із тієї самої
+        // формули, що й Chunk.idx() (x + z*SIZE + y*SIZE*SIZE), без жодних
+        // String-ключів чи автобоксингу.
+        Block[] arr = chunk.getBlocksArray();
+        int baseX = chunk.getChunkX() * Chunk.SIZE, baseZ = chunk.getChunkZ() * Chunk.SIZE;
+        int planeSize = Chunk.SIZE * Chunk.SIZE;
+        for (int i = 0; i < arr.length; i++) {
+            Block block = arr[i];
+            if (block == null) continue;
+            int ly = i / planeSize;
+            int rem = i % planeSize;
+            int lz = rem / Chunk.SIZE;
+            int lx = rem % Chunk.SIZE;
+            int x = lx + baseX, y = ly, z = lz + baseZ;
+            boolean top = isBlockVisible(x, y+1, z), bottom = isBlockVisible(x, y-1, z);
+            boolean front = isBlockVisible(x, y, z+1), back = isBlockVisible(x, y, z-1);
+            boolean left = isBlockVisible(x-1, y, z), right = isBlockVisible(x+1, y, z);
             if (!top && !bottom && !front && !back && !left && !right) continue;
             float[] color = Block.colorFor(block.getType());
             float r = color[0], g = color[1], b = color[2];

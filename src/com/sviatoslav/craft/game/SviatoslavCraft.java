@@ -68,10 +68,26 @@ public class SviatoslavCraft {
                     Chunk.BLOCK_SIZE * 1.02f);
             }
 
+            // "Тіло" гравця (F5, 3-я особа) - лише коробка-заглушка, у грі
+            // нема справжньої моделі. ЛИШЕ коли не від першої особи -
+            // інакше коробка малювалась би прямо перед/навколо камери.
+            if (player != null && renderer.getCamera().getViewMode() != Camera.ViewMode.FIRST_PERSON) {
+                renderer.renderBox(player.getX(), player.getBodyCenterY(), player.getZ(),
+                    player.getWidth() / 2f, player.getBodyHeight() / 2f, 0.85f, 0.7f, 0.55f);
+            }
+
             // Приціл по центру екрана (Sviatoslav попросив) - без нього
             // незрозуміло, куди саме дивишся, коли в межах досяжності
             // немає жодного блока (renderWireCube тоді взагалі не малюється).
-            renderer.renderCrosshair(1280, 720);
+            // ЛИШЕ від першої особи - у 3-й особі приціл у центрі екрана не
+            // відповідав би реальній точці прицілювання (raycast і далі
+            // йде від СПРАВЖНЬОГО ока гравця, не від відсунутої камери,
+            // інакше ламання/постановка блоків цілились би не туди, куди
+            // дивиться сама камера) - той самий підхід, що й у Minecraft
+            // (приціл ховається поза 1-ю особою).
+            if (renderer.getCamera().getViewMode() == Camera.ViewMode.FIRST_PERSON) {
+                renderer.renderCrosshair(1280, 720);
+            }
 
             // Хотбар (Sviatoslav попросив) - раніше перемикання 1-5 вже
             // працювало, але НІДЕ на екрані не було видно, що саме вибрано.
@@ -98,7 +114,7 @@ public class SviatoslavCraft {
                         + " " + (hb != null ? hb.getType() : "?") + " D=" + ((int)(dist*10))/10.0f;
                 }
                 debug.render(player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch(),
-                             gameLoop.getFPS(), world != null ? world.getChunks().values().stream().mapToInt(c -> c.getBlocks().size()).sum() : 0,
+                             gameLoop.getFPS(), world != null ? world.getChunks().values().stream().mapToInt(Chunk::getBlockCount).sum() : 0,
                              targetInfo);
             }
         }
@@ -133,6 +149,7 @@ public class SviatoslavCraft {
         // скінчитись МІЖ двома опитуваннями, тому натискання іноді
         // взагалі не реєструвалось - "не з першого разу, не з третього").
         if (input.consumeKeyJustPressed(GLFW_KEY_F3)) debug.toggle();
+        if (input.consumeKeyJustPressed(GLFW_KEY_F5)) renderer.getCamera().cycleViewMode();
 
         if (input.consumeKeyJustPressed(GLFW_KEY_E)) {
             inventoryUI.toggle();
@@ -170,9 +187,11 @@ public class SviatoslavCraft {
         else if (scroll < 0) inventory.nextSlot();
         player.updatePhysics(dt);
         if (input.isKeyPressed(GLFW_KEY_SPACE)) player.jump();
+        boolean sprint = input.isKeyPressed(GLFW_KEY_LEFT_CONTROL) || input.isKeyPressed(GLFW_KEY_RIGHT_CONTROL);
+        boolean crouch = input.isKeyPressed(GLFW_KEY_LEFT_SHIFT);
         player.updateMovement(dt,
             input.isKeyPressed(GLFW_KEY_W), input.isKeyPressed(GLFW_KEY_S),
-            input.isKeyPressed(GLFW_KEY_A), input.isKeyPressed(GLFW_KEY_D));
+            input.isKeyPressed(GLFW_KEY_A), input.isKeyPressed(GLFW_KEY_D), sprint, crouch);
         world.update(player.getX(), player.getZ());
 
         // РЕАЛЬНА фіча - ламання (ЛКМ) і постановка (ПКМ) блоків. У

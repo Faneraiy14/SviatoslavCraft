@@ -48,6 +48,22 @@ public class Player {
     // дає короткий плавний "розгін+гальмування", а не один різкий крок.
     private float velX = 0, velZ = 0;
     private static final float ACCEL_RATE = 9f;
+    // Спринт (Sviatoslav попросив - Ctrl+W біжить, як у Minecraft):
+    // множник швидкості, лише поки затиснуто вперед (Ctrl+A/S/D без W не
+    // прискорює - той самий принцип, що й у ванільній грі, інакше
+    // "спринт назад" виглядав би дивно).
+    private static final float SPRINT_MULTIPLIER = 1.6f;
+    // Присід (Sviatoslav попросив - лівий Shift, "майже повзе", і не дає
+    // впасти з краю блока, як у Minecraft).
+    private static final float CROUCH_MULTIPLIER = 0.3f;
+    // Опускання камери на присіді (Sviatoslav - "інакше як гравець
+    // зрозуміє, що він присів") - ЛИШЕ візуально (Camera.viewYOffset, не
+    // сама фізична Y), плавно згладжується тим самим принципом, що й
+    // velX/velZ вище, і повертається назад так само плавно, коли Shift
+    // відпущено.
+    private float crouchOffset = 0;
+    private static final float CROUCH_EYE_DROP = 0.4f * Chunk.BLOCK_SIZE;
+    private static final float CROUCH_TRANSITION_RATE = 10f;
 
     public Player(Camera camera, World world) {
         this.camera = camera; this.world = world;
@@ -65,7 +81,7 @@ public class Player {
     // майже завжди непомітна помилка нормалізації). Тут напрямок від УСІХ
     // затиснутих клавіш складається в один вектор і нормалізується ОДИН
     // раз - діагональ тепер із тією самою швидкістю, що й пряма лінія.
-    public void updateMovement(float dt, boolean forward, boolean backward, boolean left, boolean right) {
+    public void updateMovement(float dt, boolean forward, boolean backward, boolean left, boolean right, boolean sprint, boolean crouch) {
         float yawRad = (float) Math.toRadians(camera.getYaw());
         float fx = (float) Math.sin(yawRad), fz = -(float) Math.cos(yawRad);
         float rx = (float) Math.cos(yawRad), rz = (float) Math.sin(yawRad);
@@ -80,8 +96,11 @@ public class Player {
         float targetVelX = 0, targetVelZ = 0;
         if (hasInput) {
             float len = (float) Math.sqrt(dirX*dirX + dirZ*dirZ);
-            targetVelX = dirX / len * speed;
-            targetVelZ = dirZ / len * speed;
+            // Присід переважає спринт (як у Minecraft - на Ctrl+Shift+W
+            // біжати не можна, лише повзти).
+            float s = crouch ? speed * CROUCH_MULTIPLIER : (sprint && forward) ? speed * SPRINT_MULTIPLIER : speed;
+            targetVelX = dirX / len * s;
+            targetVelZ = dirZ / len * s;
         }
 
         // Експоненційне згладжування до цільової швидкості (0, якщо
@@ -95,14 +114,38 @@ public class Player {
         // інакше ніколи повністю не зупинили б гравця - обнуляємо поріг.
         if (!hasInput && Math.abs(velX) < 0.01f && Math.abs(velZ) < 0.01f) { velX = 0; velZ = 0; }
 
-        moveTo(camera.getX() + velX * dt, camera.getZ() + velZ * dt);
+        float targetCrouchOffset = crouch ? -CROUCH_EYE_DROP : 0f;
+        float ct = Math.min(1f, CROUCH_TRANSITION_RATE * dt);
+        crouchOffset += (targetCrouchOffset - crouchOffset) * ct;
+        camera.setViewYOffset(crouchOffset);
+
+        moveTo(camera.getX() + velX * dt, camera.getZ() + velZ * dt, crouch);
     }
 
-    private void moveTo(float nx, float nz) {
+    // preventFallOff - лише поки на землі (onGround): у повітрі (стрибок/
+    // падіння) заборона рухатись "у порожнечу" не має сенсу, гравець і так
+    // уже не на блоці.
+    private void moveTo(float nx, float nz, boolean preventFallOff) {
         AABB testX = new AABB(nx, boxCenterY(camera.getY()), camera.getZ(), width, HEIGHT);
-        if (!collidesWithWorld(testX)) camera.setX(nx);
+        boolean edgeX = preventFallOff && onGround && !isGroundedAt(nx, camera.getZ());
+        if (!collidesWithWorld(testX) && !edgeX) camera.setX(nx);
         AABB testZ = new AABB(camera.getX(), boxCenterY(camera.getY()), nz, width, HEIGHT);
-        if (!collidesWithWorld(testZ)) camera.setZ(nz);
+        boolean edgeZ = preventFallOff && onGround && !isGroundedAt(camera.getX(), nz);
+        if (!collidesWithWorld(testZ) && !edgeZ) camera.setZ(nz);
+    }
+
+    // Тонкий "щуп" одразу під ногами гравця в позиції (x,z) - чи є там
+    // суцільний блок. Використовується ЛИШЕ для захисту від падіння на
+    // присіді (Sviatoslav попросив - "як в майні не може впасти з краю
+    // блока на шифті"): якщо під новою позицією ніг нічого нема, той крок
+    // просто не застосовується (той самий принцип, що й звичайна колізія
+    // testX/testZ вище, лише перевіряє ВІДСУТНІСТЬ опори, а не наявність
+    // перешкоди).
+    private boolean isGroundedAt(float x, float z) {
+        float feetY = boxCenterY(camera.getY()) - HEIGHT / 2f;
+        float probeHeight = 0.1f * Chunk.BLOCK_SIZE;
+        AABB probe = new AABB(x, feetY - probeHeight / 2f, z, width, probeHeight);
+        return collidesWithWorld(probe);
     }
 
     public void jump() { if (onGround) { verticalVelocity = jumpSpeed; onGround = false; } }
@@ -170,4 +213,10 @@ public class Player {
 
     public float getX() { return camera.getX(); } public float getY() { return camera.getY(); } public float getZ() { return camera.getZ(); }
     public float getYaw() { return camera.getYaw(); } public float getPitch() { return camera.getPitch(); }
+
+    // Для рендеру "тіла" гравця в 3-й особі (F5) - справжньої моделі в
+    // грі нема, лише коробка-заглушка розміром із хітбокс.
+    public float getBodyCenterY() { return boxCenterY(camera.getY()); }
+    public float getWidth() { return width; }
+    public float getBodyHeight() { return HEIGHT; }
 }

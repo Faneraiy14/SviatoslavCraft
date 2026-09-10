@@ -60,6 +60,28 @@ public class Renderer {
         glPopMatrix();
     }
 
+    // "Тіло" гравця в 3-й особі (F5) - справжньої моделі гравця в грі
+    // нема, тому коробка-заглушка (не куб - ширина/глибина ≠ висота),
+    // завжди всі 6 граней (окремий об'єкт, не частина сітки чанка - нема
+    // сусідів, що ховали б грані). Той самий порядок вершин TOP/BOTTOM,
+    // що й у виправленому renderCube вище - інакше знову зникли б згори/
+    // знизу з GL_CULL_FACE.
+    public void renderBox(float x, float y, float z, float halfWidth, float halfHeight, float r, float g, float b) {
+        glPushMatrix();
+        glTranslatef(x, y, z);
+        glColor3f(r, g, b);
+        float hw = halfWidth, hh = halfHeight;
+        glBegin(GL_QUADS);
+        glVertex3f(-hw,hh,-hw); glVertex3f(-hw,hh,hw); glVertex3f(hw,hh,hw); glVertex3f(hw,hh,-hw);
+        glVertex3f(-hw,-hh,-hw); glVertex3f(hw,-hh,-hw); glVertex3f(hw,-hh,hw); glVertex3f(-hw,-hh,hw);
+        glVertex3f(-hw,-hh,hw); glVertex3f(hw,-hh,hw); glVertex3f(hw,hh,hw); glVertex3f(-hw,hh,hw);
+        glVertex3f(-hw,-hh,-hw); glVertex3f(-hw,hh,-hw); glVertex3f(hw,hh,-hw); glVertex3f(hw,-hh,-hw);
+        glVertex3f(-hw,-hh,-hw); glVertex3f(-hw,-hh,hw); glVertex3f(-hw,hh,hw); glVertex3f(-hw,hh,-hw);
+        glVertex3f(hw,-hh,-hw); glVertex3f(hw,hh,-hw); glVertex3f(hw,hh,hw); glVertex3f(hw,-hh,hw);
+        glEnd();
+        glPopMatrix();
+    }
+
     // Контур навколо блока, на який дивишся (targeting-курсор) - GL_LINE_LOOP
     // по кожній грані, трохи більший за куб (offset), щоб не "воювати" з
     // кольором грані (z-fighting). БІЛИЙ, не чорний (був чорний - Sviatoslav

@@ -1,13 +1,21 @@
 package com.sviatoslav.craft.engine.world;
 
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Random;
 
 public class Chunk implements Serializable {
-    private static final long serialVersionUID = 1L;
+    // Версію піднято - формат збереження ЗМІНЕНО (HashMap<String,Block> ->
+    // плаский масив, див. коментар при `blocks` нижче), старі файли
+    // saves/world1/*.dat більше НЕ сумісні (readObject кине
+    // InvalidClassException, loadChunkFromDisk у World це ловить і просто
+    // згенерує чанк заново на тому самому місці - не крах, але старі
+    // побудови гравця на тій ділянці не відновляться).
+    private static final long serialVersionUID = 2L;
     public static final int SIZE = 16;
+    // Скільки по висоті може сягати чанк (генерація рельєфу - максимум
+    // ~9-10, дерева - ще трохи вище; із запасом під ручну забудову
+    // гравцем).
+    public static final int MAX_HEIGHT = 64;
     // Sviatoslav попросив "блоки більшими, але щоб не перетинались" -
     // тобто розмір блока = відстань між сусідніми (як і зараз, 1:1), лише
     // сам масштаб більший. ОДНА спільна константа для всього світу:
@@ -20,8 +28,27 @@ public class Chunk implements Serializable {
     // проходив би крізь "повітря", яке насправді вже частина куба.
     public static final float BLOCK_SIZE = 1.5f;
     private int chunkX, chunkZ;
-    private Map<String, Block> blocks = new HashMap<>();
+    // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "фризи, коли чанки
+    // з'являються/вивантажуються"): раніше тут був `HashMap<String,Block>`
+    // з ключем "x,y,z" - КОЖЕН getBlock/setBlock будував новий String
+    // (конкатенація + подальше хешування). getBlock викликається
+    // величезну кількість разів САМЕ під час перебудови display list'а
+    // (World.isBlockVisible - до 6 разів на КОЖЕН блок чанка, для
+    // перевірки видимості кожної грані) - для чанка з ~1000-2000 блоків
+    // це тисячі короткоживучих String-об'єктів одразу, що ставали сміттям
+    // у той самий момент. Перебудова відбувається саме тоді, коли чанк
+    // щойно згенерувався чи сусід вивантажився (dirty-позначка) - тому
+    // сплески сміття були синхронізовані ТОЧНО з появою/вивантаженням
+    // чанків, як і описав Sviatoslav. Плаский масив з прямим індексом
+    // (x + z*SIZE + y*SIZE*SIZE) - доступ за O(1) без виділення пам'яті
+    // й без хешування рядка.
+    private Block[] blocks = new Block[SIZE * SIZE * MAX_HEIGHT];
     private transient Random random;
+
+    private static int idx(int x, int y, int z) { return x + z * SIZE + y * SIZE * SIZE; }
+    private static boolean inBounds(int x, int y, int z) {
+        return x >= 0 && x < SIZE && z >= 0 && z < SIZE && y >= 0 && y < MAX_HEIGHT;
+    }
 
     // Display list для батчингу рендеру (НЕ серіалізується - лише
     // рантайм-стан OpenGL). displayListId <= 0 означає "ще не побудований"
@@ -85,12 +112,21 @@ public class Chunk implements Serializable {
     }
 
     public void setBlock(int x, int y, int z, Block block) {
-        String key = x+","+y+","+z;
-        if (block.getType() == Block.Type.AIR) blocks.remove(key);
-        else blocks.put(key, block);
+        if (!inBounds(x, y, z)) return;
+        blocks[idx(x, y, z)] = block.getType() == Block.Type.AIR ? null : block;
         dirty = true;
     }
-    public Block getBlock(int x, int y, int z) { return blocks.get(x+","+y+","+z); }
-    public Map<String, Block> getBlocks() { return blocks; }
+    public Block getBlock(int x, int y, int z) {
+        return inBounds(x, y, z) ? blocks[idx(x, y, z)] : null;
+    }
+    // Прямий доступ до масиву (World.buildChunkGeometry ітерує за
+    // індексом, обчислюючи lx/ly/lz назад через idx() - без .values()/
+    // ітератора HashMap, яких тут уже нема).
+    public Block[] getBlocksArray() { return blocks; }
+    public int getBlockCount() {
+        int n = 0;
+        for (Block b : blocks) if (b != null) n++;
+        return n;
+    }
     public int getChunkX() { return chunkX; } public int getChunkZ() { return chunkZ; }
 }

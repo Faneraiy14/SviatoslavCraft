@@ -214,6 +214,17 @@ public class Player {
     public float getX() { return camera.getX(); } public float getY() { return camera.getY(); } public float getZ() { return camera.getZ(); }
     public float getYaw() { return camera.getYaw(); } public float getPitch() { return camera.getPitch(); }
 
+    // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "приціл дивиться туда же
+    // коли я стою [хоча я присів]"): raycast (BlockRayCast) рахувався від
+    // camera.getY() - ФІЗИЧНОГО ока, яке на присіді СВІДОМО не
+    // змінюється (щоб не ламати колізію/гравітацію). Але камера
+    // РЕНДЕРИТЬСЯ з опущеної позиції (Camera.viewYOffset) - тобто те, що
+    // ти БАЧИШ, і те, куди РЕАЛЬНО цілишся, розходились рівно на висоту
+    // присіду. getAimY() додає той самий візуальний зсув до ока - приціл
+    // тепер завжди йде від ТОЧКИ, яку ти бачиш у кадрі, а не від
+    // "недоторканої" фізичної висоти.
+    public float getAimY() { return camera.getY() + camera.getViewYOffset(); }
+
     // Для рендеру "тіла" гравця в 3-й особі (F5) - справжньої моделі в
     // грі нема, лише коробка-заглушка розміром із хітбокс.
     public float getBodyCenterY() { return boxCenterY(camera.getY()); }

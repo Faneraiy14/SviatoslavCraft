@@ -55,11 +55,22 @@ public final class GLBitmapFont {
     }
 
     // 2D-текст в ортографічній проєкції (викликач вже мусить бути в
-    // ортопроєкції, як DebugOverlay нижче) - кожна "точка" гліфа - окремий
-    // невеликий GL_QUADS.
+    // ортопроєкції, як DebugOverlay нижче).
+    //
+    // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "FPS 7-13 само по собі",
+    // саме з відкритим F3): раніше КОЖЕН закрашений піксель гліфа мав
+    // ВЛАСНИЙ окремий glBegin(GL_QUADS)/glEnd() - для рядка F3 (~90
+    // символів, ~12-15 закрашених пікселів на символ) це понад 1000
+    // ОКРЕМИХ пар glBegin/glEnd ЩОКАДРУ, без жодного кешування (на
+    // відміну від геометрії світу, яка компілюється в display list один
+    // раз і лише відтворюється). Кожен glBegin/glEnd - перехід через JNI
+    // в LWJGL, і саме кількість таких переходів (не кількість вершин) тут
+    // і була вузьким місцем. Тепер ОДИН glBegin на весь рядок - ті самі
+    // вершини, лише без тисяч зайвих переходів.
     public static void draw(String text, float x, float y, float scale, float r, float g, float b) {
         glColor3f(r, g, b);
         float cursorX = x;
+        glBegin(GL_QUADS);
         for (char raw : text.toCharArray()) {
             char c = Character.toUpperCase(raw);
             String[] rows = GLYPHS.get(c);
@@ -70,15 +81,14 @@ public final class GLBitmapFont {
                     if (line.charAt(col) != '#') continue;
                     float px = cursorX + col * scale;
                     float py = y + row * scale;
-                    glBegin(GL_QUADS);
                     glVertex2f(px, py);
                     glVertex2f(px + scale, py);
                     glVertex2f(px + scale, py + scale);
                     glVertex2f(px, py + scale);
-                    glEnd();
                 }
             }
             cursorX += 6 * scale;
         }
+        glEnd();
     }
 }

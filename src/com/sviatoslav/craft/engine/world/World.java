@@ -9,10 +9,24 @@ import java.util.concurrent.TimeUnit;
 import com.sviatoslav.craft.engine.graphics.Renderer;
 
 public class World {
-    private Map<String, Chunk> chunks = new ConcurrentHashMap<>();
+    // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "фризи, коли бігаю,
+    // стрибаю, мотаю камерою і завантажуються/вивантажуються чанки"): той
+    // самий патерн, що я вже виправив УСЕРЕДИНІ Chunk (String-ключ "x,y,z"
+    // -> плаский масив), лишався ТУТ, на рівень вище - chunks і далі
+    // ключувався рядком "x,z". getChunk() (через getBlock/isBlockVisible)
+    // викликається ТИСЯЧІ разів під час КОЖНОЇ перебудови чанка (6
+    // перевірок видимості на кожен блок) - кожен виклик будував НОВИЙ
+    // String. Плюс chunks.entrySet().removeIf() при вивантаженні
+    // РОЗБИРАВ той рядок назад через split(",")+parseInt - ще одна купа
+    // виділень на кожен перетин межі loadDistance. Long-ключ (cx у
+    // старших 32 бітах, cz у молодших) - жодних рядків, лише
+    // побітові операції.
+    private Map<Long, Chunk> chunks = new ConcurrentHashMap<>();
+    private static long chunkKey(int cx, int cz) { return ((long) cx << 32) | (cz & 0xFFFFFFFFL); }
+
     private int loadDistance = 4, renderDistance = 2;
     private int lastChunkX = Integer.MAX_VALUE, lastChunkZ = Integer.MAX_VALUE;
-    private String saveFolder = "saves/world1/";
+    private String saveFolder;
     // РЕАЛЬНИЙ ФІКС (Sviatoslav - "все ще трохи підлагує"): на 4-ядерному
     // ноутбуці пул був теж на 4 потоки - перетин межі loadDistance
     // одразу ставить у чергу ~7-9 задач генерації чанків, і пул міг
@@ -22,7 +36,14 @@ public class World {
     // ядра вільними для головного потоку й GC.
     private ExecutorService chunkExecutor = Executors.newFixedThreadPool(2);
 
-    public World() { new File(saveFolder).mkdirs(); }
+    // РЕАЛЬНА фіча (Sviatoslav попросив - екран вибору світу як у
+    // Minecraft): раніше папка збереження була ЖОРСТКО "saves/world1" -
+    // тепер кожен світ отримує свою папку за назвою, обраною на екрані
+    // вибору/створення світу (WorldSelectManager).
+    public World(String worldName) {
+        this.saveFolder = "saves/" + worldName + "/";
+        new File(saveFolder).mkdirs();
+    }
 
     // px/pz - СВІТОВІ float-координати гравця (масштаб Chunk.BLOCK_SIZE);
     // спершу переводимо в grid-простір (/BLOCK_SIZE), а вже тоді - у
@@ -38,7 +59,7 @@ public class World {
     private void loadChunksAsync(int cx, int cz) {
         for (int dx = -loadDistance; dx <= loadDistance; dx++) for (int dz = -loadDistance; dz <= loadDistance; dz++) {
             int tx = cx + dx, tz = cz + dz;
-            String key = tx+","+tz;
+            long key = chunkKey(tx, tz);
             if (!chunks.containsKey(key)) {
                 chunkExecutor.submit(() -> {
                     Chunk chunk = loadChunkFromDisk(tx, tz);
@@ -65,8 +86,8 @@ public class World {
         // МУСИТЬ лишитись на головному потоці (GL-виклик), а от сам запис
         // на диск - ні, переносимо в chunkExecutor.
         chunks.entrySet().removeIf(e -> {
-            String[] p = e.getKey().split(",");
-            int x = Integer.parseInt(p[0]), z = Integer.parseInt(p[1]);
+            long k = e.getKey();
+            int x = (int) (k >> 32), z = (int) k;
             if (Math.abs(x - cx) > loadDistance || Math.abs(z - cz) > loadDistance) {
                 Chunk chunk = e.getValue();
                 if (chunk.displayListId > 0) {
@@ -85,7 +106,7 @@ public class World {
     }
 
     private void markDirtyIfLoaded(int cx, int cz) {
-        Chunk c = chunks.get(cx + "," + cz);
+        Chunk c = chunks.get(chunkKey(cx, cz));
         if (c != null) c.dirty = true;
     }
 
@@ -105,7 +126,7 @@ public class World {
         } catch (IOException | ClassNotFoundException e) { return null; }
     }
 
-    public Chunk getChunk(int x, int z) { return chunks.get(x+","+z); }
+    public Chunk getChunk(int x, int z) { return chunks.get(chunkKey(x, z)); }
     public Block getBlock(int x, int y, int z) {
         int cx = (int) Math.floor((double)x / Chunk.SIZE), cz = (int) Math.floor((double)z / Chunk.SIZE);
         Chunk c = getChunk(cx, cz);
@@ -140,7 +161,7 @@ public class World {
             if (localZ == Chunk.SIZE - 1) markDirtyIfLoaded(cx, cz + 1);
         }
     }
-    public Map<String, Chunk> getChunks() { return chunks; }
+    public Map<Long, Chunk> getChunks() { return chunks; }
     public void saveAllChunks() { chunks.values().forEach(this::saveChunkToDisk); }
     public void shutdown() { chunkExecutor.shutdown(); try { chunkExecutor.awaitTermination(5, TimeUnit.SECONDS); } catch (InterruptedException e) { chunkExecutor.shutdownNow(); } }
 
@@ -208,34 +229,57 @@ public class World {
         }
     }
 
+    // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "мікрофризи, коли бігаю і
+    // повертаю камеру"): раніше кожен видимий блок малювався ОКРЕМИМ
+    // викликом renderer.renderCube (власний glPushMatrix/glBegin/glEnd/
+    // glPopMatrix на КОЖЕН блок) - для чанка з сотнями видимих блоків це
+    // сотні пар begin/end на КОЖНУ перебудову display list'а (World.render,
+    // MAX_REBUILDS_PER_FRAME), а біг перетинає межі чанків (і тому
+    // перебудови) значно частіше за ходьбу. Тепер - ДВА проходи по масиву,
+    // кожен всередині ОДНОГО спільного begin/end на весь чанк
+    // (beginChunkSolid/beginChunkOutline у Renderer) - координати
+    // рахуються напряму в АБСОЛЮТНИХ світових одиницях, без per-блокової
+    // матриці. Видимість граней рахується двічі (по разу на прохід) - те
+    // саме дешеве O(1) звернення до масиву (isBlockVisible), не String/
+    // алокації, тому дублювання тут не варте ускладнення кодом.
     private void buildChunkGeometry(Chunk chunk, Renderer renderer) {
-        // Плаский масив (Chunk.getBlocksArray) замість HashMap.values() -
-        // ітеруємо за індексом і рахуємо lx/ly/lz назад із тієї самої
-        // формули, що й Chunk.idx() (x + z*SIZE + y*SIZE*SIZE), без жодних
-        // String-ключів чи автобоксингу.
         Block[] arr = chunk.getBlocksArray();
         int baseX = chunk.getChunkX() * Chunk.SIZE, baseZ = chunk.getChunkZ() * Chunk.SIZE;
         int planeSize = Chunk.SIZE * Chunk.SIZE;
+
+        renderer.beginChunkSolid();
         for (int i = 0; i < arr.length; i++) {
             Block block = arr[i];
             if (block == null) continue;
-            int ly = i / planeSize;
-            int rem = i % planeSize;
-            int lz = rem / Chunk.SIZE;
-            int lx = rem % Chunk.SIZE;
+            int ly = i / planeSize, rem = i % planeSize, lz = rem / Chunk.SIZE, lx = rem % Chunk.SIZE;
             int x = lx + baseX, y = ly, z = lz + baseZ;
             boolean top = isBlockVisible(x, y+1, z), bottom = isBlockVisible(x, y-1, z);
             boolean front = isBlockVisible(x, y, z+1), back = isBlockVisible(x, y, z-1);
             boolean left = isBlockVisible(x-1, y, z), right = isBlockVisible(x+1, y, z);
             if (!top && !bottom && !front && !back && !left && !right) continue;
             float[] color = Block.colorFor(block.getType());
-            float r = color[0], g = color[1], b = color[2];
             // grid-координата (x,y,z) -> світова float-позиція через
             // Chunk.BLOCK_SIZE (див. коментар при константі) - розмір
             // куба теж BLOCK_SIZE, не 1.0, щоб суцільно стикався із
             // сусідами на новому масштабі, без перетину/щілин.
-            renderer.renderCube((x+0.5f)*Chunk.BLOCK_SIZE, (y+0.5f)*Chunk.BLOCK_SIZE, (z+0.5f)*Chunk.BLOCK_SIZE,
-                Chunk.BLOCK_SIZE, r, g, b, top, bottom, front, back, left, right);
+            renderer.addCubeQuads((x+0.5f)*Chunk.BLOCK_SIZE, (y+0.5f)*Chunk.BLOCK_SIZE, (z+0.5f)*Chunk.BLOCK_SIZE,
+                Chunk.BLOCK_SIZE, color[0], color[1], color[2], top, bottom, front, back, left, right);
         }
+        renderer.endChunkSolid();
+
+        renderer.beginChunkOutline();
+        for (int i = 0; i < arr.length; i++) {
+            Block block = arr[i];
+            if (block == null) continue;
+            int ly = i / planeSize, rem = i % planeSize, lz = rem / Chunk.SIZE, lx = rem % Chunk.SIZE;
+            int x = lx + baseX, y = ly, z = lz + baseZ;
+            boolean top = isBlockVisible(x, y+1, z), bottom = isBlockVisible(x, y-1, z);
+            boolean front = isBlockVisible(x, y, z+1), back = isBlockVisible(x, y, z-1);
+            boolean left = isBlockVisible(x-1, y, z), right = isBlockVisible(x+1, y, z);
+            if (!top && !bottom && !front && !back && !left && !right) continue;
+            renderer.addCubeOutline((x+0.5f)*Chunk.BLOCK_SIZE, (y+0.5f)*Chunk.BLOCK_SIZE, (z+0.5f)*Chunk.BLOCK_SIZE,
+                Chunk.BLOCK_SIZE, top, bottom, front, back, left, right);
+        }
+        renderer.endChunkOutline();
     }
 }

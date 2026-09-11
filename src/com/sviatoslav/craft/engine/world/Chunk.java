@@ -111,9 +111,25 @@ public class Chunk implements Serializable {
         }
     }
 
+    // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "FPS 11 само по собі"):
+    // getBlockCount() нижче раніше сканував УВЕСЬ масив (16*16*64=16384
+    // клітинок) на кожен виклик, а F3 (DebugOverlay) викликає його для
+    // КОЖНОГО завантаженого чанка (81 при loadDistance=4) ЩОКАДРУ, поки
+    // відкритий F3 - понад мільйон зайвих перевірок на кадр лише заради
+    // цифри "BLOCKS" на екрані. Тепер лічильник оновлюється ТУТ, в
+    // setBlock (єдине місце, де масив взагалі змінюється) - getBlockCount
+    // стає миттєвим (просто повертає готове число), як і було з
+    // HashMap.size() до переходу на масив.
+    private int blockCount = 0;
+
     public void setBlock(int x, int y, int z, Block block) {
         if (!inBounds(x, y, z)) return;
-        blocks[idx(x, y, z)] = block.getType() == Block.Type.AIR ? null : block;
+        int i = idx(x, y, z);
+        boolean wasBlock = blocks[i] != null;
+        boolean willBeBlock = block.getType() != Block.Type.AIR;
+        if (wasBlock && !willBeBlock) blockCount--;
+        else if (!wasBlock && willBeBlock) blockCount++;
+        blocks[i] = willBeBlock ? block : null;
         dirty = true;
     }
     public Block getBlock(int x, int y, int z) {
@@ -123,10 +139,6 @@ public class Chunk implements Serializable {
     // індексом, обчислюючи lx/ly/lz назад через idx() - без .values()/
     // ітератора HashMap, яких тут уже нема).
     public Block[] getBlocksArray() { return blocks; }
-    public int getBlockCount() {
-        int n = 0;
-        for (Block b : blocks) if (b != null) n++;
-        return n;
-    }
+    public int getBlockCount() { return blockCount; }
     public int getChunkX() { return chunkX; } public int getChunkZ() { return chunkZ; }
 }

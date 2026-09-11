@@ -6,7 +6,10 @@ import com.sviatoslav.craft.engine.world.*;
 import static org.lwjgl.glfw.GLFW.*;
 
 public class SviatoslavCraft {
-    private enum GameState { MENU, PLAYING }
+    // РЕАЛЬНА фіча (Sviatoslav попросив - екран вибору світу "як у майні"):
+    // WORLD_SELECT (список світів + BACK/CREATE/EDIT) і WORLD_EDIT (поки
+    // заглушка з однією кнопкою BACK) - між головним меню й самою грою.
+    private enum GameState { MENU, WORLD_SELECT, WORLD_EDIT, PLAYING }
     private Window window;
     private InputHandler input;
     private Renderer renderer;
@@ -19,6 +22,8 @@ public class SviatoslavCraft {
     private Player player;
     private Inventory inventory;
     private MenuManager menu;
+    private WorldSelectManager worldSelect;
+    private WorldEditManager worldEdit;
 
     public void start() {
         window = new LwjglWindow();
@@ -28,6 +33,8 @@ public class SviatoslavCraft {
         debug = new DebugOverlay();
         inventoryUI = new InventoryUI();
         menu = new MenuManager(window, input, 1280, 720);
+        worldSelect = new WorldSelectManager(window, input, 1280, 720);
+        worldEdit = new WorldEditManager(window, input, 1280, 720);
         gameLoop = new GameLoop();
         gameLoop.start(this::update, this::render, this::shouldClose);
         if (world != null) { world.shutdown(); world.saveAllChunks(); }
@@ -37,17 +44,52 @@ public class SviatoslavCraft {
     private void update(double deltaTime) {
         if (state == GameState.MENU) {
             String action = menu.update();
-            if (action.equals("PLAY")) { state = GameState.PLAYING; window.setMouseGrabbed(true); initGame(); }
+            // "PLAY" (перший пункт меню, тепер підписаний "SINGLEPLAYER")
+            // веде на екран вибору світу, а не одразу в гру.
+            if (action.equals("PLAY")) { state = GameState.WORLD_SELECT; worldSelect.refresh(); }
             else if (action.equals("EXIT")) running = false;
+        } else if (state == GameState.WORLD_SELECT) {
+            String action = worldSelect.update();
+            if (action.equals("BACK")) state = GameState.MENU;
+            else if (action.equals("PLAY")) { state = GameState.PLAYING; window.setMouseGrabbed(true); initGame(worldSelect.getSelectedWorld()); }
+            else if (action.equals("EDIT")) { worldEdit.open(worldSelect.getSelectedWorld()); state = GameState.WORLD_EDIT; }
+        } else if (state == GameState.WORLD_EDIT) {
+            String action = worldEdit.update();
+            if (action.equals("BACK")) state = GameState.WORLD_SELECT;
         } else updateGame(deltaTime);
     }
 
     private void render() {
         if (state == GameState.MENU) menu.render();
+        else if (state == GameState.WORLD_SELECT) worldSelect.render();
+        else if (state == GameState.WORLD_EDIT) worldEdit.render();
         else {
+            Camera camera = renderer.getCamera();
+            // РЕАЛЬНИЙ БАГ (Sviatoslav попросив - "камера не могла
+            // дивитись крізь блоки"): позиція камери в 2/3-й особі
+            // рахувалась як ФІКСОВАНИЙ зсув від гравця, без перевірки, чи
+            // є щось суцільне на шляху - тому позаду/попереду стіни
+            // камера просто опинялась УСЕРЕДИНІ неї. Camera сама не має
+            // доступу до World (інший пакет), тому перевірку робимо тут -
+            // той самий DDA, що й для прицілу (BlockRayCast), лише в
+            // напрямку зсуву камери (позаду гравця для THIRD_BACK,
+            // попереду для THIRD_FRONT - той самий кут, що й розворот
+            // погляду камери в цьому режимі), і РЕЗУЛЬТАТ (безпечна
+            // дистанція) віддаємо назад у Camera перед applyView().
+            if (player != null && world != null && camera.getViewMode() != Camera.ViewMode.FIRST_PERSON) {
+                boolean back = camera.getViewMode() == Camera.ViewMode.THIRD_BACK;
+                float rayYaw = back ? player.getYaw() + 180f : player.getYaw();
+                float rayPitch = back ? -player.getPitch() : player.getPitch();
+                float maxDist = camera.getThirdPersonMaxDistance();
+                float safeDist = BlockRayCast.castDistance(player.getX(), player.getAimY(), player.getZ(), rayYaw, rayPitch, world, maxDist);
+                // Невеликий запас (0.3), щоб камера не лягала прямо на
+                // поверхню стіни (z-fighting/впритул до неї).
+                camera.setThirdPersonDistance(Math.max(0f, safeDist - 0.3f));
+            }
+
             renderer.prepare();
-            renderer.getCamera().updateProjection();
-            renderer.getCamera().applyView();
+            camera.updateProjection();
+            camera.applyView();
             if (world != null) world.render(renderer);
 
             // Контур навколо блока, на який дивишся - той самий raycast, що
@@ -60,7 +102,7 @@ public class SviatoslavCraft {
             // куди не мав би" по РЕАЛЬНИХ координатах, а не на око.
             BlockRayCast.Hit hit = null;
             if (player != null && world != null) {
-                hit = BlockRayCast.cast(player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch(), world);
+                hit = BlockRayCast.cast(player.getX(), player.getAimY(), player.getZ(), player.getYaw(), player.getPitch(), world);
                 // grid-координата hit -> світова float-позиція (той самий
                 // масштаб Chunk.BLOCK_SIZE, що й рендер блоків у World).
                 if (hit != null) renderer.renderWireCube(
@@ -71,7 +113,7 @@ public class SviatoslavCraft {
             // "Тіло" гравця (F5, 3-я особа) - лише коробка-заглушка, у грі
             // нема справжньої моделі. ЛИШЕ коли не від першої особи -
             // інакше коробка малювалась би прямо перед/навколо камери.
-            if (player != null && renderer.getCamera().getViewMode() != Camera.ViewMode.FIRST_PERSON) {
+            if (player != null && camera.getViewMode() != Camera.ViewMode.FIRST_PERSON) {
                 renderer.renderBox(player.getX(), player.getBodyCenterY(), player.getZ(),
                     player.getWidth() / 2f, player.getBodyHeight() / 2f, 0.85f, 0.7f, 0.55f);
             }
@@ -85,7 +127,7 @@ public class SviatoslavCraft {
             // інакше ламання/постановка блоків цілились би не туди, куди
             // дивиться сама камера) - той самий підхід, що й у Minecraft
             // (приціл ховається поза 1-ю особою).
-            if (renderer.getCamera().getViewMode() == Camera.ViewMode.FIRST_PERSON) {
+            if (camera.getViewMode() == Camera.ViewMode.FIRST_PERSON) {
                 renderer.renderCrosshair(1280, 720);
             }
 
@@ -121,9 +163,9 @@ public class SviatoslavCraft {
         window.swapBuffers();
     }
 
-    private void initGame() {
+    private void initGame(String worldName) {
         System.out.println("Генерація світу...");
-        world = new World();
+        world = new World(worldName);
         renderer.getCamera().setY(50.0f);
         player = new Player(renderer.getCamera(), world);
         inventory = new Inventory();
@@ -199,11 +241,11 @@ public class SviatoslavCraft {
         // є, лише не прив'язана до кліку" - насправді жодного raycast'а
         // взагалі не існувало ніде в коді.
         if (input.consumeMouseButtonJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-            var hit = BlockRayCast.cast(player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch(), world);
+            var hit = BlockRayCast.cast(player.getX(), player.getAimY(), player.getZ(), player.getYaw(), player.getPitch(), world);
             if (hit != null) world.setBlock(hit.hitX(), hit.hitY(), hit.hitZ(), new Block(Block.Type.AIR, 0, 0, 0));
         }
         if (input.consumeMouseButtonJustPressed(GLFW_MOUSE_BUTTON_RIGHT)) {
-            var hit = BlockRayCast.cast(player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch(), world);
+            var hit = BlockRayCast.cast(player.getX(), player.getAimY(), player.getZ(), player.getYaw(), player.getPitch(), world);
             Block.Type selected = inventory.getSelectedBlockType();
             if (hit != null && selected != null
                     && !player.wouldOverlapPlacedBlock(hit.placeX(), hit.placeY(), hit.placeZ())) {

@@ -73,6 +73,48 @@ public final class BlockRayCast {
         return null; // нічого в межах досяжності
     }
 
+    // Для камери 2/3-ї особи (Sviatoslav попросив - "камера не могла
+    // дивитись крізь блоки"): той самий DDA-обхід, що й cast() вище,
+    // лише повертає СВІТОВУ відстань до першого суцільного блока (або
+    // maxReach, якщо на шляху нічого нема), а не сам блок - камера
+    // "прилипає" до перешкоди замість проходити крізь неї.
+    public static float castDistance(float ox, float oy, float oz, float yawDeg, float pitchDeg, World world, float maxReach) {
+        float yaw = (float) Math.toRadians(yawDeg);
+        float pitch = (float) Math.toRadians(pitchDeg);
+        double dx = Math.sin(yaw) * Math.cos(pitch);
+        double dy = -Math.sin(pitch);
+        double dz = -Math.cos(yaw) * Math.cos(pitch);
+
+        double gox = ox / Chunk.BLOCK_SIZE, goy = oy / Chunk.BLOCK_SIZE, goz = oz / Chunk.BLOCK_SIZE;
+        double maxReachGrid = maxReach / Chunk.BLOCK_SIZE;
+
+        int gx = (int) Math.floor(gox), gy = (int) Math.floor(goy), gz = (int) Math.floor(goz);
+        int stepX = sign(dx), stepY = sign(dy), stepZ = sign(dz);
+
+        double tMaxX = firstBoundary(gox, gx, stepX, dx);
+        double tMaxY = firstBoundary(goy, gy, stepY, dy);
+        double tMaxZ = firstBoundary(goz, gz, stepZ, dz);
+        double tDeltaX = stepX != 0 ? Math.abs(1.0 / dx) : Double.POSITIVE_INFINITY;
+        double tDeltaY = stepY != 0 ? Math.abs(1.0 / dy) : Double.POSITIVE_INFINITY;
+        double tDeltaZ = stepZ != 0 ? Math.abs(1.0 / dz) : Double.POSITIVE_INFINITY;
+
+        double t = 0;
+        while (t < maxReachGrid) {
+            Block b = world.getBlock(gx, gy, gz);
+            if (b != null && b.getType() != Block.Type.AIR) {
+                return (float) (t * Chunk.BLOCK_SIZE);
+            }
+            if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+                gx += stepX; t = tMaxX; tMaxX += tDeltaX;
+            } else if (tMaxY < tMaxZ) {
+                gy += stepY; t = tMaxY; tMaxY += tDeltaY;
+            } else {
+                gz += stepZ; t = tMaxZ; tMaxZ += tDeltaZ;
+            }
+        }
+        return maxReach;
+    }
+
     private static int sign(double v) { return v > 1e-9 ? 1 : (v < -1e-9 ? -1 : 0); }
 
     // t (у grid-одиницях уздовж променя), за якого координата вперше

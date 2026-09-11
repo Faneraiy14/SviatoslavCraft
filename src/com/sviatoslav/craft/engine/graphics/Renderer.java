@@ -12,52 +12,81 @@ public class Renderer {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 
-    public void renderCube(float x, float y, float z, float size, float r, float g, float b,
-                           boolean top, boolean bottom, boolean front, boolean back, boolean left, boolean right) {
-        glPushMatrix();
-        glTranslatef(x, y, z);
-        glColor3f(r, g, b);
-        float h = size / 2;
-        // РЕАЛЬНИЙ БАГ (чернетка DeepSeek, знайдено Sviatoslav'ом живцем -
-        // "текстури не повні", листя дерев виглядало тонкими скалками):
-        // порядок вершин TOP/BOTTOM був ЗВОРОТНИЙ відносно решти 4 граней
-        // (перевірено векторним добутком - нормаль виходила в протилежний
-        // бік). З увімкненим GL_CULL_FACE верх і низ КОЖНОГО блока в грі
-        // були невидимі майже завжди (видно лише знизу вгору/зверху вниз,
-        // чого в звичайній грі не буває) - лишались тільки бокові грані,
-        // тому скупчення блоків (крони дерев) виглядали пласкими скалками.
-        glBegin(GL_QUADS);
-        if (top) { glVertex3f(-h,h,-h); glVertex3f(-h,h,h); glVertex3f(h,h,h); glVertex3f(h,h,-h); }
-        if (bottom) { glVertex3f(-h,-h,-h); glVertex3f(h,-h,-h); glVertex3f(h,-h,h); glVertex3f(-h,-h,h); }
-        if (front) { glVertex3f(-h,-h,h); glVertex3f(h,-h,h); glVertex3f(h,h,h); glVertex3f(-h,h,h); }
-        if (back) { glVertex3f(-h,-h,-h); glVertex3f(-h,h,-h); glVertex3f(h,h,-h); glVertex3f(h,-h,-h); }
-        if (left) { glVertex3f(-h,-h,-h); glVertex3f(-h,-h,h); glVertex3f(-h,h,h); glVertex3f(-h,h,-h); }
-        if (right) { glVertex3f(h,-h,-h); glVertex3f(h,h,-h); glVertex3f(h,h,h); glVertex3f(h,-h,h); }
-        glEnd();
+    // РЕАЛЬНИЙ БАГ (Sviatoslav знайшов живцем - "мікрофризи, коли бігаю і
+    // повертаю камеру", ставали частішими саме під час бігу): раніше тут
+    // був renderCube(...) - ОКРЕМИЙ glPushMatrix/glTranslatef/glBegin/
+    // glEnd/glPopMatrix (і ще один begin/end на контур) на КОЖЕН окремий
+    // блок. World.buildChunkGeometry викликав це для кожного видимого
+    // блока чанка (сотні за раз) під час КОЖНОЇ перебудови display
+    // list'а - а біг перетинає межі чанків (і тому перебудови) значно
+    // частіше за ходьбу. Тепер - beginChunkSolid/addCubeQuads/
+    // endChunkSolid: ОДИН спільний glBegin(GL_QUADS) на ВЕСЬ чанк одразу
+    // (координати вершин рахуються тут напряму в АБСОЛЮТНИХ світових
+    // одиницях, без per-блокової матриці - glPushMatrix/glTranslatef на
+    // кожен блок якраз і були частиною зайвого навантаження). Той самий
+    // принцип, що й пакетний GLBitmapFont.draw() вище.
+    public void beginChunkSolid() { glBegin(GL_QUADS); }
+    public void endChunkSolid() { glEnd(); }
 
-        // Контур граней (Sviatoslav попросив - "не слішком ядрьоні, але і не
-        // дуже тонкі"): приглушений темно-сірий (не чистий чорний - на
-        // яскраво-зеленій траві/жовтуватому дереві це різало б очі), лінія
-        // середньої товщини (1.3, тонше за прицільний renderWireCube нижче,
-        // який навмисно жирніший, бо він один і сам по собі акцент). Лише
-        // для ВИДИМИХ граней (ті самі top/bottom/... прапорці) - контур
-        // прихованої грані однаково ніхто не побачить, лише зайве
-        // навантаження.
+    // РЕАЛЬНИЙ БАГ (чернетка DeepSeek, знайдено Sviatoslav'ом живцем -
+    // "текстури не повні", листя дерев виглядало тонкими скалками):
+    // порядок вершин TOP/BOTTOM був ЗВОРОТНИЙ відносно решти 4 граней
+    // (перевірено векторним добутком - нормаль виходила в протилежний
+    // бік). З увімкненим GL_CULL_FACE верх і низ КОЖНОГО блока в грі
+    // були невидимі майже завжди (видно лише знизу вгору/зверху вниз,
+    // чого в звичайній грі не буває) - лишались тільки бокові грані,
+    // тому скупчення блоків (крони дерев) виглядали пласкими скалками.
+    // Викликається ВСЕРЕДИНІ вже відкритого beginChunkSolid() - сам
+    // begin/end не відкриває.
+    public void addCubeQuads(float x, float y, float z, float size, float r, float g, float b,
+                              boolean top, boolean bottom, boolean front, boolean back, boolean left, boolean right) {
+        float h = size / 2;
+        glColor3f(r, g, b);
+        if (top) { glVertex3f(x-h,y+h,z-h); glVertex3f(x-h,y+h,z+h); glVertex3f(x+h,y+h,z+h); glVertex3f(x+h,y+h,z-h); }
+        if (bottom) { glVertex3f(x-h,y-h,z-h); glVertex3f(x+h,y-h,z-h); glVertex3f(x+h,y-h,z+h); glVertex3f(x-h,y-h,z+h); }
+        if (front) { glVertex3f(x-h,y-h,z+h); glVertex3f(x+h,y-h,z+h); glVertex3f(x+h,y+h,z+h); glVertex3f(x-h,y+h,z+h); }
+        if (back) { glVertex3f(x-h,y-h,z-h); glVertex3f(x-h,y+h,z-h); glVertex3f(x+h,y+h,z-h); glVertex3f(x+h,y-h,z-h); }
+        if (left) { glVertex3f(x-h,y-h,z-h); glVertex3f(x-h,y-h,z+h); glVertex3f(x-h,y+h,z+h); glVertex3f(x-h,y+h,z-h); }
+        if (right) { glVertex3f(x+h,y-h,z-h); glVertex3f(x+h,y+h,z-h); glVertex3f(x+h,y+h,z+h); glVertex3f(x+h,y-h,z+h); }
+    }
+
+    // Контур граней (Sviatoslav попросив - "не слішком ядрьоні, але і не
+    // дуже тонкі"): приглушений темно-сірий, ОДИН раз на весь чанк
+    // (кольор/товщина лінії не змінюються між блоками, на відміну від
+    // заливки). Лише для ВИДИМИХ граней - контур прихованої грані однаково
+    // ніхто не побачить, лише зайве навантаження.
+    public void beginChunkOutline() {
         glColor3f(0.06f, 0.06f, 0.06f);
         glLineWidth(1.0f);
-        // lh трохи більше за h (той самий прийом, що й у renderWireCube
-        // нижче) - інакше лінія й заливка лежать РІВНО на одній глибині, і
-        // яка з них "переможе" в буфері глибини непередбачувано мигтить
-        // (z-fighting) кожен кадр.
-        float lh = h + 0.004f;
-        if (top) { glBegin(GL_LINE_LOOP); glVertex3f(-lh,lh,-lh); glVertex3f(-lh,lh,lh); glVertex3f(lh,lh,lh); glVertex3f(lh,lh,-lh); glEnd(); }
-        if (bottom) { glBegin(GL_LINE_LOOP); glVertex3f(-lh,-lh,-lh); glVertex3f(lh,-lh,-lh); glVertex3f(lh,-lh,lh); glVertex3f(-lh,-lh,lh); glEnd(); }
-        if (front) { glBegin(GL_LINE_LOOP); glVertex3f(-lh,-lh,lh); glVertex3f(lh,-lh,lh); glVertex3f(lh,lh,lh); glVertex3f(-lh,lh,lh); glEnd(); }
-        if (back) { glBegin(GL_LINE_LOOP); glVertex3f(-lh,-lh,-lh); glVertex3f(-lh,lh,-lh); glVertex3f(lh,lh,-lh); glVertex3f(lh,-lh,-lh); glEnd(); }
-        if (left) { glBegin(GL_LINE_LOOP); glVertex3f(-lh,-lh,-lh); glVertex3f(-lh,-lh,lh); glVertex3f(-lh,lh,lh); glVertex3f(-lh,lh,-lh); glEnd(); }
-        if (right) { glBegin(GL_LINE_LOOP); glVertex3f(lh,-lh,-lh); glVertex3f(lh,lh,-lh); glVertex3f(lh,lh,lh); glVertex3f(lh,-lh,lh); glEnd(); }
+        glBegin(GL_LINES);
+    }
+    public void endChunkOutline() { glEnd(); }
 
-        glPopMatrix();
+    // lh трохи більше за h (той самий прийом, що й у renderWireCube
+    // нижче) - інакше лінія й заливка лежать РІВНО на одній глибині, і
+    // яка з них "переможе" в буфері глибини непередбачувано мигтить
+    // (z-fighting) кожен кадр. Викликається ВСЕРЕДИНІ вже відкритого
+    // beginChunkOutline().
+    public void addCubeOutline(float x, float y, float z, float size,
+                                boolean top, boolean bottom, boolean front, boolean back, boolean left, boolean right) {
+        float lh = size / 2 + 0.004f;
+        if (top) outlineQuad(x-lh,y+lh,z-lh, x-lh,y+lh,z+lh, x+lh,y+lh,z+lh, x+lh,y+lh,z-lh);
+        if (bottom) outlineQuad(x-lh,y-lh,z-lh, x+lh,y-lh,z-lh, x+lh,y-lh,z+lh, x-lh,y-lh,z+lh);
+        if (front) outlineQuad(x-lh,y-lh,z+lh, x+lh,y-lh,z+lh, x+lh,y+lh,z+lh, x-lh,y+lh,z+lh);
+        if (back) outlineQuad(x-lh,y-lh,z-lh, x-lh,y+lh,z-lh, x+lh,y+lh,z-lh, x+lh,y-lh,z-lh);
+        if (left) outlineQuad(x-lh,y-lh,z-lh, x-lh,y-lh,z+lh, x-lh,y+lh,z+lh, x-lh,y+lh,z-lh);
+        if (right) outlineQuad(x+lh,y-lh,z-lh, x+lh,y+lh,z-lh, x+lh,y+lh,z+lh, x+lh,y-lh,z+lh);
+    }
+
+    // 4 ребра однієї грані як GL_LINES (v0-v1, v1-v2, v2-v3, v3-v0) -
+    // викликається ВСЕРЕДИНІ вже відкритого glBegin(GL_LINES), сам
+    // begin/end не відкриває.
+    private void outlineQuad(float x0,float y0,float z0, float x1,float y1,float z1,
+                              float x2,float y2,float z2, float x3,float y3,float z3) {
+        glVertex3f(x0,y0,z0); glVertex3f(x1,y1,z1);
+        glVertex3f(x1,y1,z1); glVertex3f(x2,y2,z2);
+        glVertex3f(x2,y2,z2); glVertex3f(x3,y3,z3);
+        glVertex3f(x3,y3,z3); glVertex3f(x0,y0,z0);
     }
 
     // "Тіло" гравця в 3-й особі (F5) - справжньої моделі гравця в грі

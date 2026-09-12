@@ -100,15 +100,15 @@ public final class InventoryUI {
             // Кількість - у правому нижньому куті (як у Minecraft), не
             // зверху зліва.
             String countStr = String.valueOf(slotItem.getCount());
-            GLBitmapFont.draw(countStr, x + size - countStr.length()*6*1.3f - 3, y + size - 16, 1.3f, 1, 1, 1);
+            GLBitmapFont.draw(countStr, x + size - countStr.length()*6*1.6f - 3, y + size - 18, 1.6f, 1, 1, 1);
             if (withLabel) {
                 String name = slotItem.getBlockType().toString();
-                GLBitmapFont.draw(name, x + size/2f - name.length()*3, y + size + 8, 1, 0.85f, 0.85f, 0.85f);
+                GLBitmapFont.draw(name, x + size/2f - name.length()*6*1.4f/2f, y + size + 8, 1.4f, 0.85f, 0.85f, 0.85f);
             }
         }
 
         if (hotbarNumber > 0) {
-            GLBitmapFont.draw(String.valueOf(hotbarNumber), x + 4, y + 4, 1.1f, 0.85f, 0.85f, 0.85f);
+            GLBitmapFont.draw(String.valueOf(hotbarNumber), x + 4, y + 4, 1.5f, 0.85f, 0.85f, 0.85f);
         }
 
         // Виділення вибраного слота - яскрава рамка ПОВЕРХ усього (той

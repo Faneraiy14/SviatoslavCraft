@@ -21,7 +21,10 @@ public class MenuManager {
     // WORLD_SELECT замість initGame() напряму, семантика назви лишається
     // "той самий перший пункт меню".
     private String[] options = {"SINGLEPLAYER", "EXIT"};
-    private int bw = 340, bh = 60, bx, by1, by2;
+    // bw розширено (340->400) під більший текст (Sviatoslav попросив -
+    // "зроби текст трохи більше") - інакше "SINGLEPLAYER" на scale 4.5
+    // (замість 4) впирався б у краї кнопки.
+    private int bw = 400, bh = 60, bx, by1, by2;
     // РЕАЛЬНИЙ ФІКС (баг у чернетці DeepSeek): навігація клавіатурою робила
     // Thread.sleep(150) ПРЯМО у update(), яку викликає ігровий цикл - це
     // блокувало ВЕСЬ застосунок (рендер+ввід) на 150мс щоразу, як хтось
@@ -85,8 +88,14 @@ public class MenuManager {
         // букв на самих кнопках - "PLAY"/"EXIT" зберігались у масиві
         // options[], але ніколи насправді не малювались. Тепер - реальний
         // текст через GLBitmapFont (той самий підхід, що й DebugOverlay).
+        // Sviatoslav попросив "зроби текст трохи більше" - заголовок
+        // 3->4, кнопки 4->4.5 (bw вище вже розширено під це). Заголовок
+        // тепер центрується розрахунком, не жорсткою координатою x=420 -
+        // інакше на більшому scale з'їхав би вбік від жовтої панелі.
+        String title = "SVIATOSLAVCRAFT";
+        float titleScale = 4f, titleWidth = title.length() * 6 * titleScale;
         glColor3f(1f,0.8f,0.2f); glRectf(400,80,880,160);
-        GLBitmapFont.draw("SVIATOSLAVCRAFT", 420, 110, 3, 0.2f, 0.15f, 0.05f);
+        GLBitmapFont.draw(title, (400+880)/2f - titleWidth/2f, 110, titleScale, 0.2f, 0.15f, 0.05f);
 
         int[] ys = {by1, by2};
         for (int i = 0; i < options.length; i++) {
@@ -96,8 +105,9 @@ public class MenuManager {
             glColor3f(1,1,1); glLineWidth(2);
             glBegin(GL_LINE_LOOP); glVertex2f(bx,y); glVertex2f(bx+bw,y); glVertex2f(bx+bw,y+bh); glVertex2f(bx,y+bh); glEnd();
             String label = options[i];
-            float labelWidth = label.length() * 6 * 4; // 6px крок гліфа * scale=4
-            GLBitmapFont.draw(label, bx + (bw - labelWidth) / 2f, y + bh/2f - 14, 4, 1, 1, 1);
+            float labelScale = 4.5f;
+            float labelWidth = label.length() * 6 * labelScale;
+            GLBitmapFont.draw(label, bx + (bw - labelWidth) / 2f, y + bh/2f - 16, labelScale, 1, 1, 1);
         }
         glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glPopMatrix(); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW);
     }

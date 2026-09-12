@@ -52,6 +52,11 @@ public final class WorldSelectManager {
     public String getSelectedWorld() { return selected; }
 
     public String update() {
+        // РЕАЛЬНА фіча (Sviatoslav попросив - "Escape працював всюди як
+        // 'назад', в любому випадку"): цей екран узагалі не перевіряв
+        // Escape - клавіша тут просто нічого не робила.
+        if (input.consumeKeyJustPressed(GLFW_KEY_ESCAPE)) return "BACK";
+
         double mx = input.getMouseX(), my = input.getMouseY();
         // consumeMouseButtonJustPressed, НЕ isMouseButtonPressed -
         // РЕАЛЬНИЙ БАГ, якого тут НЕ мало бути (той самий клас, що вже
@@ -74,7 +79,13 @@ public final class WorldSelectManager {
             }
         }
         if (isOverButton(backX, mx, my)) return "BACK";
-        if (isOverButton(createX, mx, my)) { createWorld(); return "NONE"; }
+        // РЕАЛЬНА фіча (Sviatoslav попросив - "коли нажимаєш CREATE
+        // WORLD має вилізати наступний екран створення"): раніше тут
+        // одразу створювалась папка з автоназвою; тепер лише сигнал -
+        // саме створення (з вибором типу рельєфу) робить
+        // WorldCreateManager, а цей екран після повернення просто
+        // оновить список через selectCreated().
+        if (isOverButton(createX, mx, my)) return "CREATE";
         if (isOverButton(editX, mx, my) && selected != null) return "EDIT";
         return "NONE";
     }
@@ -83,14 +94,11 @@ public final class WorldSelectManager {
         return mx >= x && mx <= x + BW && my >= BTN_Y && my <= BTN_Y + BH;
     }
 
-    private void createWorld() {
-        int n = 1;
-        String name;
-        do { name = "World" + n; n++; } while (new File(SAVES_DIR + "/" + name).exists());
-        new File(SAVES_DIR + "/" + name).mkdirs();
-        worlds.add(name);
-        Collections.sort(worlds);
-        selected = name;
+    // Викликається після повернення з WorldCreateManager - список уже
+    // оновлено (refresh()), лишається лише підсвітити щойно створений
+    // світ, якщо він справді з'явився на диску.
+    public void selectIfExists(String name) {
+        if (worlds.contains(name)) selected = name;
     }
 
     public void render() {

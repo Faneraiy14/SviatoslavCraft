@@ -7,9 +7,11 @@ import static org.lwjgl.glfw.GLFW.*;
 
 public class SviatoslavCraft {
     // РЕАЛЬНА фіча (Sviatoslav попросив - екран вибору світу "як у майні"):
-    // WORLD_SELECT (список світів + BACK/CREATE/EDIT) і WORLD_EDIT (поки
-    // заглушка з однією кнопкою BACK) - між головним меню й самою грою.
-    private enum GameState { MENU, WORLD_SELECT, WORLD_EDIT, PLAYING }
+    // WORLD_SELECT (список світів + BACK/CREATE/EDIT), WORLD_CREATE
+    // (назва + плаский/звичайний + CREATE/BACK) і WORLD_EDIT (поки
+    // заглушка з полем перейменування й BACK) - між головним меню й
+    // самою грою.
+    private enum GameState { MENU, WORLD_SELECT, WORLD_CREATE, WORLD_EDIT, PLAYING }
     private Window window;
     private InputHandler input;
     private Renderer renderer;
@@ -23,6 +25,7 @@ public class SviatoslavCraft {
     private Inventory inventory;
     private MenuManager menu;
     private WorldSelectManager worldSelect;
+    private WorldCreateManager worldCreate;
     private WorldEditManager worldEdit;
 
     public void start() {
@@ -34,6 +37,7 @@ public class SviatoslavCraft {
         inventoryUI = new InventoryUI();
         menu = new MenuManager(window, input, 1280, 720);
         worldSelect = new WorldSelectManager(window, input, 1280, 720);
+        worldCreate = new WorldCreateManager(window, input, 1280, 720);
         worldEdit = new WorldEditManager(window, input, 1280, 720);
         gameLoop = new GameLoop();
         gameLoop.start(this::update, this::render, this::shouldClose);
@@ -53,15 +57,35 @@ public class SviatoslavCraft {
             if (action.equals("BACK")) state = GameState.MENU;
             else if (action.equals("PLAY")) { state = GameState.PLAYING; window.setMouseGrabbed(true); initGame(worldSelect.getSelectedWorld()); }
             else if (action.equals("EDIT")) { worldEdit.open(worldSelect.getSelectedWorld()); state = GameState.WORLD_EDIT; }
+            else if (action.equals("CREATE")) { worldCreate.open(); state = GameState.WORLD_CREATE; }
+        } else if (state == GameState.WORLD_CREATE) {
+            String action = worldCreate.update();
+            if (action.equals("BACK")) state = GameState.WORLD_SELECT;
+            else if (action.equals("CREATED")) {
+                // Список у WorldSelectManager сканується з диска -
+                // refresh() підхопить щойно створену папку, а
+                // selectIfExists одразу підсвітить її (без ще одного
+                // кліку по рядку).
+                worldSelect.refresh();
+                worldSelect.selectIfExists(worldCreate.getCreatedWorldName());
+                state = GameState.WORLD_SELECT;
+            }
         } else if (state == GameState.WORLD_EDIT) {
             String action = worldEdit.update();
-            if (action.equals("BACK")) state = GameState.WORLD_SELECT;
+            if (action.equals("BACK")) {
+                // refresh() - на випадок перейменування (стара назва в
+                // списку більше не існує на диску).
+                worldSelect.refresh();
+                worldSelect.selectIfExists(worldEdit.getWorldName());
+                state = GameState.WORLD_SELECT;
+            }
         } else updateGame(deltaTime);
     }
 
     private void render() {
         if (state == GameState.MENU) menu.render();
         else if (state == GameState.WORLD_SELECT) worldSelect.render();
+        else if (state == GameState.WORLD_CREATE) worldCreate.render();
         else if (state == GameState.WORLD_EDIT) worldEdit.render();
         else {
             Camera camera = renderer.getCamera();
@@ -259,7 +283,19 @@ public class SviatoslavCraft {
         // потім гра закривається"): isKeyPressed тут не "з'їдав" натиск,
         // тому MenuManager.update() наступного кадру бачив ТОЙ САМИЙ ще
         // затиснутий Escape і трактував як "Вихід". consumeKeyJustPressed.
-        if (input.consumeKeyJustPressed(GLFW_KEY_ESCAPE)) { state = GameState.MENU; window.setMouseGrabbed(false); }
+        //
+        // РЕАЛЬНА фіча (Sviatoslav попросив - "Escape працював всюди як
+        // 'назад', в будь-якому випадку"): раніше вело одразу в MENU,
+        // перестрибуючи WORLD_SELECT - непослідовно з рештою навігації
+        // (E/F3/Escape тепер "крок назад", а не "стрибок на корінь").
+        // Тепер повертає на екран вибору світу (той самий, звідки
+        // почалась гра), і оновлює список - на випадок, якщо щось
+        // змінилось на диску, поки грав.
+        if (input.consumeKeyJustPressed(GLFW_KEY_ESCAPE)) {
+            state = GameState.WORLD_SELECT;
+            window.setMouseGrabbed(false);
+            worldSelect.refresh();
+        }
     }
 
     private boolean shouldClose() { return window.shouldClose() || !running; }

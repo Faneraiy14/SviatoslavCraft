@@ -40,9 +40,38 @@ public class World {
     // Minecraft): раніше папка збереження була ЖОРСТКО "saves/world1" -
     // тепер кожен світ отримує свою папку за назвою, обраною на екрані
     // вибору/створення світу (WorldSelectManager).
+    private Chunk.WorldType worldType;
+
     public World(String worldName) {
         this.saveFolder = "saves/" + worldName + "/";
         new File(saveFolder).mkdirs();
+        worldType = readWorldType();
+    }
+
+    // Тип рельєфу (плаский/звичайний, обраний на екрані створення -
+    // WorldCreateManager) записується ОДИН РАЗ у момент створення
+    // (writeWorldMeta нижче, static, викликається до першого відкриття
+    // світу) - World сам лише ЧИТАЄ, ніколи не пише, інакше довелось би
+    // розрізняти "відкриваю новостворений" від "відкриваю вже існуючий"
+    // прямо тут. Файла нема - старі світи (до цієї фічі) чи як
+    // підстраховка - NORMAL за замовчуванням.
+    private Chunk.WorldType readWorldType() {
+        File meta = new File(saveFolder + "world.meta");
+        if (meta.exists()) {
+            try {
+                String s = new String(java.nio.file.Files.readAllBytes(meta.toPath())).trim();
+                return Chunk.WorldType.valueOf(s);
+            } catch (Exception e) { /* лишаємо NORMAL нижче */ }
+        }
+        return Chunk.WorldType.NORMAL;
+    }
+
+    public static void writeWorldMeta(String worldName, Chunk.WorldType type) {
+        File dir = new File("saves/" + worldName);
+        dir.mkdirs();
+        try (FileWriter w = new FileWriter(new File(dir, "world.meta"))) {
+            w.write(type.name());
+        } catch (IOException e) {}
     }
 
     // px/pz - СВІТОВІ float-координати гравця (масштаб Chunk.BLOCK_SIZE);
@@ -63,7 +92,7 @@ public class World {
             if (!chunks.containsKey(key)) {
                 chunkExecutor.submit(() -> {
                     Chunk chunk = loadChunkFromDisk(tx, tz);
-                    if (chunk == null) chunk = new Chunk(tx, tz);
+                    if (chunk == null) chunk = new Chunk(tx, tz, worldType);
                     chunks.put(key, chunk);
                     // Сусідні чанки (якщо вже завантажені) могли намалювати
                     // грань на межі як "видима" ЛИШЕ тому, що цей чанк тоді

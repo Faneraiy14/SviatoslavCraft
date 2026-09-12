@@ -21,15 +21,18 @@ public class DebugOverlay {
         // у Y-перевернутій 2D-проєкції).
         glDisable(GL_CULL_FACE);
 
-        glColor4f(0,0,0,0.7f); glRectf(10,10,520,175);
-
-        GLBitmapFont.draw("XYZ: " + fmt(x) + " " + fmt(y) + " " + fmt(z), 20, 25, 2, 1, 1, 1);
-        GLBitmapFont.draw("YAW: " + fmt(yaw) + " PITCH: " + fmt(pitch), 20, 55, 2, 1, 1, 1);
-        GLBitmapFont.draw("FPS: " + fps, 20, 85, 2, 0.4f, 1f, 0.4f);
-        GLBitmapFont.draw("BLOCKS: " + blockCount, 20, 115, 2, 1, 1, 1);
+        // Sviatoslav попросив "трохи більше" - scale 2->3 (реальний
+        // шрифт на 2 був нечитабельним), крок рядків розширено під нього.
+        // Чорну підкладку прибрано (Sviatoslav попросив "фон прозорий, а
+        // текст видний") - сам текст тепер має власну товщину/жирність
+        // (font-фікс вище), лишається читабельним і без підкладки.
+        GLBitmapFont.draw("XYZ: " + fmt(x) + " " + fmt(y) + " " + fmt(z), 20, 25, 3, 1, 1, 1);
+        GLBitmapFont.draw("YAW: " + fmt(yaw) + " PITCH: " + fmt(pitch), 20, 65, 3, 1, 1, 1);
+        GLBitmapFont.draw("FPS: " + fps, 20, 105, 3, 0.4f, 1f, 0.4f);
+        GLBitmapFont.draw("BLOCKS: " + blockCount, 20, 145, 3, 1, 1, 1);
         // Точні координати блока під прицілом - щоб перевіряти "дотягується
         // раптом до чогось не того" по РЕАЛЬНИХ числах, а не на око під кутом.
-        if (targetInfo != null) GLBitmapFont.draw("TARGET: " + targetInfo, 20, 145, 2, 1f, 0.85f, 0.2f);
+        if (targetInfo != null) GLBitmapFont.draw("TARGET: " + targetInfo, 20, 185, 3, 1f, 0.85f, 0.2f);
 
         glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glPopMatrix(); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW);
     }

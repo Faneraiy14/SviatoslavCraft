@@ -60,11 +60,19 @@ public class Chunk implements Serializable {
     public transient int displayListId = -1;
     public transient boolean dirty = true;
 
-    public Chunk(int chunkX, int chunkZ) {
+    // РЕАЛЬНА фіча (Sviatoslav попросив - екран створення світу: "плаский,
+    // звичайний і налаштування"): тип рельєфу вирішується ЛИШЕ в момент
+    // генерації (тут), не зберігається як поле Chunk - для вже
+    // ЗБЕРЕЖЕНОГО (десеріалізованого) чанка тип узагалі не має значення,
+    // блоки вже готові. Плаский - без дерев (як "Superflat" у Minecraft).
+    public enum WorldType { NORMAL, FLAT }
+    private static final int FLAT_HEIGHT = 4;
+
+    public Chunk(int chunkX, int chunkZ, WorldType type) {
         this.chunkX = chunkX; this.chunkZ = chunkZ;
         this.random = new Random(chunkX * 1000 + chunkZ);
-        generateTerrain();
-        generateTrees();
+        generateTerrain(type);
+        if (type != WorldType.FLAT) generateTrees();
     }
 
     // РЕАЛЬНИЙ БАГ (знайдено Sviatoslav'ом живцем - провалився під світ):
@@ -77,14 +85,19 @@ public class Chunk implements Serializable {
     // гарантує хоч якийсь суцільний шар землі в БУДЬ-ЯКІЙ точці світу.
     private static final int MIN_HEIGHT = 2;
 
-    private void generateTerrain() {
+    private void generateTerrain(WorldType type) {
         for (int x = 0; x < SIZE; x++) for (int z = 0; z < SIZE; z++) {
             int wx = x + chunkX * SIZE, wz = z + chunkZ * SIZE;
-            int height = (int)(4 + Math.sin(wx*0.05)*Math.cos(wz*0.05)*3 + Math.sin(wx*0.1 + wz*0.08)*2);
-            height = Math.max(height, MIN_HEIGHT);
+            int height;
+            if (type == WorldType.FLAT) {
+                height = FLAT_HEIGHT;
+            } else {
+                height = (int)(4 + Math.sin(wx*0.05)*Math.cos(wz*0.05)*3 + Math.sin(wx*0.1 + wz*0.08)*2);
+                height = Math.max(height, MIN_HEIGHT);
+            }
             for (int y = 0; y < height; y++) {
-                Block.Type type = (y == height-1) ? Block.Type.GRASS : (y > height-4) ? Block.Type.DIRT : Block.Type.STONE;
-                setBlock(x, y, z, new Block(type, x, y, z));
+                Block.Type blockType = (y == height-1) ? Block.Type.GRASS : (y > height-4) ? Block.Type.DIRT : Block.Type.STONE;
+                setBlock(x, y, z, new Block(blockType, x, y, z));
             }
         }
     }

@@ -2,6 +2,7 @@ package com.sviatoslav.craft.game;
 
 import com.sviatoslav.craft.engine.core.*;
 import com.sviatoslav.craft.engine.graphics.GLBitmapFont;
+import com.sviatoslav.craft.engine.world.World;
 import java.io.File;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
@@ -79,6 +80,10 @@ public final class WorldEditManager {
         String newName = input.getTextInput().trim();
         if (newName.isEmpty()) { status = "TYPE A NAME FIRST"; return false; }
         if (newName.equals(worldName)) { status = "ALREADY THIS NAME"; return false; }
+        // World.isValidWorldName - захист від path traversal ("../../"
+        // тощо), незалежний від фільтра символів у самому полі вводу -
+        // те саме, що й у WorldCreateManager.
+        if (!World.isValidWorldName(newName)) { status = "INVALID NAME"; return false; }
         File oldDir = new File("saves/" + worldName);
         File newDir = new File("saves/" + newName);
         if (newDir.exists()) { status = "NAME TAKEN"; return false; }

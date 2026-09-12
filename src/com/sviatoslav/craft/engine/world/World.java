@@ -42,7 +42,29 @@ public class World {
     // вибору/створення світу (WorldSelectManager).
     private Chunk.WorldType worldType;
 
+    // РЕАЛЬНА ДІРА (Sviatoslav попросив перевірити код на "критичні
+    // діри"): worldName напряму йде в шлях файлової системи
+    // ("saves/" + worldName) - у КОЖНОМУ місці, де світ створюється/
+    // відкривається/перейменовується. ЄДИНИМ захистом від path traversal
+    // (наприклад, назва "../../../etc" писала б поза папкою saves/) був
+    // ПОБІЧНИЙ ефект фільтра символів у текстовому полі вводу
+    // (InputHandler - дозволяє лише літери/цифри/пробіл, тому "/" і "."
+    // фізично не потрапляють у буфер) - НЕ явна перевірка тут, де шлях
+    // реально будується. Крихко: якщо колись розширити дозволені символи
+    // в полі вводу (наприклад, додати дефіс для "New-World"), діра
+    // відкриється непомітно, без жодного зв'язку з цим файлом. Явна
+    // перевірка ТУТ (і скрізь, де назва світу перетворюється на шлях -
+    // WorldCreateManager/WorldEditManager/WorldSelectManager) - незалежна
+    // від того, що зараз дозволяє чи забороняє поле вводу.
+    public static boolean isValidWorldName(String name) {
+        return name != null && !name.isEmpty()
+            && !name.contains("/") && !name.contains("\\") && !name.contains("..");
+    }
+
     public World(String worldName) {
+        if (!isValidWorldName(worldName)) {
+            throw new IllegalArgumentException("Недопустима назва світу: " + worldName);
+        }
         this.saveFolder = "saves/" + worldName + "/";
         new File(saveFolder).mkdirs();
         worldType = readWorldType();
@@ -67,6 +89,7 @@ public class World {
     }
 
     public static void writeWorldMeta(String worldName, Chunk.WorldType type) {
+        if (!isValidWorldName(worldName)) return;
         File dir = new File("saves/" + worldName);
         dir.mkdirs();
         try (FileWriter w = new FileWriter(new File(dir, "world.meta"))) {

@@ -45,7 +45,15 @@ public final class WorldSelectManager {
         File[] children = dir.listFiles(File::isDirectory);
         if (children != null) {
             Arrays.sort(children, Comparator.comparing(File::getName));
-            for (File f : children) worlds.add(f.getName());
+            // World.isValidWorldName - якщо якимось чином (не через саму
+            // гру) у saves/ опинилась папка з підозрілою назвою, вона
+            // просто не з'явиться в списку, замість того щоб пізніше
+            // піти в "saves/" + назва деінде в коді.
+            for (File f : children) {
+                if (com.sviatoslav.craft.engine.world.World.isValidWorldName(f.getName())) {
+                    worlds.add(f.getName());
+                }
+            }
         }
     }
 

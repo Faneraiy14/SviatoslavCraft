@@ -71,7 +71,11 @@ public final class WorldCreateManager {
         if (isOver(backX, BOTTOM_Y, BACK_BW, BOTTOM_BH, mx, my)) { input.setTextInputActive(false); return "BACK"; }
         if (isOver(createX, BOTTOM_Y, CREATE_BW, BOTTOM_BH, mx, my)) {
             String name = input.getTextInput().trim();
-            if (name.isEmpty()) name = nextAutoName();
+            // Порожньо АБО недопустимі символи (World.isValidWorldName -
+            // захист від path traversal, незалежний від того, що зараз
+            // пропускає фільтр символів у самому полі вводу) - тихо
+            // підставляємо автоназву замість збою/запису не туди.
+            if (name.isEmpty() || !World.isValidWorldName(name)) name = nextAutoName();
             // Ім'я вже зайняте (хтось інший світ так називається) -
             // тихо підставляємо вільну автоназву замість збою/перезапису
             // чужого світу.

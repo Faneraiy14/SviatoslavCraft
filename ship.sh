@@ -15,7 +15,12 @@ if [ -z "$VERSION" ]; then
 fi
 
 RELEASES_REPO="Faneraiy14/voxelin-releases"
-ARTIFACT="Voxelin-v${VERSION}-linux"
+# lib/ тепер містить і Linux-, і Windows-natives LWJGL одночасно (сама
+# бібліотека автовизначає ОС і бере потрібний файл під час запуску,
+# перевірено живцем - обидва набори natives мирно співіснують на
+# класпасі) - тому один архів працює на обох ОС, суфікс "-linux"
+# прибрано.
+ARTIFACT="Voxelin-v${VERSION}"
 DIST="dist"
 
 echo "== Очищення $DIST/ =="
@@ -37,6 +42,11 @@ cd "$(dirname "$0")"
 java -cp "out:lib/*" com.sviatoslav.craft.game.SviatoslavCraft
 RUNEOF
 chmod +x "$PKG/run.sh"
+cat > "$PKG/run.bat" << 'RUNEOF'
+@echo off
+cd /d "%~dp0"
+java -cp "out;lib/*" com.sviatoslav.craft.game.SviatoslavCraft
+RUNEOF
 ( cd "$DIST" && zip -r -q "$ARTIFACT.zip" "$ARTIFACT" )
 
 echo "== Тег v$VERSION =="
@@ -47,7 +57,7 @@ echo "== Реліз на GitHub ($RELEASES_REPO) =="
 gh release create "v$VERSION" "$DIST/$ARTIFACT.zip" \
     --repo "$RELEASES_REPO" \
     --title "v$VERSION" \
-    --notes "Voxelin v$VERSION (Linux)"
+    --notes "Voxelin v$VERSION (Linux + Windows, x64, потрібна Java 21)"
 
 echo "== Готово: v$VERSION =="
 echo "https://github.com/$RELEASES_REPO/releases/tag/v$VERSION"

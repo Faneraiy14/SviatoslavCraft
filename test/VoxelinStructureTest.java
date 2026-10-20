@@ -19,7 +19,7 @@ public class VoxelinStructureTest {
     public static void main(String[] a) throws Exception {
         g = new Game(new File("nope"), null);
         root = Files.createTempDirectory("vx-struct").toFile();
-        parsing(); rotation(); placer(); stitching(); world(); far(); files(); perf();
+        parsing(); rotation(); placer(); biomes(); stitching(); world(); far(); files(); perf();
         System.out.println("VoxelinStructureTest: " + n + " перевірок OK");
     }
 
@@ -32,7 +32,7 @@ public class VoxelinStructureTest {
     }
 
     static void parsing() throws Exception {
-        check(g.structures.templates().stream().filter(t -> t.role == null).count() == 3, "три ванільні окремі структури");
+        check(g.structures.templates().stream().filter(t -> t.role == null).count() == 5, "п'ять ванільних окремих структур (руїни, підземелля, шахта, храм, фортеця)");
         for (String nm : new String[]{"ruins", "dungeon", "mine"}) check(g.structures.find(nm) != null && g.structures.find("voxelin:" + nm) != null, "шаблон " + nm);
         StructureTemplate t = parse(TINY);
         check(t.sx == 3 && t.sz == 2 && t.sy == 2 && t.place == StructureTemplate.Place.SURFACE && t.spacing == 40 && t.chance == 1 && t.sink == 1, "розміри й заголовок");
@@ -149,6 +149,35 @@ public class VoxelinStructureTest {
     /** Окремі структури без частин сіл (села можуть перекривати їх - перевіряються в VoxelinVillageTest). */
     static List<StructureTemplate> standalone() { List<StructureTemplate> r = new ArrayList<>(); for (StructureTemplate t : g.structures.templates()) if (t.role == null) r.add(t); return r; }
 
+    static void biomes() throws Exception {
+        StructureTemplate temple = g.structures.find("temple"), fort = g.structures.find("fortress");
+        check(temple != null && temple.biomes.equals(Set.of("desert", "glass_dunes")) && temple.sx == 15 && temple.sy == 7 && fort.biomes.isEmpty() && fort.sx == 25 && fort.sy == 10, "храм у пустелі, фортеця будь-де");
+        int chests = 0, zombies = 0;
+        for (int y = 0; y < fort.sy; y++) for (int z = 0; z < fort.sz; z++) for (int x = 0; x < fort.sx; x++) { if (fort.lootAt(x, y, z) != null) chests++; if ("voxelin:zombie".equals(fort.mobAt(x, y, z))) zombies++; }
+        check(chests == 3 && zombies == 3, "у фортеці 3 скрині й 3 зомбі: " + chests + "/" + zombies);
+        check(g.loot.get("temple") != null && g.loot.get("fortress") != null, "таблиці здобичі храму й фортеці");
+        String t = TINY.replace("sink: 1\n", "sink: 1\nbiomes: desert quiet_wastes\n");
+        check(parse(t).biomes.equals(Set.of("desert", "quiet_wastes")), "biomes: розбір");
+        for (String bad : new String[]{"biomes: nowhere", "biomes: desert, swamp, mars"}) {
+            try { parse(TINY.replace("sink: 1\n", "sink: 1\n" + bad + "\n")); check(false, "має бути помилка: " + bad); } catch (StructureTemplate.StructureException e) { check(e.getMessage().contains("біом"), "невідомий біом відхиляється: " + e.getMessage()); }
+        }
+        StructureTemplate only = parse(t.replace("chance: 1", "chance: 1"));
+        StructurePlacer.Surface flat = (x, z) -> 70;
+        StructurePlacer desert = new StructurePlacer(5, List.of(only), flat, 62).biomes((x, z) -> "desert");
+        StructurePlacer plains = new StructurePlacer(5, List.of(only), flat, 62).biomes((x, z) -> "plains");
+        StructurePlacer none = new StructurePlacer(5, List.of(only), flat, 62);
+        int d = 0, p = 0, nn = 0;
+        for (long cx = -10; cx < 10; cx++) for (long cz = -10; cz < 10; cz++) { if (desert.placementFor(only, cx, cz) != null) d++; if (plains.placementFor(only, cx, cz) != null) p++; if (none.placementFor(only, cx, cz) != null) nn++; }
+        check(d == 400 && p == 0 && nn == 0, "біом-фільтр: пустеля " + d + ", рівнини " + p + ", без визначення біому " + nn);
+        // справжній генератор: храм лише на піску, фортеця де завгодно
+        TerrainGenerator tg = new TerrainGenerator(12345, WorldInfo.Type.NORMAL, g.blocks, g.structures.templates());
+        long[] loc = tg.locate("temple", 0, 0);
+        check(loc != null, "храм існує у світі (locate)");
+        String biome = tg.biomeAt(loc[0], loc[2]);
+        check(biome.equals("Пустеля") || biome.equals("Скляні дюни"), "храм у пустельному біомі: " + biome);
+        check(tg.locate("fortress", 0, 0) != null, "фортеця існує");
+    }
+
     static Chunk gen(TerrainGenerator tg, long cx, long cz) { Chunk c = new Chunk(cx, cz); tg.generate(c); return c; }
 
     static int blockAt(Map<Long, Chunk> m, TerrainGenerator tg, long x, int y, long z) {
@@ -174,7 +203,7 @@ public class VoxelinStructureTest {
         TerrainGenerator tg = new TerrainGenerator(seed, WorldInfo.Type.FLAT, g.blocks, standalone());
         StructurePlacer pl = new StructurePlacer(seed, standalone(), tg::surfaceY, tg.seaLevel());
         for (StructureTemplate t : g.structures.templates()) {
-            if (t.role != null) continue;
+            if (t.role != null || !t.biomes.isEmpty()) continue;
             int verified = 0;
             outer:
             for (long cx = 0; cx < 12 && verified < 3; cx++) for (long cz = 0; cz < 12 && verified < 3; cz++) {
@@ -274,8 +303,8 @@ public class VoxelinStructureTest {
 
     static void far() throws Exception {
         long seed = 5;
-        TerrainGenerator tg = new TerrainGenerator(seed, WorldInfo.Type.FLAT, g.blocks, standalone());
-        StructurePlacer pl = new StructurePlacer(seed, standalone(), tg::surfaceY, tg.seaLevel());
+        TerrainGenerator tg = new TerrainGenerator(seed, WorldInfo.Type.FLAT, g.blocks, List.of(g.structures.find("ruins")));
+        StructurePlacer pl = new StructurePlacer(seed, List.of(g.structures.find("ruins")), tg::surfaceY, tg.seaLevel());
         for (long base : new long[]{1_000_000_000_000_000L, -1_000_000_000_000_000L, 4_000_000_000_000_000_000L}) {
             StructureTemplate t = g.structures.find("ruins");
             StructurePlacer.Placement p = null;
@@ -310,7 +339,7 @@ public class VoxelinStructureTest {
         StructureTemplate ruins = g3.structures.find("ruins");
         check(ruins != null && ruins.sx == 3 && ruins.spacing == 40, "файл гравця перекрив ванільні руїни");
         check(g3.structures.find("extra") != null && g3.structures.find("broken") == null && g3.structures.find("bad name") == null, "новий вид додано, зламані пропущено");
-        check(g3.structures.templates().stream().filter(t -> t.role == null).count() == 4, "ванільні dungeon+mine + руїни з файла + extra");
+        check(g3.structures.templates().stream().filter(t -> t.role == null).count() == 6, "ванільні dungeon+mine+temple+fortress + руїни з файла + extra");
     }
 
     static void perf() throws Exception {

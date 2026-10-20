@@ -11,6 +11,8 @@ import java.util.*;
  */
 public final class StructurePlacer {
     public interface Surface { int surfaceY(long x, long z); }
+    /** Назва біому колонки (нижній регістр) - для шаблонів із biomes:. */
+    public interface BiomeAt { String name(long x, long z); }
 
     public static final class Placement {
         public final StructureTemplate t; public final long ox, oz; public final int oy, rot, w, d; public final long seed;
@@ -33,6 +35,7 @@ public final class StructurePlacer {
 
     private final long seed;
     private int pathBlock = 1;
+    private BiomeAt biomeAt;
     private final Map<String, List<StructureTemplate>> roles = new HashMap<>();
     private final Map<String, Optional<Village>> villageCache = Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry<String, Optional<Village>> e) { return size() > 96; }
@@ -50,6 +53,8 @@ public final class StructurePlacer {
     public List<StructureTemplate> templates() { return templates; }
     /** Id блока стежок у селах (гравій). */
     public StructurePlacer pathBlock(int id) { pathBlock = id; return this; }
+    /** Підключити визначення біому (інакше шаблони з biomes: ніколи не ставляться). */
+    public StructurePlacer biomes(BiomeAt b) { this.biomeAt = b; return this; }
     public boolean hasVillages() { return roles.containsKey("house"); }
 
     private long cellHash(StructureTemplate t, long cx, long cz) {
@@ -69,6 +74,7 @@ public final class StructurePlacer {
         int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
         for (int y : ys) { min = Math.min(min, y); max = Math.max(max, y); }
         int oy;
+        if (!t.biomes.isEmpty() && (biomeAt == null || !t.biomes.contains(biomeAt.name(wx + w / 2, wz + d / 2)))) return null;
         if (t.place == StructureTemplate.Place.SURFACE) {
             if (min <= sea + 1 || max - min > 4) return null;
             oy = min + 1 - t.sink;

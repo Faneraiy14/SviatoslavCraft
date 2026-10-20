@@ -25,6 +25,8 @@ public final class StructureTemplate {
     public final double chance;
     /** Роль у селі (well, hall, house, farm, lamp) і вага вибору; null - окрема структура. */
     public final String role;
+    /** Дозволені біоми (імена в нижньому регістрі: desert, glass_dunes...); порожньо - будь-які. */
+    public final Set<String> biomes;
     public final int weight;
     /** Блоки: -1 - не чіпати, 0 - повітря, інакше id. Індекс x + z*sx + y*sx*sz. */
     final short[] ids;
@@ -34,8 +36,8 @@ public final class StructureTemplate {
     /** Моби-мітки з легенди («mob villager_farmer»): ім'я виду в клітинці або null. */
     final String[] mobs;
 
-    private StructureTemplate(String name, Place place, int spacing, double chance, int depthMin, int depthMax, int sink, int sx, int sy, int sz, short[] ids, String[] loot, String[] mobs, String role, int weight) {
-        this.mobs = mobs; this.role = role; this.weight = weight;
+    private StructureTemplate(String name, Place place, int spacing, double chance, int depthMin, int depthMax, int sink, int sx, int sy, int sz, short[] ids, String[] loot, String[] mobs, String role, int weight, Set<String> biomes) {
+        this.biomes = biomes; this.mobs = mobs; this.role = role; this.weight = weight;
         this.name = name; this.place = place; this.spacing = spacing; this.chance = chance; this.depthMin = depthMin; this.depthMax = depthMax; this.sink = sink;
         this.sx = sx; this.sy = sy; this.sz = sz; this.ids = ids; this.loot = loot;
         short f = 1;
@@ -165,7 +167,13 @@ public final class StructureTemplate {
         }
         boolean any = false; for (short v : ids) if (v != -1) any = true;
         if (!any) throw new StructureException(1, "шаблон порожній (усі клітинки «не чіпати»)");
-        return new StructureTemplate(name, place, spacing, chance, dmin, dmax, sink, sx, sy, sz, ids, loot, mobs, role, weight);
+        Set<String> bio = new HashSet<>();
+        if (head.containsKey("biomes")) for (String b : head.get("biomes").split("[,\\s]+")) {
+            if (b.isEmpty()) continue;
+            try { TerrainGenerator.Biome.valueOf(b.toUpperCase(Locale.ROOT)); } catch (IllegalArgumentException e) { throw new StructureException(1, "biomes: невідомий біом " + b); }
+            bio.add(b.toLowerCase(Locale.ROOT));
+        }
+        return new StructureTemplate(name, place, spacing, chance, dmin, dmax, sink, sx, sy, sz, ids, loot, mobs, role, weight, Set.copyOf(bio));
     }
 
     private static int intOf(Map<String, String> head, String key, int lo, int hi) throws StructureException {

@@ -55,7 +55,7 @@ public final class TerrainGenerator implements Generator {
         else {
             boolean[] liquid = new boolean[reg.size()];
             for (voxelin.core.BlockType b : reg.all()) liquid[b.id] = b.liquid;
-            placer = new StructurePlacer(seed, structures, this::surfaceY, 62).liquids(liquid).pathBlock(gravel);
+            placer = new StructurePlacer(seed, structures, this::surfaceY, 62).liquids(liquid).pathBlock(gravel).biomes((bx, bz) -> columnAt(bx, bz).biome.name().toLowerCase(java.util.Locale.ROOT));
         }
         coal = id(reg, "coal_ore"); iron = id(reg, "iron_ore"); copper = id(reg, "copper_ore"); gold = id(reg, "gold_ore"); diamond = id(reg, "diamond_ore"); liminite = id(reg, "liminite_ore");
     }

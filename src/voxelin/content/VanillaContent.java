@@ -2,6 +2,8 @@ package voxelin.content;
 
 import voxelin.api.*;
 import voxelin.core.CommandRegistry;
+import voxelin.core.DayCycle;
+import voxelin.core.entity.Vitals;
 
 /**
  * Ванільний вміст Voxelin - звичайний «мод» з id "voxelin", що реєструється через той самий API, що й сторонні моди.
@@ -21,6 +23,21 @@ public final class VanillaContent implements VoxelinMod {
 
     /** Зареєструвати текстуру й повернути її середній колір (для іконок). */
     private int tex(String name, int[] px) { r.texture(name, px); return TextureGen.average(px); }
+
+    private static Vitality vit(Commands.Context k) throws Commands.CommandException {
+        Vitality v = k.world().vitality(k.source());
+        if (v == null) throw new Commands.CommandException("У цього джерела нема здоров'я");
+        return v;
+    }
+
+    private static double amount(Commands.Context k) throws Commands.CommandException {
+        if (k.args().size() != 1) throw new Commands.CommandException("Потрібне одне число");
+        try {
+            double d = Double.parseDouble(k.args().get(0));
+            if (Double.isNaN(d) || Double.isInfinite(d) || d <= 0 || d > 1000) throw new NumberFormatException();
+            return d;
+        } catch (NumberFormatException e) { throw new Commands.CommandException("Потрібне число від 0 до 1000: " + k.args().get(0)); }
+    }
 
     private void block(String name, BlockSettings s) { r.block(name, s); }
 
@@ -112,7 +129,33 @@ public final class VanillaContent implements VoxelinMod {
             n = cnt[0];
             k.reply("Заповнено " + n + " з " + (long) vol + " блоків" + (n < (long) vol ? " (решта - чанки не завантажені або ліміт)" : ""));
         });
-        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
+        c.register("time", "[set <день|ніч|вечір|світанок|північ|полудень|число> | add <число>]", 2, k -> {
+            WorldAccess w = k.world();
+            long dt = w.dayTicks(), t = w.time();
+            if (k.args().isEmpty()) {
+                double p = (double) Math.floorMod(t, dt) / dt;
+                k.reply("День " + (Math.floorDiv(t, dt) + 1) + ", " + DayCycle.phaseName(p) + " (" + String.format(java.util.Locale.ROOT, "%.0f", p * 100) + "% доби; доба = " + dt / 1200.0 + " хв)");
+                return;
+            }
+            if (k.args().size() != 2) throw new Commands.CommandException("Потрібно 2 аргументи");
+            String sub = k.args().get(0).toLowerCase(java.util.Locale.ROOT), arg = k.args().get(1).toLowerCase(java.util.Locale.ROOT);
+            if (sub.equals("set")) {
+                long inDay;
+                double ph = DayCycle.presetPhase(arg);
+                if (ph >= 0) inDay = (long) (ph * dt);
+                else try { inDay = Math.floorMod(Long.parseLong(arg), dt); } catch (NumberFormatException e) { throw new Commands.CommandException("Не час: " + arg); }
+                w.setTime(Math.floorDiv(Math.max(0, t), dt) * dt + inDay);
+            } else if (sub.equals("add")) {
+                long n;
+                try { n = Long.parseLong(arg); w.setTime(Math.addExact(t, n)); }
+                catch (NumberFormatException | ArithmeticException e) { throw new Commands.CommandException("Не число (або надто велике): " + arg); }
+            } else throw new Commands.CommandException("Невідома дія: " + sub);
+            k.reply("Час: день " + (Math.floorDiv(w.time(), dt) + 1) + ", " + DayCycle.phaseName((double) Math.floorMod(w.time(), dt) / dt));
+        });
+        c.register("heal", "", 2, k -> { vit(k).heal(Vitals.MAX); k.reply("Здоров'я відновлено"); });
+        c.register("hurt", "<шкода>", 2, k -> { vit(k).damage(amount(k)); k.reply("Шкода завдана (здоров'я " + vit(k).health() + ")"); });
+        c.register("eat", "<їжа>", 2, k -> { vit(k).feed(amount(k)); k.reply("Голод " + vit(k).hunger()); });
+        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
     }
 
     /** Назва блока з аргументу команди: "stone" = "voxelin:stone". */

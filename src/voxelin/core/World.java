@@ -2,6 +2,7 @@ package voxelin.core;
 
 import voxelin.api.*;
 import voxelin.api.event.*;
+import voxelin.core.entity.Vitals;
 import voxelin.core.gen.Generator;
 
 import java.io.File;
@@ -76,6 +77,33 @@ public final class World implements WorldAccess {
     }
 
     public void setListener(Listener l) { listener = l; }
+
+    // ------------------------------------------------------------------ час доби й здоров'я гравця
+
+    @Override public long time() { return info.time; }
+    @Override public void setTime(long t) { info.time = Math.max(0, t); }
+    @Override public long dayTicks() { return DayCycle.dayTicks(info.dayMinutes); }
+    public double dayPhase() { return DayCycle.phase(info.time, dayTicks()); }
+    public long dayNumber() { return DayCycle.day(info.time, dayTicks()); }
+    /** Яскравість неба 0.12..1 за часом доби. */
+    public double skyLevel() { return DayCycle.sky(dayPhase()); }
+
+    private final Map<Source, Vitals> vitals = new IdentityHashMap<>();
+    private Vitals mainVitals;
+
+    /** Здоров'я/голод джерела (створюється при першому зверненні; перше джерело - гравець одиночної гри - відновлюється зі збереження). */
+    public Vitals vitals(Source s) {
+        Vitals v = vitals.get(s);
+        if (v == null) {
+            v = mainVitals == null && info.hasVitals ? new Vitals(info.health, info.hunger, info.saturation) : new Vitals();
+            if (v.dead()) v = new Vitals();
+            vitals.put(s, v);
+            if (mainVitals == null) mainVitals = v;
+        }
+        return v;
+    }
+
+    @Override public Vitality vitality(Source s) { return s.kind() == Source.Kind.PLAYER ? vitals(s) : null; }
 
     // ------------------------------------------------------------------ читання
 
@@ -206,6 +234,7 @@ public final class World implements WorldAccess {
     /** Тік гри (20/с). */
     public void tick() {
         tick++;
+        info.time++;
         budgets.clear();
         events.post(new TickEvent(this, tick));
         if (System.currentTimeMillis() - lastAutosave > 30_000) { lastAutosave = System.currentTimeMillis(); autosave(); }
@@ -253,6 +282,7 @@ public final class World implements WorldAccess {
         io.shutdown();
         try { if (!io.awaitTermination(15, TimeUnit.SECONDS)) System.out.println("[Voxelin] ⚠️ збереження не завершилось за 15 с"); }
         catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        if (mainVitals != null) { Vitals mv = mainVitals; info.hasVitals = true; info.health = mv.dead() ? 20 : mv.health(); info.hunger = mv.dead() ? 20 : mv.hunger(); info.saturation = mv.dead() ? 5 : mv.saturation(); }
         try { info.save(dir); } catch (IOException e) { System.out.println("[Voxelin] ⚠️ " + e); }
         chunks.clear();
     }

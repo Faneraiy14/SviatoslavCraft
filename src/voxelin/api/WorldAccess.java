@@ -10,6 +10,13 @@ public interface WorldAccess {
     boolean setBlock(Source source, long x, int y, long z, BlockRef block);
     /** Виконати багато змін як одну: світло перераховується один раз у кінці (замість окремо на кожен блок). Типово - просто виконати. */
     default void batch(Runnable changes) { changes.run(); }
+    /** Ігровий час у тіках (20/с) від початку світу. */
+    default long time() { return 0; }
+    default void setTime(long ticks) {}
+    /** Довжина доби в тіках. */
+    default long dayTicks() { return 24000; }
+    /** Здоров'я/голод гравця-джерела; null - у цього джерела їх нема. */
+    default Vitality vitality(Source source) { return null; }
     long seed();
     String name();
 }

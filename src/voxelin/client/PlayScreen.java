@@ -6,6 +6,8 @@ import voxelin.client.ui.Gui;
 import voxelin.content.VanillaContent;
 import voxelin.core.*;
 import voxelin.core.entity.PlayerEntity;
+import voxelin.core.entity.Vitals;
+import voxelin.api.Source;
 
 import java.util.*;
 
@@ -28,7 +30,7 @@ final class PlayScreen {
     final Inventory inv = new Inventory();
     private final PlayerActions actions;
     private final Deque<Line> chat = new ArrayDeque<>();
-    private static final float[] SKY = {0.53f, 0.71f, 0.92f}, UNDER_FOG = {0.07f, 0.2f, 0.45f};
+    private static final float[] UNDER_FOG = {0.07f, 0.2f, 0.45f};
     private final Pos spawn;
     private boolean invOpen, chatOpen, debug, hud = true, grabbed;
     private Raycast.Hit hit;
@@ -37,13 +39,20 @@ final class PlayScreen {
     long updNs, renNs, guiNs;
     private int quietFrames;
     private boolean cmdsDone, shotDone;
+    private final Source playerSrc = Sources.player("Player");
+    private final Vitals vt;
+    private boolean leaving, deadHandled;
+    private double prevHealth = 20, hurtFlash;
+    private long bannerDay = -1, bannerAt;
 
     PlayScreen(Voxelin v, World world) {
         this.v = v; this.world = world;
         rend = new WorldRenderer(world, v.textures);
         rend.renderDistance = v.opts.renderDistance;
-        rend.skyBrightness = v.opts.sky;
-        actions = new LocalActions(world, v.game.commands, Sources.player("Player"));
+        if (v.opts.dayMinutes > 0) world.info.dayMinutes = Math.max(DayCycle.MIN_MINUTES, Math.min(DayCycle.MAX_MINUTES, v.opts.dayMinutes));
+        actions = new LocalActions(world, v.game.commands, playerSrc);
+        vt = world.vitals(playerSrc);
+        prevHealth = vt.health();
         long[] land = world.findLand(0, 0); // не з'являтись у морі
         spawn = findSpawn(land[0], land[1]);
         player = new PlayerEntity(world::isSolid, world::isLiquid, spawn);
@@ -84,11 +93,19 @@ final class PlayScreen {
     void tick() {
         ticks++;
         Input in = v.input;
-        boolean active = grabbed && !chatOpen && !invOpen;
+        boolean active = grabbed && !chatOpen && !invOpen && !vt.dead();
         if (bench != null && bench.active()) bench.move(player);
         else if (!v.opts.freeze) player.tick(Voxelin.TICK, active && in.down(GLFW_KEY_W), active && in.down(GLFW_KEY_S), active && in.down(GLFW_KEY_A), active && in.down(GLFW_KEY_D),
                 active && in.down(GLFW_KEY_SPACE), active && (in.down(GLFW_KEY_LEFT_CONTROL) || in.down(GLFW_KEY_RIGHT_CONTROL)), active && in.down(GLFW_KEY_LEFT_SHIFT));
-        if (player.pos.y < -20) { player.teleport(spawn); say("Ти впав за межі світу - повернено на спавн."); }
+        if (!vt.dead() && !v.opts.freeze) {
+            boolean sprinting = active && in.down(GLFW_KEY_W) && (in.down(GLFW_KEY_LEFT_CONTROL) || in.down(GLFW_KEY_RIGHT_CONTROL));
+            if (sprinting) vt.exhaust(0.1 * Math.hypot(player.pos.relX(player.prev.cx) - player.prev.x, player.pos.relZ(player.prev.cz) - player.prev.z));
+            if (player.jumped) vt.exhaust(sprinting ? 0.2 : 0.05);
+            vt.land(player.takeLanded());
+            vt.tick(player.headInWater);
+        }
+        if (vt.dead() && !deadHandled) { deadHandled = true; hud = true; invOpen = false; chatOpen = false; v.input.endText(); grab(false); say("Ти загинув."); }
+        if (player.pos.y < -20) { player.teleport(spawn); if (!vt.dead()) vt.damage(4); say("Ти впав за межі світу - повернено на спавн."); }
         world.update(player.pos.cx, player.pos.cz, rend.renderDistance + 1);
         world.tick();
     }
@@ -98,18 +115,19 @@ final class PlayScreen {
     /** Повертає false, коли треба вийти зі світу в меню. */
     boolean frame(float alpha) {
         Input in = v.input;
-        if (in.pressed(GLFW_KEY_ESCAPE)) {
+        if (leaving) return false;
+        if (in.pressed(GLFW_KEY_ESCAPE) && !vt.dead()) {
             if (chatOpen) closeChat(); else if (invOpen) { invOpen = false; grab(true); } else return false;
         }
         if (in.pressed(GLFW_KEY_F3)) debug = !debug;
         if (in.pressed(GLFW_KEY_F1)) hud = !hud;
         if (in.pressed(GLFW_KEY_F5)) cam.cycle();
-        if (!chatOpen) {
+        if (!chatOpen && !vt.dead()) {
             if (in.pressed(GLFW_KEY_E)) { invOpen = !invOpen; grab(!invOpen); }
             if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); }
         }
         if (chatOpen) { in.updateText(); if (in.pressed(GLFW_KEY_ENTER)) sendChat(); } // не залежить від F1 (HUD)
-        boolean play = grabbed && !chatOpen && !invOpen;
+        boolean play = grabbed && !chatOpen && !invOpen && !vt.dead();
         if (play) {
             player.rotate((float) in.mouseDX() * 0.12f, (float) -in.mouseDY() * 0.12f);
             for (int i = 0; i < 9; i++) if (in.pressed(GLFW_KEY_1 + i)) inv.select(i);
@@ -134,7 +152,16 @@ final class PlayScreen {
         }
         boolean under = world.isLiquid(cam.pos.blockX(), cam.pos.blockY(), cam.pos.blockZ());
         rend.underwater = under;
-        rend.fogColor = under ? UNDER_FOG : SKY;
+        double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : DayCycle.sky(phase);
+        rend.skyBrightness = (float) sky;
+        float[] horizon = DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
+        if (under) { float k = (float) Math.max(0.25, sky); rend.fogColor = new float[]{UNDER_FOG[0] * k, UNDER_FOG[1] * k, UNDER_FOG[2] * k}; }
+        else rend.fogColor = horizon;
+        long dn = world.dayNumber();
+        if (dn != bannerDay) { if (bannerDay >= 0) bannerAt = System.currentTimeMillis(); bannerDay = dn; }
+        if (vt.health() < prevHealth - 0.01) hurtFlash = 1;
+        prevHealth = vt.health();
+        hurtFlash = Math.max(0, hurtFlash - 0.03);
         cam.update(v.window.fbWidth(), v.window.fbHeight(), (rend.renderDistance + 1) * 16 * Units.BLOCK_SIZE);
 
         hit = play || bench != null ? Raycast.cast(cam.pos, yaw, pitch, Raycast.MAX_REACH, this::solidAt) : null;
@@ -142,7 +169,7 @@ final class PlayScreen {
             if (in.clicked(GLFW_MOUSE_BUTTON_LEFT)) {
                 int id = world.blockId(hit.x(), hit.y(), hit.z());
                 String name = id > 0 ? world.blocks.get(id).name : null;
-                if (name != null && actions.breakBlock(hit.x(), hit.y(), hit.z())) inv.add(name, 1);
+                if (name != null && actions.breakBlock(hit.x(), hit.y(), hit.z())) { inv.add(name, 1); vt.exhaust(0.005); }
             } else if (in.clicked(GLFW_MOUSE_BUTTON_RIGHT)) {
                 Inventory.Stack st = inv.selectedStack();
                 if (st != null && !player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), st.item)) inv.takeSelected();
@@ -241,6 +268,7 @@ final class PlayScreen {
             Gui.rect(Gui.W / 2f - 1, Gui.H / 2f - 12, 2, 24, 1, 1, 1, 0.85f);
         }
         hotbar(g);
+        vitalsHud();
         long now = System.currentTimeMillis();
         List<Line> shown = new ArrayList<>();
         for (Line l : chat) if (chatOpen || now - l.at < 9000) shown.add(l);
@@ -257,7 +285,56 @@ final class PlayScreen {
             Gui.text("> " + in.text() + ((now / 500) % 2 == 0 ? "_" : ""), 14, Gui.H - 107, 2.4f, 1, 1, 0.8f);
         }
         if (invOpen) inventory(g);
+        if (hurtFlash > 0) Gui.rect(0, 0, Gui.W, Gui.H, 0.8f, 0.05f, 0.05f, (float) (0.35 * hurtFlash));
+        if (System.currentTimeMillis() - bannerAt < 4000 && bannerDay > 1) {
+            float a = (float) Math.min(1, (4000 - (System.currentTimeMillis() - bannerAt)) / 1000.0);
+            Gui.textCentered("ДЕНЬ " + bannerDay, Gui.W / 2f, 120, 5f, 1f, 0.9f, 0.4f * a + 0.2f);
+        }
+        if (vt.dead()) deathScreen(g);
         if (debug) debugText();
+    }
+
+    // ------------------------------------------------------------------ здоров'я, голод, повітря, смерть
+
+    private static final String[] HEART = {".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."};
+    private static final String[] FOOD = {"...XXX.", "..XXXXX", "..XXXXX", ".XXXXX.", "XXXXX..", "XXX....", "XX....."};
+    private static final String[] BUBBLE = {".XXX.", "X...X", "X...X", "X...X", ".XXX."};
+
+    private static void icon(String[] pat, float x, float y, float px, int full, float r, float g, float b) { // full: 0 порожня, 1 половина, 2 повна
+        for (int row = 0; row < pat.length; row++) for (int col = 0; col < pat[row].length(); col++) {
+            if (pat[row].charAt(col) != 'X') continue;
+            boolean lit = full == 2 || (full == 1 && col < pat[row].length() / 2 + 1);
+            if (lit) Gui.rect(x + col * px, y + row * px, px, px, r, g, b, 1f); else Gui.rect(x + col * px, y + row * px, px, px, r * 0.22f, g * 0.22f, b * 0.22f, 0.9f);
+        }
+    }
+
+    private void vitalsHud() {
+        if (vt.dead()) return;
+        float size = 54, gap = 6, total = 9 * (size + gap) - gap, x0 = (Gui.W - total) / 2f, y = Gui.H - size - 14 - 62, px = 3f, step = 24;
+        int hp = (int) Math.ceil(vt.health()), food = (int) Math.ceil(vt.hunger());
+        boolean low = vt.health() <= 6;
+        float wob = low ? (float) Math.sin(System.currentTimeMillis() / 90.0) * 1.5f : 0;
+        for (int i = 0; i < 10; i++) icon(HEART, x0 + i * step, y + (low && i % 2 == 0 ? wob : 0), px, hp >= 2 * i + 2 ? 2 : (hp == 2 * i + 1 ? 1 : 0), 0.9f, 0.12f, 0.15f);
+        for (int i = 0; i < 10; i++) icon(FOOD, x0 + total - (i + 1) * step + 2, y, px, food >= 2 * i + 2 ? 2 : (food == 2 * i + 1 ? 1 : 0), 0.78f, 0.5f, 0.2f);
+        if (vt.air() < Vitals.MAX_AIR) {
+            int bubbles = (int) Math.ceil(Math.max(0, vt.air()) / Vitals.MAX_AIR * 10);
+            for (int i = 0; i < bubbles; i++) icon(BUBBLE, x0 + total - (i + 1) * step + 2, y - 26, px, 2, 0.45f, 0.7f, 1f);
+        }
+    }
+
+    private void deathScreen(Gui g) {
+        Gui.rect(0, 0, Gui.W, Gui.H, 0.45f, 0.02f, 0.02f, 0.62f);
+        Gui.textCentered("ТИ ЗАГИНУВ", Gui.W / 2f, 230, 7f, 1f, 0.9f, 0.9f);
+        Gui.textCentered("День " + world.dayNumber(), Gui.W / 2f, 310, 2.8f, 0.9f, 0.8f, 0.8f);
+        if (g.button("ВІДРОДИТИСЬ", 440, 380, 400, 64)) respawn();
+        if (g.button("У МЕНЮ", 440, 466, 400, 64)) leaving = true;
+    }
+
+    private void respawn() {
+        vt.respawn();
+        player.teleport(spawn);
+        deadHandled = false; prevHealth = vt.health(); hurtFlash = 0;
+        grab(true);
     }
 
     private int colorOf(String item) { BlockType t = world.blocks.byName(item); return t == null ? 0xFF00FF : t.color; }
@@ -323,6 +400,7 @@ final class PlayScreen {
                 "XYZ: " + p.fmtX() + " " + String.format(Locale.ROOT, "%.1f", p.y - PlayerEntity.EYE) + " " + p.fmtZ() + "  (блоки)",
                 String.format(Locale.ROOT, "Кут: %.0f / %.0f   FPS: %d   чанк: %d %d", player.yaw, player.pitch, v.fps, p.cx, p.cz),
                 lightLine(),
+                String.format(Locale.ROOT, "День %d, %s (%.0f%%)   небо %.2f   здоров'я %.1f  голод %.1f  повітря %d", world.dayNumber(), DayCycle.phaseName(world.dayPhase()), world.dayPhase() * 100, world.skyLevel(), vt.health(), vt.hunger(), vt.air()),
                 "Біом: " + world.biomeAt(p.blockX(), p.blockZ()) + (player.inWater ? "  (у воді)" : ""),
                 "Чанків: " + world.loadedChunks().size() + "  мешів: " + rend.meshCountLoaded() + "  у черзі: " + rend.pending(),
                 "Видно секцій: " + rend.visibleSections + "  граней: " + rend.drawnQuads,
@@ -358,6 +436,7 @@ final class PlayScreen {
 
     /** Зберегти позицію й закрити (виклик при виході зі світу чи гри). */
     void close() {
+        if (vt.dead()) player.teleport(spawn); // збереження в момент смерті: гравець з'явиться на спавні
         world.info.setPlayer(player.pos, player.yaw, player.pitch);
         rend.close();
         world.close();

@@ -23,6 +23,12 @@ public final class WorldInfo {
     public long playerCx, playerCz;
     public double playerX, playerY, playerZ;
     public float playerYaw, playerPitch;
+    /** Ігровий час (тіки від початку) і довжина доби в хвилинах; старі світи без цих полів починають з початку дня. */
+    public long time;
+    public double dayMinutes = DayCycle.DEFAULT_MINUTES;
+    /** Стан гравця (здоров'я/голод/насиченість); hasVitals=false - значення за замовчуванням. */
+    public boolean hasVitals;
+    public double health = 20, hunger = 20, saturation = 5;
     public final List<String> palette = new ArrayList<>();
 
     public static boolean isValidName(String n) {
@@ -59,6 +65,14 @@ public final class WorldInfo {
             double sum = w.playerX + w.playerY + w.playerZ;
             if (Double.isNaN(sum) || Double.isInfinite(sum) || w.playerX < 0 || w.playerX >= 16 || w.playerZ < 0 || w.playerZ >= 16) w.hasPlayer = false;
         } catch (RuntimeException e) { w.hasPlayer = false; }
+        try { w.time = Math.max(0, Long.parseLong(p.getProperty("time", "0").trim())); } catch (NumberFormatException e) { w.time = 0; }
+        try { double m = Double.parseDouble(p.getProperty("dayMinutes", String.valueOf(DayCycle.DEFAULT_MINUTES)).trim()); w.dayMinutes = Double.isNaN(m) ? DayCycle.DEFAULT_MINUTES : Math.max(DayCycle.MIN_MINUTES, Math.min(DayCycle.MAX_MINUTES, m)); }
+        catch (NumberFormatException e) { w.dayMinutes = DayCycle.DEFAULT_MINUTES; }
+        w.hasVitals = "true".equals(p.getProperty("hasVitals"));
+        if (w.hasVitals) try {
+            w.health = Double.parseDouble(p.getProperty("health")); w.hunger = Double.parseDouble(p.getProperty("hunger")); w.saturation = Double.parseDouble(p.getProperty("saturation", "0"));
+            if (Double.isNaN(w.health + w.hunger + w.saturation)) w.hasVitals = false;
+        } catch (RuntimeException e) { w.hasVitals = false; }
         for (String s : p.getProperty("palette", "").split(",")) if (!s.trim().isEmpty()) w.palette.add(s.trim());
         if (w.palette.isEmpty() || !w.palette.get(0).equals(BlockRegistry.AIR)) w.palette.add(0, BlockRegistry.AIR);
         return w;
@@ -73,6 +87,9 @@ public final class WorldInfo {
         p.setProperty("type", type.name());
         p.setProperty("created", String.valueOf(created));
         p.setProperty("palette", String.join(",", palette));
+        p.setProperty("time", String.valueOf(time));
+        p.setProperty("dayMinutes", String.valueOf(dayMinutes));
+        if (hasVitals) { p.setProperty("hasVitals", "true"); p.setProperty("health", String.valueOf(health)); p.setProperty("hunger", String.valueOf(hunger)); p.setProperty("saturation", String.valueOf(saturation)); }
         if (hasPlayer) {
             p.setProperty("hasPlayer", "true");
             p.setProperty("pcx", String.valueOf(playerCx)); p.setProperty("pcz", String.valueOf(playerCz));

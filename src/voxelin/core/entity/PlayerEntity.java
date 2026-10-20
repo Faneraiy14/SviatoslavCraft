@@ -26,11 +26,17 @@ public final class PlayerEntity {
     private final Solid world;
     private final Liquid liquid;
     public boolean inWater, headInWater;
+    /** Стрибнув у цьому тіку (для виснаження). */
+    public boolean jumped;
+    private double fall, landedFall;
 
     public PlayerEntity(Solid world, Pos at) { this(world, (x, y, z) -> false, at); }
     public PlayerEntity(Solid world, Liquid liquid, Pos at) { this.world = world; this.liquid = liquid; teleport(at); }
 
-    public void teleport(Pos p) { pos.set(p); prev.set(p); vx = vy = vz = 0; }
+    public void teleport(Pos p) { pos.set(p); prev.set(p); vx = vy = vz = 0; fall = landedFall = 0; }
+
+    /** Висота падіння (блоків), накопичена до приземлення в цьому тіку; читання скидає. Падіння у воду не рахується. */
+    public double takeLanded() { double f = landedFall; landedFall = 0; return f; }
 
     public void rotate(float dYaw, float dPitch) { yaw += dYaw; pitch = Math.max(-89f, Math.min(89f, pitch + dPitch)); }
 
@@ -57,7 +63,8 @@ public final class PlayerEntity {
         if (tvx == 0 && tvz == 0 && Math.abs(vx) < 0.01 && Math.abs(vz) < 0.01) { vx = 0; vz = 0; }
         eyeOffset += ((crouch ? -CROUCH_DROP : 0.0) - eyeOffset) * Math.min(1.0, 10.0 * dt);
 
-        if (jump && onGround) { vy = JUMP; onGround = false; }
+        jumped = false;
+        if (jump && onGround) { vy = JUMP; onGround = false; jumped = true; }
         if (inWater) { // плавання: слабка гравітація, повільне занурення, пробіл - вгору (біля поверхні - сильніший поштовх, щоб вилізти на берег)
             vy = Math.max(-3.0, vy - GRAVITY * 0.12 * dt);
             if (jump) vy = Math.max(vy, headInWater ? 3.8 : 5.5);
@@ -65,6 +72,12 @@ public final class PlayerEntity {
         moveY(vy * dt);
         moveH(vx * dt, vz * dt, crouch);
         pos.normalize();
+        double down = prev.y - pos.y; // prev.y у тому ж чанку (normalize не міняє y)
+        boolean wet = liquid.at(pos.blockX(), (int) Math.floor(pos.y - EYE + 0.6), pos.blockZ());
+        if (wet) fall = 0;
+        else if (onGround) { if (fall > 0) landedFall = fall; fall = 0; }
+        else if (down > 0) fall += down;
+        else fall = Math.max(0, fall + down);
     }
 
     private void moveY(double d) {

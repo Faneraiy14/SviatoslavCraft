@@ -29,6 +29,7 @@ public final class Voxelin {
         int renderDistance = 12, msaa = 2, width = 1280, height = 720, textureSize = 16;
         boolean vsync = true;
         float sky = -1f; // --sky 0..1: примусова яскравість неба (інакше - за часом доби)
+        float showProgress = -1f; // --show-progress 0..1: показати тріщини цілі (для знімків)
         double dayMinutes = -1; // --day-minutes N: довжина доби (інакше - зі світу, типово 30)
         long seed = 12345L;
         String autoWorld, screenshot, benchOut = "bench-result.json";
@@ -54,6 +55,7 @@ public final class Voxelin {
                         case "--texture-size" -> o.textureSize = Integer.parseInt(a[++i]) >= 64 ? 64 : (Integer.parseInt(a[i]) >= 32 ? 32 : 16);
                         case "--msaa" -> o.msaa = Math.max(0, Math.min(8, Integer.parseInt(a[++i])));
                         case "--no-vsync" -> o.vsync = false;
+                        case "--show-progress" -> o.showProgress = Math.max(0f, Math.min(1f, Float.parseFloat(a[++i])));
                         case "--day-minutes" -> o.dayMinutes = Double.parseDouble(a[++i]);
                         case "--sky" -> o.sky = Math.max(0f, Math.min(1f, Float.parseFloat(a[++i])));
                         case "--debug" -> o.debug = true;

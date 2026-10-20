@@ -27,7 +27,7 @@ final class PlayScreen {
     final WorldRenderer rend;
     final Camera cam = new Camera();
     final PlayerEntity player;
-    final Inventory inv = new Inventory();
+    final Inventory inv;
     private final PlayerActions actions;
     private final Deque<Line> chat = new ArrayDeque<>();
     private static final float[] UNDER_FOG = {0.07f, 0.2f, 0.45f};
@@ -42,6 +42,10 @@ final class PlayScreen {
     private final Source playerSrc = Sources.player("Player");
     private final Vitals vt;
     private boolean leaving, deadHandled;
+    // ламання блока: ціль, прогрес 0..1, пауза між блоками
+    private long breakX, breakZ; private int breakY; private boolean breaking;
+    private double breakProgress, breakCooldown;
+    private long lastFrameNs = System.nanoTime();
     private double prevHealth = 20, hurtFlash;
     private long bannerDay = -1, bannerAt;
 
@@ -52,6 +56,7 @@ final class PlayScreen {
         if (v.opts.dayMinutes > 0) world.info.dayMinutes = Math.max(DayCycle.MIN_MINUTES, Math.min(DayCycle.MAX_MINUTES, v.opts.dayMinutes));
         actions = new LocalActions(world, v.game.commands, playerSrc);
         vt = world.vitals(playerSrc);
+        inv = world.inventory(playerSrc);
         prevHealth = vt.health();
         long[] land = world.findLand(0, 0); // не з'являтись у морі
         spawn = findSpawn(land[0], land[1]);
@@ -64,7 +69,7 @@ final class PlayScreen {
             int feet = (int) Math.floor(p.y - PlayerEntity.EYE + 0.05);
             if (world.isSolid(fx, feet, fz) || world.isSolid(fx, p.blockY(), fz)) player.teleport(findSpawn(fx, fz)); // світ змінився - не лишати гравця в блоці
         }
-        for (String s : VanillaContent.STARTER) inv.add(s, 64);
+        if (world.creative() && inv.isEmpty()) for (String s : VanillaContent.STARTER) inv.add(s, 64);
         if (v.opts.hasTp) { // X, Z (long, блоки), кути, висота над землею
             Pos sp = findSpawn(v.opts.tpX, v.opts.tpZ);
             sp.add(0, v.opts.tpH, 0);
@@ -76,6 +81,11 @@ final class PlayScreen {
         grab(!v.opts.quiet()); // автоперевірки не захоплюють справжній курсор користувача
         say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера.");
     }
+
+    /** Центр тіла гравця - від нього рахується підбір і випадіння речей. */
+    private Pos bodyPos() { Pos c = player.pos.copy(); c.y = player.bodyCenterY(); return c; }
+
+    private ItemType held() { Inventory.Stack st = inv.selectedStack(); return st == null ? null : world.itemTypes.get(st.item); }
 
     /** Місце появи над землею в колонці (bx,bz): перший вільний прохід на 2 блоки вгору від поверхні. */
     private Pos findSpawn(long bx, long bz) {
@@ -103,6 +113,11 @@ final class PlayScreen {
             if (player.jumped) vt.exhaust(sprinting ? 0.2 : 0.05);
             vt.land(player.takeLanded());
             vt.tick(player.headInWater);
+        }
+        if (!vt.dead() && !v.opts.freeze) world.collectItems(bodyPos(), inv);
+        if (vt.dead() && !deadHandled && !world.creative()) {
+            Pos at = bodyPos();
+            for (Inventory.Stack st : inv.drain()) world.spawnItem(at, st.item, st.count, st.damage, true);
         }
         if (vt.dead() && !deadHandled) { deadHandled = true; hud = true; invOpen = false; chatOpen = false; v.input.endText(); grab(false); say("Ти загинув."); }
         if (player.pos.y < -20) { player.teleport(spawn); if (!vt.dead()) vt.damage(4); say("Ти впав за межі світу - повернено на спавн."); }
@@ -164,17 +179,18 @@ final class PlayScreen {
         hurtFlash = Math.max(0, hurtFlash - 0.03);
         cam.update(v.window.fbWidth(), v.window.fbHeight(), (rend.renderDistance + 1) * 16 * Units.BLOCK_SIZE);
 
-        hit = play || bench != null ? Raycast.cast(cam.pos, yaw, pitch, Raycast.MAX_REACH, this::solidAt) : null;
+        hit = play || bench != null || v.opts.showProgress >= 0 ? Raycast.cast(cam.pos, yaw, pitch, Raycast.MAX_REACH, this::solidAt) : null;
+        long nowNs = System.nanoTime();
+        double dt = Math.min(0.1, (nowNs - lastFrameNs) / 1e9);
+        lastFrameNs = nowNs;
+        if (breakCooldown > 0) breakCooldown -= dt;
         if (play && hit != null) {
-            if (in.clicked(GLFW_MOUSE_BUTTON_LEFT)) {
-                int id = world.blockId(hit.x(), hit.y(), hit.z());
-                String name = id > 0 ? world.blocks.get(id).name : null;
-                if (name != null && actions.breakBlock(hit.x(), hit.y(), hit.z())) { inv.add(name, 1); vt.exhaust(0.005); }
-            } else if (in.clicked(GLFW_MOUSE_BUTTON_RIGHT)) {
-                Inventory.Stack st = inv.selectedStack();
-                if (st != null && !player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), st.item)) inv.takeSelected();
-            }
-        } else if (play) { in.clicked(GLFW_MOUSE_BUTTON_LEFT); in.clicked(GLFW_MOUSE_BUTTON_RIGHT); }
+            updateBreaking(in, dt);
+            if (in.clicked(GLFW_MOUSE_BUTTON_RIGHT)) useItem();
+        } else {
+            breaking = false; breakProgress = 0;
+            if (play) { in.clicked(GLFW_MOUSE_BUTTON_LEFT); in.clicked(GLFW_MOUSE_BUTTON_RIGHT); }
+        }
 
         // світ
         glViewport(0, 0, v.window.fbWidth(), v.window.fbHeight());
@@ -195,6 +211,39 @@ final class PlayScreen {
         guiNs = System.nanoTime() - t2;
         devHooks();
         return true;
+    }
+
+    /** Утримання лівої кнопки: прогрес ламання цілі; скидається при зміні блока чи відпусканні. */
+    private void updateBreaking(Input in, double dt) {
+        in.clicked(GLFW_MOUSE_BUTTON_LEFT); // «щойно натиснуто» нам не потрібне - дивимось на утримання
+        if (!in.buttonDown(GLFW_MOUSE_BUTTON_LEFT)) { breaking = false; breakProgress = 0; return; }
+        int id = world.blockId(hit.x(), hit.y(), hit.z());
+        if (id <= 0) { breaking = false; breakProgress = 0; return; }
+        if (!breaking || breakX != hit.x() || breakY != hit.y() || breakZ != hit.z()) { breaking = true; breakX = hit.x(); breakY = hit.y(); breakZ = hit.z(); breakProgress = 0; }
+        if (breakCooldown > 0) return;
+        BlockType bt = world.blocks.get(id);
+        ItemType tool = held();
+        double secs = Mining.seconds(bt, tool, world.creative());
+        if (secs == Double.POSITIVE_INFINITY) return;
+        breakProgress = secs <= 0 ? 1 : breakProgress + dt / secs;
+        if (breakProgress < 1) return;
+        boolean ok = actions.breakBlock(breakX, breakY, breakZ, tool == null ? null : tool.name, !world.creative());
+        breaking = false; breakProgress = 0; breakCooldown = 0.2;
+        if (!ok) return;
+        vt.exhaust(0.005);
+        if (!world.creative() && tool != null) inv.wearSelected(tool.durability);
+    }
+
+    /** Права кнопка: з'їсти їжу (якщо голодний) або поставити блок з руки. */
+    private void useItem() {
+        Inventory.Stack st = inv.selectedStack();
+        ItemType t = st == null ? null : world.itemTypes.get(st.item);
+        if (t == null) return;
+        if (t.food > 0) {
+            if (vt.hunger() < Vitals.MAX && !vt.dead()) { vt.feed(t.food); if (!world.creative()) inv.takeSelected(); }
+        } else if (t.placesBlock != null && !player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
+            if (!world.creative()) inv.takeSelected();
+        }
     }
 
     private boolean solidAt(long x, int y, long z) { int id = world.blockId(x, y, z); return id > 0 && world.blocks.get(id).solid; }
@@ -218,6 +267,8 @@ final class PlayScreen {
             for (int[] k : ed) { glVertex3f(c[k[0]][0], c[k[0]][1], c[k[0]][2]); glVertex3f(c[k[1]][0], c[k[1]][1], c[k[1]][2]); }
             glEnd();
         }
+        drawCracks(rcx, rcz, s);
+        drawItems(rcx, rcz, s);
         if (cam.mode != Camera.Mode.FIRST) { // заглушка тіла: коробка розміром із хітбокс
             float hw = (float) (PlayerEntity.WIDTH / 2 * s), hh = (float) (PlayerEntity.HEIGHT / 2 * s);
             float px = (float) (player.pos.relX(cam.eye.cx) * s), cy = (float) (player.bodyCenterY() * s), pz = (float) (player.pos.relZ(cam.eye.cz) * s);
@@ -237,6 +288,95 @@ final class PlayScreen {
             glEnable(GL_CULL_FACE);
         }
         glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix();
+    }
+
+    /** Тріщини на цілі: затемнення + ламані лінії на гранях, їх більшає з прогресом (детерміновано за позицією блока). */
+    private void drawCracks(long rcx, long rcz, float s) {
+        double prog = v.opts.showProgress >= 0 && hit != null ? v.opts.showProgress : (breaking ? breakProgress : 0);
+        long bx = v.opts.showProgress >= 0 && hit != null ? hit.x() : breakX, bz = v.opts.showProgress >= 0 && hit != null ? hit.z() : breakZ;
+        int by = v.opts.showProgress >= 0 && hit != null ? hit.y() : breakY;
+        if (prog <= 0.001) return;
+        float e = 0.006f, x0 = (bx - rcx - e) * s, y0 = (by - e) * s, z0 = (bz - rcz - e) * s, x1 = (bx - rcx + 1 + e) * s, y1 = (by + 1 + e) * s, z1 = (bz - rcz + 1 + e) * s;
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(false);
+        glColor4f(0f, 0f, 0f, (float) (0.12 + 0.38 * prog));
+        glBegin(GL_QUADS);
+        glVertex3f(x0, y1, z0); glVertex3f(x0, y1, z1); glVertex3f(x1, y1, z1); glVertex3f(x1, y1, z0); // верх
+        glVertex3f(x0, y0, z0); glVertex3f(x1, y0, z0); glVertex3f(x1, y0, z1); glVertex3f(x0, y0, z1); // низ
+        glVertex3f(x0, y0, z0); glVertex3f(x0, y1, z0); glVertex3f(x1, y1, z0); glVertex3f(x1, y0, z0);
+        glVertex3f(x0, y0, z1); glVertex3f(x1, y0, z1); glVertex3f(x1, y1, z1); glVertex3f(x0, y1, z1);
+        glVertex3f(x0, y0, z0); glVertex3f(x0, y0, z1); glVertex3f(x0, y1, z1); glVertex3f(x0, y1, z0);
+        glVertex3f(x1, y0, z0); glVertex3f(x1, y1, z0); glVertex3f(x1, y1, z1); glVertex3f(x1, y0, z1);
+        glEnd();
+        glColor4f(0f, 0f, 0f, 0.85f); glLineWidth(2f);
+        int steps = 2 + (int) (prog * 14);
+        for (int face = 0; face < 6; face++) {
+            java.util.Random r = new java.util.Random(bx * 73856093L ^ bz * 19349663L ^ by * 83492791L ^ face * 2654435761L);
+            for (int branch = 0; branch < 2; branch++) {
+                double u = 0.5, w = 0.5, ang = r.nextDouble() * Math.PI * 2;
+                glBegin(GL_LINE_STRIP);
+                for (int i = 0; i < steps; i++) {
+                    float[] p = facePoint(face, u, w, x0, y0, z0, x1, y1, z1);
+                    glVertex3f(p[0], p[1], p[2]);
+                    ang += (r.nextDouble() - 0.5) * 1.6;
+                    u = Math.max(0.02, Math.min(0.98, u + Math.cos(ang) * 0.11)); w = Math.max(0.02, Math.min(0.98, w + Math.sin(ang) * 0.11));
+                }
+                glEnd();
+            }
+        }
+        glDepthMask(true);
+        glDisable(GL_BLEND);
+    }
+
+    private static float[] facePoint(int face, double u, double w, float x0, float y0, float z0, float x1, float y1, float z1) {
+        float fu = (float) u, fw = (float) w;
+        switch (face) {
+            case 0: return new float[]{x0 + (x1 - x0) * fu, y1, z0 + (z1 - z0) * fw};
+            case 1: return new float[]{x0 + (x1 - x0) * fu, y0, z0 + (z1 - z0) * fw};
+            case 2: return new float[]{x0 + (x1 - x0) * fu, y0 + (y1 - y0) * fw, z0};
+            case 3: return new float[]{x0 + (x1 - x0) * fu, y0 + (y1 - y0) * fw, z1};
+            case 4: return new float[]{x0, y0 + (y1 - y0) * fu, z0 + (z1 - z0) * fw};
+            default: return new float[]{x1, y0 + (y1 - y0) * fu, z0 + (z1 - z0) * fw};
+        }
+    }
+
+    /** Предмети на землі: маленькі кольорові кубики, що крутяться й погойдуються (кольори - з предмета, затемнені вночі). */
+    private void drawItems(long rcx, long rcz, float s) {
+        java.util.List<voxelin.core.entity.ItemEntity> list = world.itemEntities();
+        if (list.isEmpty()) return;
+        float light = (float) Math.max(0.3, rend.skyBrightness);
+        double t = System.currentTimeMillis() / 1000.0;
+        float half = 0.14f * s;
+        glDisable(GL_CULL_FACE);
+        int drawn = 0;
+        for (voxelin.core.entity.ItemEntity en : list) {
+            double dx = en.pos.relX(cam.eye.cx) - cam.eye.x, dz = en.pos.relZ(cam.eye.cz) - cam.eye.z, dy = en.pos.y - cam.eye.y;
+            if (dx * dx + dz * dz + dy * dy > 48 * 48) continue;
+            if (++drawn > 300) break;
+            ItemType it = world.itemTypes.get(en.item);
+            int rgb = it == null ? 0xFF00FF : it.color;
+            float r = ((rgb >> 16) & 255) / 255f * light, g = ((rgb >> 8) & 255) / 255f * light, b = (rgb & 255) / 255f * light;
+            float px = (float) (en.pos.relX(cam.eye.cx) * s), pz = (float) (en.pos.relZ(cam.eye.cz) * s);
+            float bob = (float) (Math.sin(t * 2.5 + (en.pos.x + en.pos.z)) * 0.04 + 0.1) * s;
+            glPushMatrix();
+            glTranslatef(px, (float) (en.pos.y * s) + (en.onGround ? bob : 0), pz);
+            glRotatef((float) ((t * 70 + en.pos.x * 40) % 360), 0, 1, 0);
+            glBegin(GL_QUADS);
+            float[] sh = {1.0f, 0.5f, 0.8f, 0.8f, 0.65f, 0.65f};
+            for (int f = 0; f < 6; f++) {
+                glColor3f(r * sh[f], g * sh[f], b * sh[f]);
+                int ax = f >> 1; float sg = (f & 1) == 0 ? half : -half;
+                for (int q = 0; q < 4; q++) {
+                    float u = (q == 0 || q == 3) ? -half : half, w = q < 2 ? -half : half;
+                    float[] p = new float[3];
+                    p[ax] = sg; p[(ax + 1) % 3] = u; p[(ax + 2) % 3] = w;
+                    glVertex3f(p[0], p[1], p[2]);
+                }
+            }
+            glEnd();
+            glPopMatrix();
+        }
+        glEnable(GL_CULL_FACE);
     }
 
     // ------------------------------------------------------------------ чат і команди
@@ -269,6 +409,10 @@ final class PlayScreen {
         }
         hotbar(g);
         vitalsHud();
+        if (breaking && breakProgress > 0.01 && cam.mode == Camera.Mode.FIRST) {
+            Gui.rect(Gui.W / 2f - 31, Gui.H / 2f + 21, 62, 7, 0, 0, 0, 0.6f);
+            Gui.rect(Gui.W / 2f - 30, Gui.H / 2f + 22, (float) (60 * Math.min(1, breakProgress)), 5, 1f, 1f, 1f, 0.95f);
+        }
         long now = System.currentTimeMillis();
         List<Line> shown = new ArrayList<>();
         for (Line l : chat) if (chatOpen || now - l.at < 9000) shown.add(l);
@@ -337,7 +481,7 @@ final class PlayScreen {
         grab(true);
     }
 
-    private int colorOf(String item) { BlockType t = world.blocks.byName(item); return t == null ? 0xFF00FF : t.color; }
+    private int colorOf(String item) { ItemType t = world.itemTypes.get(item); return t != null ? t.color : 0xFF00FF; }
 
     private void slot(Gui g, float x, float y, float size, Inventory.Stack st, boolean selected, boolean hov) {
         Gui.rect(x - 2, y - 2, size + 4, size + 4, selected ? 1f : 0.08f, selected ? 1f : 0.08f, selected ? 1f : 0.08f, 0.9f);
@@ -346,7 +490,13 @@ final class PlayScreen {
         float pad = size * 0.2f;
         Gui.rect(x + pad, y + pad, size - 2 * pad, size - 2 * pad, colorOf(st.item), 1f);
         Gui.frame(x + pad, y + pad, size - 2 * pad, size - 2 * pad, 1.5f, 0, 0, 0);
-        String c = String.valueOf(st.count);
+        ItemType it = world.itemTypes.get(st.item);
+        if (it != null && it.durability > 0 && st.damage > 0) { // смужка міцності
+            float f = Math.max(0f, 1f - st.damage / (float) it.durability);
+            Gui.rect(x + pad, y + size - 9, size - 2 * pad, 4, 0, 0, 0, 0.9f);
+            Gui.rect(x + pad, y + size - 9, (size - 2 * pad) * f, 4, 1f - f, f, 0.1f, 1f);
+        }
+        String c = st.count > 1 ? String.valueOf(st.count) : "";
         Gui.text(c, x + size - Gui.textWidth(c, 1.8f) - 3, y + size - 15, 1.8f, 1, 1, 1);
     }
 
@@ -400,6 +550,7 @@ final class PlayScreen {
                 "XYZ: " + p.fmtX() + " " + String.format(Locale.ROOT, "%.1f", p.y - PlayerEntity.EYE) + " " + p.fmtZ() + "  (блоки)",
                 String.format(Locale.ROOT, "Кут: %.0f / %.0f   FPS: %d   чанк: %d %d", player.yaw, player.pitch, v.fps, p.cx, p.cz),
                 lightLine(),
+                "Режим: " + world.gameMode() + "   предметів на землі: " + world.itemEntities().size(),
                 String.format(Locale.ROOT, "День %d, %s (%.0f%%)   небо %.2f   здоров'я %.1f  голод %.1f  повітря %d", world.dayNumber(), DayCycle.phaseName(world.dayPhase()), world.dayPhase() * 100, world.skyLevel(), vt.health(), vt.hunger(), vt.air()),
                 "Біом: " + world.biomeAt(p.blockX(), p.blockZ()) + (player.inWater ? "  (у воді)" : ""),
                 "Чанків: " + world.loadedChunks().size() + "  мешів: " + rend.meshCountLoaded() + "  у черзі: " + rend.pending(),

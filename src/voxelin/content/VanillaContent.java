@@ -188,6 +188,19 @@ public final class VanillaContent implements VoxelinMod {
             int left = h.give(t.name, n);
             k.reply("Видано " + (n - left) + " x " + t.name + (left > 0 ? " (не влізло " + left + ")" : ""));
         });
+        c.register("drop", "<предмет> [кількість]", 2, k -> {
+            if (!(k.world() instanceof voxelin.core.World)) throw new Commands.CommandException("Недоступно");
+            voxelin.core.World w = (voxelin.core.World) k.world();
+            if (k.args().isEmpty() || k.args().size() > 2) throw new Commands.CommandException("Потрібна назва предмета й (необов'язково) кількість");
+            voxelin.core.ItemType t = w.itemTypes.find(k.args().get(0));
+            if (t == null) throw new Commands.CommandException("Невідомий предмет: " + k.args().get(0));
+            int n = 1;
+            if (k.args().size() == 2) try { n = Integer.parseInt(k.args().get(1)); } catch (NumberFormatException e) { throw new Commands.CommandException("Не число: " + k.args().get(1)); }
+            if (n < 1 || n > 64) throw new Commands.CommandException("Кількість від 1 до 64: " + n);
+            long[] o = k.origin();
+            w.spawnItem(voxelin.core.Pos.ofBlock(o[0], o[1] + 1.2, o[2]), t.name, n, 0, true);
+            k.reply("Викинуто " + n + " x " + t.name);
+        });
         c.register("clear", "", 2, k -> {
             ItemHolder h = k.world().items(k.source());
             if (h == null) throw new Commands.CommandException("У цього джерела нема інвентаря");
@@ -202,7 +215,7 @@ public final class VanillaContent implements VoxelinMod {
             if (now && !was && h != null) for (String s : STARTER) h.give(s, 64);
             k.reply("Режим гри: " + k.world().gameMode());
         });
-        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /clear, /gamemode, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
+        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
     }
 
     /** Назва блока з аргументу команди: "stone" = "voxelin:stone". */

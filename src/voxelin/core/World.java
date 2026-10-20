@@ -75,6 +75,7 @@ public final class World implements WorldAccess {
         loadItems();
         loadBlockEntities();
         loadMobs();
+        loadMarks();
         // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
         int threads = Integer.getInteger("voxelin.genThreads", Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)));
         genPool = Executors.newFixedThreadPool(threads, daemon("voxelin-gen"));
@@ -280,9 +281,31 @@ public final class World implements WorldAccess {
             if (m.removable()) { it.remove(); continue; }
             if (pc != null) { // далекі зникають (вороги ближче, ніж мирні)
                 double dx = m.pos.relX(pc.cx) - pc.x, dz = m.pos.relZ(pc.cz) - pc.z, d2 = dx * dx + dz * dz;
-                if (naturalSpawning && ((m.type.hostile() && d2 > 80 * 80) || d2 > 128 * 128)) it.remove();
+                if (naturalSpawning && !m.keep && !m.type.persistent && ((m.type.hostile() && d2 > 80 * 80) || d2 > 128 * 128)) it.remove();
             }
         }
+    }
+
+    /** Відмітки вже створених мобів зі структур (щоб повторна генерація чанка не відроджувала жителів). */
+    private final Set<Long> marks = new HashSet<>();
+
+    private File marksFile() { return new File(dir, "marks.dat"); }
+
+    private void saveMarks() {
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (long k : marks) sb.append(k).append('\n');
+            File tmp = new File(dir, "marks.dat.tmp");
+            java.nio.file.Files.write(tmp.toPath(), sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Files2.replace(tmp, marksFile());
+        } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати відмітки: " + e); }
+    }
+
+    private void loadMarks() {
+        File f = marksFile();
+        if (!f.isFile()) return;
+        try { for (String line : java.nio.file.Files.readAllLines(f.toPath(), java.nio.charset.StandardCharsets.UTF_8)) try { marks.add(Long.parseLong(line.trim())); } catch (NumberFormatException e) { /* бита клітинка */ } }
+        catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось прочитати відмітки: " + e); }
     }
 
     private File mobsFile() { return new File(dir, "mobs.dat"); }
@@ -290,9 +313,10 @@ public final class World implements WorldAccess {
     private void saveMobs() {
         try {
             StringBuilder sb = new StringBuilder();
-            for (Mob m : mobs) if ((m.type.passive() || m.type.persistent) && !m.dying) {
+            for (Mob m : mobs) if ((m.type.passive() || m.type.persistent || m.keep) && !m.dying) {
                 sb.append(m.type.name).append(' ').append(m.pos.cx).append(' ').append(m.pos.cz).append(' ').append(m.pos.x).append(' ').append(m.pos.y).append(' ').append(m.pos.z).append(' ').append(m.health).append(' ').append(m.yaw);
                 if (m.home != null) sb.append(' ').append(m.home.cx).append(' ').append(m.home.cz).append(' ').append(m.home.x).append(' ').append(m.home.y).append(' ').append(m.home.z);
+                if (m.keep) sb.append(' ').append(1);
                 sb.append('\n');
             }
             File tmp = new File(dir, "mobs.dat.tmp");
@@ -307,7 +331,7 @@ public final class World implements WorldAccess {
         try {
             for (String line : java.nio.file.Files.readAllLines(f.toPath(), java.nio.charset.StandardCharsets.UTF_8)) {
                 String[] p = line.trim().split(" ");
-                if (p.length != 8 && p.length != 13) continue;
+                if (p.length != 8 && p.length != 9 && p.length != 13 && p.length != 14) continue;
                 MobType t = mobTypes.get(p[0]);
                 if (t == null || mobs.size() >= 200) continue;
                 try {
@@ -317,7 +341,9 @@ public final class World implements WorldAccess {
                     if (!inRange(cx, cz) || Double.isNaN(x + y + z + hp + yaw) || Double.isInfinite(x + y + z + hp + yaw) || x < 0 || x >= 16 || z < 0 || z >= 16 || y < -30 || y > 400 || hp <= 0) continue;
                     Mob m = new Mob(t, new Pos(cx, cz, x, y, z));
                     m.health = Math.min(hp, t.health); m.yaw = yaw;
-                    if (p.length == 13) {
+                    boolean hasHome = p.length >= 13;
+                    if (p.length == 9 || p.length == 14) m.keep = "1".equals(p[p.length - 1]);
+                    if (hasHome) {
                         long hcx = Long.parseLong(p[8]), hcz = Long.parseLong(p[9]);
                         double hx = Double.parseDouble(p[10]), hy = Double.parseDouble(p[11]), hz = Double.parseDouble(p[12]);
                         if (!inRange(hcx, hcz) || Double.isNaN(hx + hy + hz) || Double.isInfinite(hx + hy + hz) || hx < 0 || hx >= 16 || hz < 0 || hz >= 16 || hy < -30 || hy > 400) continue;
@@ -595,6 +621,7 @@ public final class World implements WorldAccess {
         saveItems();
         saveBlockEntities();
         saveMobs();
+        saveMarks();
         try { info.save(dir); } catch (IOException e) { System.out.println("[Voxelin] ⚠️ " + e); }
     }
 
@@ -654,6 +681,14 @@ public final class World implements WorldAccess {
     private void processPending(Chunk c) {
         if (c.pending.isEmpty()) return;
         for (Chunk.Pending p : c.pending) {
+            if ("mob".equals(p.kind())) { // житель/тварина зі структури: створюється один раз (відмітка в marks.dat)
+                if (marks.contains(p.seed())) continue;
+                MobType mt = mobTypes.get(p.loot());
+                if (mt == null) continue;
+                Mob m = spawnMob(mt, Pos.ofBlock(p.x(), p.y(), p.z()));
+                if (m != null) { m.keep = true; marks.add(p.seed()); }
+                continue;
+            }
             if (!"chest".equals(p.kind())) continue;
             BlockPos pos = new BlockPos(p.x(), p.y(), p.z());
             if (blockEntities.containsKey(pos)) continue;

@@ -23,13 +23,19 @@ public final class StructureTemplate {
     public final Place place;
     public final int spacing, depthMin, depthMax, sink, sx, sy, sz;
     public final double chance;
+    /** Роль у селі (well, hall, house, farm, lamp) і вага вибору; null - окрема структура. */
+    public final String role;
+    public final int weight;
     /** Блоки: -1 - не чіпати, 0 - повітря, інакше id. Індекс x + z*sx + y*sx*sz. */
     final short[] ids;
     /** Таблиця здобичі для клітинок-скринь (інакше null). */
     final String[] loot;
     final short foundation;
+    /** Моби-мітки з легенди («mob villager_farmer»): ім'я виду в клітинці або null. */
+    final String[] mobs;
 
-    private StructureTemplate(String name, Place place, int spacing, double chance, int depthMin, int depthMax, int sink, int sx, int sy, int sz, short[] ids, String[] loot) {
+    private StructureTemplate(String name, Place place, int spacing, double chance, int depthMin, int depthMax, int sink, int sx, int sy, int sz, short[] ids, String[] loot, String[] mobs, String role, int weight) {
+        this.mobs = mobs; this.role = role; this.weight = weight;
         this.name = name; this.place = place; this.spacing = spacing; this.chance = chance; this.depthMin = depthMin; this.depthMax = depthMax; this.sink = sink;
         this.sx = sx; this.sy = sy; this.sz = sz; this.ids = ids; this.loot = loot;
         short f = 1;
@@ -39,6 +45,7 @@ public final class StructureTemplate {
 
     public int id(int x, int y, int z) { return ids[x + z * sx + y * sx * sz]; }
     public String lootAt(int x, int y, int z) { return loot[x + z * sx + y * sx * sz]; }
+    public String mobAt(int x, int y, int z) { return mobs[x + z * sx + y * sx * sz]; }
 
     /** Розміри габариту після повороту (rot 0..3): непарний - x і z міняються місцями. */
     public int width(int rot) { return (rot & 1) == 0 ? sx : sz; }
@@ -82,13 +89,24 @@ public final class StructureTemplate {
         }
         if (mode != 2) throw new StructureException(lines.length, "нема розділу layers:");
         // заголовок
+        String role = null; int weight = 1;
+        if (head.containsKey("village")) {
+            String[] v = head.get("village").split("\\s+");
+            if (v.length < 1 || !java.util.List.of("well", "hall", "house", "farm", "lamp").contains(v[0])) throw new StructureException(1, "village: роль має бути well, hall, house, farm або lamp");
+            role = v[0];
+            if (v.length > 1) try { weight = Integer.parseInt(v[1]); } catch (NumberFormatException e) { throw new StructureException(1, "village: вага - ціле число"); }
+            if (weight < 1 || weight > 100) throw new StructureException(1, "village: вага від 1 до 100");
+        }
         Place place;
-        String pl = head.getOrDefault("place", "");
+        String pl = head.getOrDefault("place", role != null ? "surface" : "");
         if (pl.equals("surface")) place = Place.SURFACE; else if (pl.equals("underground")) place = Place.UNDERGROUND; else throw new StructureException(1, "place: має бути surface або underground");
-        int spacing = intOf(head, "spacing", 16, 4096);
+        int spacing = role != null && !head.containsKey("spacing") ? 64 : intOf(head, "spacing", 16, 4096);
         double chance;
-        try { chance = Double.parseDouble(head.getOrDefault("chance", "")); } catch (NumberFormatException e) { throw new StructureException(1, "chance: не число"); }
-        if (!(chance >= 0 && chance <= 1)) throw new StructureException(1, "chance: від 0 до 1");
+        if (role != null && !head.containsKey("chance")) chance = 0;
+        else {
+            try { chance = Double.parseDouble(head.getOrDefault("chance", "")); } catch (NumberFormatException e) { throw new StructureException(1, "chance: не число"); }
+            if (!(chance >= 0 && chance <= 1)) throw new StructureException(1, "chance: від 0 до 1");
+        }
         int sink = place == Place.SURFACE && head.containsKey("sink") ? intOf(head, "sink", 0, 8) : 0, dmin = 0, dmax = 0;
         if (place == Place.UNDERGROUND) {
             String[] d = head.getOrDefault("depth", "").split("\\s+");
@@ -100,14 +118,19 @@ public final class StructureTemplate {
         if (layers.isEmpty()) throw new StructureException(lines.length, "нема жодного шару");
         int sy = layers.size(), sz = layers.get(0).size(), sx = layers.get(0).get(0).length();
         if (sx > MAX_XZ || sz > MAX_XZ || sy > MAX_Y) throw new StructureException(1, "розмір " + sx + "x" + sz + "x" + sy + " більший за " + MAX_XZ + "x" + MAX_XZ + "x" + MAX_Y);
-        if (spacing < Math.max(sx, sz) + 8) throw new StructureException(1, "spacing має бути не менше " + (Math.max(sx, sz) + 8) + " (габарит + 8)");
+        if (role == null && spacing < Math.max(sx, sz) + 8) throw new StructureException(1, "spacing має бути не менше " + (Math.max(sx, sz) + 8) + " (габарит + 8)");
         // легенда -> id
         Map<Character, Integer> idOf = new HashMap<>();
-        Map<Character, String> lootOf = new HashMap<>();
+        Map<Character, String> lootOf = new HashMap<>(), mobOf = new HashMap<>();
         for (Map.Entry<Character, String> e : legend.entrySet()) {
             String v = e.getValue();
             if (v.equals("air")) idOf.put(e.getKey(), 0);
             else if (v.equals("keep")) idOf.put(e.getKey(), -1);
+            else if (v.startsWith("mob ")) {
+                String mn = v.substring(4).strip();
+                if (!mn.matches("[a-z0-9_]+(:[a-z0-9_/]+)?")) throw new StructureException(1, "mob: погана назва виду: " + mn);
+                idOf.put(e.getKey(), 0); mobOf.put(e.getKey(), mn.indexOf(':') >= 0 ? mn : "voxelin:" + mn);
+            }
             else if (v.startsWith("chest")) {
                 String[] p = v.split("\\s+");
                 if (p.length != 2 || !p[1].startsWith("loot=") || p[1].length() < 6) throw new StructureException(1, "скриня: «chest loot=ID»: " + v);
@@ -121,7 +144,7 @@ public final class StructureTemplate {
             }
         }
         short[] ids = new short[sx * sy * sz];
-        String[] loot = new String[sx * sy * sz];
+        String[] loot = new String[sx * sy * sz], mobs = new String[sx * sy * sz];
         Arrays.fill(ids, (short) -1);
         for (int y = 0; y < sy; y++) {
             List<String> rows = layers.get(y);
@@ -136,12 +159,13 @@ public final class StructureTemplate {
                     if (id == null) throw new StructureException(1, "шар " + (y + 1) + ", рядок " + (z + 1) + ": символ '" + ch + "' не визначено в легенді");
                     ids[x + z * sx + y * sx * sz] = (short) (int) id;
                     loot[x + z * sx + y * sx * sz] = lootOf.get(ch);
+                    mobs[x + z * sx + y * sx * sz] = mobOf.get(ch);
                 }
             }
         }
         boolean any = false; for (short v : ids) if (v != -1) any = true;
         if (!any) throw new StructureException(1, "шаблон порожній (усі клітинки «не чіпати»)");
-        return new StructureTemplate(name, place, spacing, chance, dmin, dmax, sink, sx, sy, sz, ids, loot);
+        return new StructureTemplate(name, place, spacing, chance, dmin, dmax, sink, sx, sy, sz, ids, loot, mobs, role, weight);
     }
 
     private static int intOf(Map<String, String> head, String key, int lo, int hi) throws StructureException {

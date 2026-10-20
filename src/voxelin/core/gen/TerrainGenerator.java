@@ -55,7 +55,7 @@ public final class TerrainGenerator implements Generator {
         else {
             boolean[] liquid = new boolean[reg.size()];
             for (voxelin.core.BlockType b : reg.all()) liquid[b.id] = b.liquid;
-            placer = new StructurePlacer(seed, structures, this::surfaceY, 62).liquids(liquid);
+            placer = new StructurePlacer(seed, structures, this::surfaceY, 62).liquids(liquid).pathBlock(gravel);
         }
         coal = id(reg, "coal_ore"); iron = id(reg, "iron_ore"); copper = id(reg, "copper_ore"); gold = id(reg, "gold_ore"); diamond = id(reg, "diamond_ore"); liminite = id(reg, "liminite_ore");
     }
@@ -145,14 +145,19 @@ public final class TerrainGenerator implements Generator {
 
     @Override public java.util.List<String> structureNames() {
         java.util.List<String> r = new java.util.ArrayList<>();
-        if (placer != null) for (StructureTemplate t : placer.templates()) r.add(t.name);
+        if (placer != null) { for (StructureTemplate t : placer.templates()) if (t.role == null) r.add(t.name); if (placer.hasVillages()) r.add("village"); }
         return r;
     }
 
     @Override public long[] locate(String name, long x, long z) {
         if (placer == null || name == null) return null;
         String n = name.trim().toLowerCase(java.util.Locale.ROOT);
+        if (n.equals("village") || n.equals("voxelin:village")) {
+            long[] v = placer.locateVillage(x, z, 12);
+            return v == null ? null : new long[]{v[0], surfaceY(v[0], v[1]) + 1, v[1], v[2]};
+        }
         for (StructureTemplate t : placer.templates()) {
+            if (t.role != null) continue;
             if (!t.name.equals(n) && !t.name.equals("voxelin:" + n)) continue;
             StructurePlacer.Placement p = placer.locate(t, x, z, 24);
             if (p == null) return null;

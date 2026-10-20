@@ -150,6 +150,8 @@ public final class VanillaContent implements VoxelinMod {
                 .entry("raw_iron", 1, 3, 5).entry("leather", 1, 2, 4).entry("string", 1, 3, 4).entry("iron_ingot", 1, 2, 2));
         r.loot("dungeon", new LootSettings().rolls(2, 4).entry("raw_iron", 2, 5, 8).entry("raw_gold", 1, 3, 5).entry("iron_ingot", 1, 3, 5).entry("steak", 2, 4, 6)
                 .entry("leather", 1, 3, 5).entry("string", 2, 4, 5).entry("coal", 3, 6, 6).entry("iron_sword", 1, 1, 2).entry("diamond", 1, 1, 1));
+        r.loot("village", new LootSettings().rolls(1, 3).entry("apple", 1, 3, 8).entry("cooked_chicken", 1, 2, 6).entry("steak", 1, 2, 5).entry("coal", 2, 5, 6)
+                .entry("stick", 3, 8, 6).entry("iron_ingot", 1, 2, 3).entry("gold_ingot", 1, 1, 2).entry("leather", 1, 2, 4));
         r.loot("mine", new LootSettings().rolls(1, 3).entry("coal", 4, 9, 10).entry("raw_iron", 2, 4, 6).entry("raw_copper", 2, 5, 6).entry("stick", 3, 8, 8)
                 .entry("stone_pickaxe", 1, 1, 2).entry("apple", 1, 2, 4).entry("cooked_chicken", 1, 2, 3));
         r.recipe("furnace", RecipeSettings.shaped("C.C", "CKC", "CCC").key('C', "cobblestone").key('K', "coal").result("furnace", 1));
@@ -232,6 +234,12 @@ public final class VanillaContent implements VoxelinMod {
         r.structure("ruins", Structures.RUINS);
         r.structure("dungeon", Structures.DUNGEON);
         r.structure("mine", Structures.MINE);
+        r.structure("village_house_small", Structures.VILLAGE_HOUSE_SMALL);
+        r.structure("village_house_big", Structures.VILLAGE_HOUSE_BIG);
+        r.structure("village_hall", Structures.VILLAGE_HALL);
+        r.structure("village_well", Structures.VILLAGE_WELL);
+        r.structure("village_farm", Structures.VILLAGE_FARM);
+        r.structure("village_lamp", Structures.VILLAGE_LAMP);
 
         Commands c = ctx.commands();
         c.register("setblock", "<x> <y> <z> <блок>", 2, k -> {

@@ -170,4 +170,319 @@ P___P___P___P___P___P___P
 .........................
 .........................
 """;
+
+    // --- частини села (розкладку робить StructurePlacer: колодязь у центрі, будинки по кільцю, двері до центру)
+    public static final String VILLAGE_HOUSE_SMALL = """
+village: house 3
+sink: 1
+legend:
+  C = cobblestone
+  P = oak_planks
+  L = oak_log
+  G = glass
+  R = oak_planks
+  M = lamp
+  K = chest loot=village
+  V = mob villager_farmer
+  _ = air
+layers:
+CCCCCCC
+CPPPPPC
+CPPPPPC
+CPPPPPC
+CPPPPPC
+CPPPPPC
+CCCCCCC
+---
+LPPPPPL
+PK____P
+P__V__P
+P_____P
+P_____P
+P_____P
+LPP_PPL
+---
+LGPPGPL
+G_____G
+P_____P
+P_____P
+G_____G
+P_____P
+LGP_PPL
+---
+LPPPPPL
+P_____P
+P_____P
+P_____P
+P_____P
+P_____P
+LPPPPPL
+---
+RRRRRRR
+RRRRRRR
+RRRRRRR
+RRRRRRR
+RRRRRRR
+RRRRRRR
+RRRRRRR
+""";
+
+    public static final String VILLAGE_HOUSE_BIG = """
+village: house 2
+sink: 1
+legend:
+  C = cobblestone
+  P = oak_planks
+  L = oak_log
+  G = glass
+  R = oak_planks
+  M = lamp
+  K = chest loot=village
+  V = mob villager_smith
+  _ = air
+layers:
+CCCCCCCCC
+CPPPPPPPC
+CPPPPPPPC
+CPPPPPPPC
+CPPPPPPPC
+CPPPPPPPC
+CPPPPPPPC
+CPPPPPPPC
+CCCCCCCCC
+---
+LPPPPPPPL
+PK______P
+P_______P
+P___V___P
+P_______P
+P_______P
+P_______P
+P_______P
+LPPP_PPPL
+---
+LGPPGPPGL
+G_______G
+P_______P
+P_______P
+G_______G
+P_______P
+P_______P
+G_______G
+LGPP_PPGL
+---
+LGPPGPPGL
+G_______G
+P_______P
+P_______P
+G_______G
+P_______P
+P_______P
+GM_____MG
+LGPPPPPGL
+---
+LPPPPPPPL
+P_______P
+P_______P
+P_______P
+P_______P
+P_______P
+P_______P
+P_______P
+LPPPPPPPL
+---
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+""";
+
+    public static final String VILLAGE_HALL = """
+village: hall 1
+sink: 1
+legend:
+  C = cobblestone
+  P = oak_planks
+  L = oak_log
+  G = glass
+  R = oak_planks
+  M = lamp
+  K = chest loot=village
+  V = mob villager_elder
+  _ = air
+layers:
+CCCCCCCCCCC
+CPPPPPPPPPC
+CPPPPPPPPPC
+CPPPPPPPPPC
+CPPPPPPPPPC
+CPPPPPPPPPC
+CPPPPPPPPPC
+CPPPPPPPPPC
+CCCCCCCCCCC
+---
+LPPPPPPPPPL
+PK________P
+P_________P
+P____V____P
+P_________P
+P_________P
+P_________P
+P_________P
+LPPP___PPPL
+---
+LGPPGPPGPPL
+G_________G
+P_________P
+P_________P
+G_________G
+P_________P
+P_________P
+G_________G
+LGPP___GPPL
+---
+LGPPGPPGPPL
+GM_______MG
+P_________P
+P_________P
+G_________G
+P_________P
+P_________P
+GM_______MG
+LGPPPPPGPPL
+---
+LPPPPPPPPPL
+P_________P
+P_________P
+P_________P
+P_________P
+P_________P
+P_________P
+P_________P
+LPPPPPPPPPL
+---
+LPPPPPPPPPL
+P_________P
+P_________P
+P_________P
+P_________P
+P_________P
+P_________P
+P_________P
+LPPPPPPPPPL
+---
+RRRRRRRRRRR
+RRRRRRRRRRR
+RRRRRRRRRRR
+RRRRRRRRRRR
+RRRRRRRRRRR
+RRRRRRRRRRR
+RRRRRRRRRRR
+RRRRRRRRRRR
+RRRRRRRRRRR
+""";
+
+    public static final String VILLAGE_WELL = """
+village: well 1
+sink: 2
+legend:
+  C = cobblestone
+  W = water
+  L = oak_log
+  R = oak_planks
+  _ = air
+layers:
+CCCCC
+CCCCC
+CCCCC
+CCCCC
+CCCCC
+---
+CCCCC
+CWWWC
+CWWWC
+CWWWC
+CCCCC
+---
+L...L
+.___.
+.___.
+.___.
+L...L
+---
+L...L
+.___.
+.___.
+.___.
+L...L
+---
+RRRRR
+RRRRR
+RRRRR
+RRRRR
+RRRRR
+""";
+
+    public static final String VILLAGE_FARM = """
+village: farm 1
+sink: 1
+legend:
+  D = dirt
+  L = oak_log
+  c = mob cow
+  h = mob chicken
+  _ = air
+layers:
+DDDDDDDDDDD
+D.........D
+D.........D
+D.........D
+D.........D
+D.........D
+D.........D
+D.........D
+DDDDDDDDDDD
+---
+LLLLLLLLLLL
+L_________L
+L____h____L
+L__c___c__L
+L_________L
+L___h_h___L
+L_________L
+L_________L
+LLLL___LLLL
+---
+LLLLLLLLLLL
+L.........L
+L.........L
+L.........L
+L.........L
+L.........L
+L.........L
+L.........L
+LLLL...LLLL
+""";
+
+    public static final String VILLAGE_LAMP = """
+village: lamp 1
+sink: 1
+legend:
+  L = oak_log
+  M = lamp
+layers:
+L
+---
+L
+---
+L
+---
+M
+
+""";
 }

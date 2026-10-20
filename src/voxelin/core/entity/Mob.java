@@ -20,6 +20,8 @@ public final class Mob {
     public double health;
     /** Дім (для жителів: блукають не далі homeRadius) і лічильник розмови (стоїть, поки гравець говорить). */
     public Pos home;
+    /** Створена структурою (житель, тварини загону): не зникає від відстані. */
+    public boolean keep;
     public int talkTicks;
     public int age, hurtTicks, invuln, deathTicks, attackCooldown, fleeTicks, wanderTicks;
     public boolean dying, onGround, provoked, inWater, burning, lootDropped;

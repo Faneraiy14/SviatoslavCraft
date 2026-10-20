@@ -12,6 +12,9 @@ public final class Chunk {
     final byte[][] light = new byte[SECTIONS][];
     /** Сусідні чанки: 0 = +x, 1 = -x, 2 = +z, 3 = -z (null - не завантажений). Вказівники веде світ на головному потоці; потрібні світлу. */
     final Chunk[] nb = new Chunk[4];
+    /** Відкладена робота зі світом, що з'явилась під час генерації (скрині зі структур): виконується головним потоком при появі чанка у світі. */
+    public record Pending(String kind, long x, int y, long z, String loot, long seed) {}
+    public final java.util.List<Pending> pending = new java.util.ArrayList<>();
     /** Змінено після завантаження/генерації - треба зберегти. */
     volatile boolean modified;
 

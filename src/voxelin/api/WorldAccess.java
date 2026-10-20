@@ -23,6 +23,10 @@ public interface WorldAccess {
     default String gameMode() { return "survival"; }
     /** false - невідомий режим. */
     default boolean setGameMode(String mode) { return false; }
+    /** Найближча структура цього виду {x, y, z, відстань}; null - не знайдено. */
+    default long[] locate(String structure, long x, long z) { return null; }
+    /** Перенести гравця-джерело в точку; false - не вдалось. */
+    default boolean teleport(Source source, long x, int y, long z) { return false; }
     long seed();
     String name();
 }

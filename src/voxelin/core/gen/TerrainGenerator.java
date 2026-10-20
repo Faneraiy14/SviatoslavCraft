@@ -35,8 +35,13 @@ public final class TerrainGenerator implements Generator {
             oakLog, oakLeaves, birchLog, birchLeaves, spruceLog, spruceLeaves, paleLog, cactus, monolith,
             coal, iron, copper, gold, diamond, liminite;
 
-    public TerrainGenerator(long seed, WorldInfo.Type type, BlockRegistry reg) {
-        this.seed = seed; this.type = type;
+    private final BlockRegistry reg;
+    private final StructurePlacer placer;
+
+    public TerrainGenerator(long seed, WorldInfo.Type type, BlockRegistry reg) { this(seed, type, reg, java.util.List.of()); }
+
+    public TerrainGenerator(long seed, WorldInfo.Type type, BlockRegistry reg, java.util.List<StructureTemplate> structures) {
+        this.seed = seed; this.type = type; this.reg = reg;
         nCont = new Noise(seed ^ 0x1111A5A5A5A5L); nTemp = new Noise(seed ^ 0x2222B4B4B4B4L); nHum = new Noise(seed ^ 0x3333C3C3C3C3L);
         nWeird = new Noise(seed ^ 0x4444D2D2D2D2L); nMount = new Noise(seed ^ 0x5555E1E1E1E1L); nHill = new Noise(seed ^ 0x6666F0F0F0F0L);
         nDetail = new Noise(seed ^ 0x77770F0F0F0FL); nPool = new Noise(seed ^ 0x88881E1E1E1EL); nFloor = new Noise(seed ^ 0xCCCC5A5A5A5AL);
@@ -46,6 +51,12 @@ public final class TerrainGenerator implements Generator {
         mud = id(reg, "mud"); paleGrass = id(reg, "pale_grass"); sintered = id(reg, "sintered_sand"); duneGlass = id(reg, "dune_glass");
         oakLog = id(reg, "oak_log"); oakLeaves = id(reg, "oak_leaves"); birchLog = id(reg, "birch_log"); birchLeaves = id(reg, "birch_leaves");
         spruceLog = id(reg, "spruce_log"); spruceLeaves = id(reg, "spruce_leaves"); paleLog = id(reg, "pale_log"); cactus = id(reg, "cactus"); monolith = id(reg, "monolith");
+        if (structures.isEmpty()) placer = null;
+        else {
+            boolean[] liquid = new boolean[reg.size()];
+            for (voxelin.core.BlockType b : reg.all()) liquid[b.id] = b.liquid;
+            placer = new StructurePlacer(seed, structures, this::surfaceY, 62).liquids(liquid);
+        }
         coal = id(reg, "coal_ore"); iron = id(reg, "iron_ore"); copper = id(reg, "copper_ore"); gold = id(reg, "gold_ore"); diamond = id(reg, "diamond_ore"); liminite = id(reg, "liminite_ore");
     }
 
@@ -132,6 +143,25 @@ public final class TerrainGenerator implements Generator {
     @Override public String biomeAt(long x, long z) { return columnAt(x, z).biome.title; }
     @Override public int seaLevel() { return SEA; }
 
+    @Override public java.util.List<String> structureNames() {
+        java.util.List<String> r = new java.util.ArrayList<>();
+        if (placer != null) for (StructureTemplate t : placer.templates()) r.add(t.name);
+        return r;
+    }
+
+    @Override public long[] locate(String name, long x, long z) {
+        if (placer == null || name == null) return null;
+        String n = name.trim().toLowerCase(java.util.Locale.ROOT);
+        for (StructureTemplate t : placer.templates()) {
+            if (!t.name.equals(n) && !t.name.equals("voxelin:" + n)) continue;
+            StructurePlacer.Placement p = placer.locate(t, x, z, 24);
+            if (p == null) return null;
+            double dx = p.centerX() - x, dz = p.centerZ() - z;
+            return new long[]{p.centerX(), p.oy, p.centerZ(), Math.round(Math.sqrt(dx * dx + dz * dz))};
+        }
+        return null;
+    }
+
     public Biome biome(long x, long z) { return columnAt(x, z).biome; }
 
     // ------------------------------------------------------------------ генерація чанка
@@ -179,6 +209,8 @@ public final class TerrainGenerator implements Generator {
         }
         // 5) рослини й споруди ландшафту
         for (int x = 3; x < 13; x++) for (int z = 3; z < 13; z++) feature(c, x, z, surf[x + z * 16], biomes[x + z * 16], hash(seed, bx + x, bz + z, 2));
+        // 6) структури (руїни, підземелля, шахти): лише клітинки шаблонів, що лежать у цьому чанку
+        if (placer != null) placer.apply(c, reg);
     }
 
     /** Дно океану: органічні плями піску, гравію й глини за шумом (а не квадрати). */

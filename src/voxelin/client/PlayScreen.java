@@ -70,6 +70,7 @@ final class PlayScreen {
             public boolean alive() { return !vt.dead(); }
             public boolean creative() { return world.creative(); }
             public void hurt(double damage, double kx, double kz) { vt.hurt(damage, false); player.knock(kx * 6, 4, kz * 6); }
+            public void teleport(long x, int y, long z) { player.teleport(Pos.ofBlock(x, y + PlayerEntity.EYE + 0.02, z)); }
         };
         world.setPlayerTarget(playerTarget);
         icons = new IconAtlas(v.textures, world);

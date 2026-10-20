@@ -18,11 +18,12 @@ public final class Game {
     public final RecipeRegistry recipes = new RecipeRegistry();
     public final MobRegistry mobTypes = new MobRegistry();
     public final LootRegistry loot = new LootRegistry();
+    public final StructureRegistry structures = new StructureRegistry();
     public final EventBus events = new EventBus();
     public final CommandRegistry commands = new CommandRegistry();
     /** Текстури з реєстру (назва -> {пікселі 16x16}); етап «Новий світ» збирає з них атлас. */
     public final Map<String, int[][]> textures = new LinkedHashMap<>();
-    public final ModLoader mods = new ModLoader(blocks, items, recipes, mobTypes, loot, events, commands, textures);
+    public final ModLoader mods = new ModLoader(blocks, items, recipes, mobTypes, loot, structures, events, commands, textures);
     public final File savesDir;
 
     public Game(File savesDir, File modsDir) {
@@ -35,6 +36,23 @@ public final class Game {
         recipes.freeze(items);
         mobTypes.freeze();
         loot.freeze(items);
+        loadStructureFiles(modsDir);
+        structures.freeze(blocks);
+    }
+
+    /** Власні шаблони: структури/*.vxs поруч із текою модів (файл перекриває ванільний шаблон з тією ж назвою). */
+    private void loadStructureFiles(File modsDir) {
+        if (modsDir == null) return;
+        File dir = new File(modsDir.getAbsoluteFile().getParentFile(), "structures");
+        File[] files = dir.listFiles((d, n) -> n.endsWith(".vxs"));
+        if (files == null) return;
+        Arrays.sort(files, Comparator.comparing(File::getName));
+        for (File f : files) {
+            String base = f.getName().substring(0, f.getName().length() - 4).toLowerCase(Locale.ROOT);
+            if (!base.matches("[a-z0-9_]+")) { System.out.println("[Voxelin] ⚠️ структура " + f.getName() + ": погана назва файла"); continue; }
+            try { structures.add("voxelin:" + base, new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8)); }
+            catch (Exception e) { System.out.println("[Voxelin] ⚠️ не вдалось прочитати " + f + ": " + e); }
+        }
     }
 
     public File worldDir(String name) {
@@ -60,6 +78,6 @@ public final class Game {
     public World openWorld(String name) throws IOException {
         File d = worldDir(name);
         WorldInfo info = WorldInfo.load(d);
-        return new World(d, info, blocks, items, recipes, mobTypes, loot, events, new TerrainGenerator(info.seed, info.type, blocks));
+        return new World(d, info, blocks, items, recipes, mobTypes, loot, events, new TerrainGenerator(info.seed, info.type, blocks, structures.templates()));
     }
 }

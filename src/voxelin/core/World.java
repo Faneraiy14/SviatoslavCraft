@@ -504,6 +504,7 @@ public final class World implements WorldAccess {
             chunks.put(c.pos(), c);
             linkNeighbors(c);
             light.reconcile(c);
+            processPending(c);
             if (listener != null) listener.chunkLoaded(c);
         }
         // замовлення від найближчих до дальніх, не більше 2 черг на потік
@@ -628,6 +629,30 @@ public final class World implements WorldAccess {
     }
 
     public int surfaceY(long x, long z) { return generator.surfaceY(x, z); }
+
+    @Override public long[] locate(String structure, long x, long z) { return generator.locate(structure, x, z); }
+    public java.util.List<String> structureNames() { return generator.structureNames(); }
+
+    @Override public boolean teleport(Source source, long x, int y, long z) {
+        if (target == null || y < 0 || y >= Chunk.HEIGHT || !inRange(Math.floorDiv(x, 16L), Math.floorDiv(z, 16L))) return false;
+        target.teleport(x, y, z);
+        return true;
+    }
+
+    /** Відкладена робота з генерації чанка (скрині структур): сутність створюється один раз, уже збережена/розграбована не відновлюється. */
+    private void processPending(Chunk c) {
+        if (c.pending.isEmpty()) return;
+        for (Chunk.Pending p : c.pending) {
+            if (!"chest".equals(p.kind())) continue;
+            BlockPos pos = new BlockPos(p.x(), p.y(), p.z());
+            if (blockEntities.containsKey(pos)) continue;
+            ChestEntity e = new ChestEntity(p.x(), p.y(), p.z());
+            LootTable t = loot.get(p.loot());
+            if (t != null) t.fill(e, new Random(p.seed()), itemTypes);
+            blockEntities.put(pos, e);
+        }
+        c.pending.clear();
+    }
     public String biomeAt(long x, long z) { return generator.biomeAt(x, z); }
 
     /**

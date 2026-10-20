@@ -9,6 +9,9 @@ public interface Generator {
     int surfaceY(long x, long z);
     /** Назва біому в колонці (для відладки й HUD). */
     default String biomeAt(long x, long z) { return ""; }
+    /** Найближча структура цього виду {x, y, z, відстань}; null - не знайдено або генератор без структур. */
+    default long[] locate(String name, long x, long z) { return null; }
+    default java.util.List<String> structureNames() { return java.util.List.of(); }
     /** Рівень моря (вода до цієї висоти); для місця появи гравця. */
     default int seaLevel() { return 62; }
 }

@@ -18,6 +18,8 @@ public interface Registries {
     MobRef findMob(String fullName);
     /** Таблиця здобичі для скринь (id без двокрапки отримує префікс мода). */
     void loot(String id, LootSettings settings);
+    /** Шаблон структури (текст формату .vxs; назва без двокрапки отримує префікс мода). Помилка в тексті - структура пропускається з попередженням. */
+    void structure(String name, String text);
     /** Знайти блок за повною назвою ("voxelin:stone") або null. */
     BlockRef findBlock(String fullName);
     /**

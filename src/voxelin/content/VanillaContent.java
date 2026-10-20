@@ -210,6 +210,10 @@ public final class VanillaContent implements VoxelinMod {
         for (int i = 0; i < 4; i++) { spider.legPart(-0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 == 0); spider.legPart(0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 != 0); }
         r.mob("spider", spider);
 
+        r.structure("ruins", Structures.RUINS);
+        r.structure("dungeon", Structures.DUNGEON);
+        r.structure("mine", Structures.MINE);
+
         Commands c = ctx.commands();
         c.register("setblock", "<x> <y> <z> <блок>", 2, k -> {
             if (k.args().size() != 4) throw new Commands.CommandException("Потрібно 4 аргументи");
@@ -314,6 +318,23 @@ public final class VanillaContent implements VoxelinMod {
             if (k.args().size() == 1) { t = w.mobTypes.find(k.args().get(0)); if (t == null) throw new Commands.CommandException("Невідомий вид: " + k.args().get(0)); }
             k.reply("Прибрано істот: " + w.killAll(t));
         });
+        c.register("locate", "<структура>", 2, k -> {
+            if (k.args().size() != 1) throw new Commands.CommandException("Потрібна назва структури");
+            if (!(k.world() instanceof voxelin.core.World)) throw new Commands.CommandException("Недоступно");
+            voxelin.core.World w = (voxelin.core.World) k.world();
+            long[] o = k.origin();
+            long[] r = k.world().locate(k.args().get(0), o[0], o[2]);
+            if (r == null) throw new Commands.CommandException("Не знайдено: " + k.args().get(0) + " (відомі: " + String.join(", ", w.structureNames()) + ")");
+            k.reply(k.args().get(0) + ": x " + r[0] + "  y " + r[1] + "  z " + r[2] + "  (" + r[3] + " блоків)");
+        });
+        c.register("tp", "<x> <y> <z>", 2, k -> {
+            if (k.args().size() != 3) throw new Commands.CommandException("Потрібні три координати");
+            long[] o = k.origin();
+            long x = CommandRegistry.coord(k.args().get(0), o[0]), y = CommandRegistry.coord(k.args().get(1), o[1]), z = CommandRegistry.coord(k.args().get(2), o[2]);
+            if (y < 0 || y > 254) throw new Commands.CommandException("Висота від 0 до 254");
+            if (!k.world().teleport(k.source(), x, (int) y, z)) throw new Commands.CommandException("Не вдалось перенести");
+            k.reply("Перенесено в " + x + " " + y + " " + z);
+        });
         c.register("clear", "", 2, k -> {
             ItemHolder h = k.world().items(k.source());
             if (h == null) throw new Commands.CommandException("У цього джерела нема інвентаря");
@@ -328,7 +349,7 @@ public final class VanillaContent implements VoxelinMod {
             if (now && !was && h != null) for (String s : STARTER) h.give(s, 64);
             k.reply("Режим гри: " + k.world().gameMode());
         });
-        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /summon, /killall, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
+        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /summon, /killall, /locate, /tp, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
     }
 
     /** Назва блока з аргументу команди: "stone" = "voxelin:stone". */

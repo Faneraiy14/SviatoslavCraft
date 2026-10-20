@@ -186,7 +186,7 @@ public final class Voxelin {
         loading.update(loadCx, loadCz, r + 1);
         int have = 0, need = 0;
         for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) {
-            if (dx * dx + dz * dz > r * r + r) continue;
+            if (dx * dx + dz * dz > r * r + r || !World.inBorder(loadCx + dx, loadCz + dz)) continue; // за межею світу чанків не буде
             need++;
             if (loading.chunk(loadCx + dx, loadCz + dz) != null) have++;
         }

@@ -35,6 +35,7 @@ final class PlayScreen {
     private static final float[] UNDER_FOG = {0.07f, 0.2f, 0.45f};
     private final Pos spawn;
     private InventoryScreen invScreen, benchScreen, activeScreen;
+    private TradeScreen trade;
     private IconAtlas icons;
     private boolean invOpen, chatOpen, debug, hud = true, grabbed;
     private Raycast.Hit hit;
@@ -111,6 +112,10 @@ final class PlayScreen {
             activeScreen = InventoryScreen.container("СКРИНЯ", new ChestMenu(world.itemTypes, inv, demo), inv, world, icons, st -> { });
             invOpen = true;
         }
+        if ("trade".equals(v.opts.open)) { // лише для знімків: розмова з ковалем
+            MobType smith = world.mobTypes.get("voxelin:villager_smith");
+            if (smith != null) { trade = new TradeScreen(new Mob(smith, bodyPos()), world, inv, icons, new java.util.Random(3)); invOpen = true; }
+        }
         if ("furnace".equals(v.opts.open)) { // лише для знімків: піч із вигаданим станом (у світі не існує)
             FurnaceEntity demo = new FurnaceEntity(0, 0, 0);
             demo.input = new Inventory.Stack("voxelin:raw_iron", 5); demo.fuel = new Inventory.Stack("voxelin:coal", 3); demo.output = new Inventory.Stack("voxelin:iron_ingot", 2);
@@ -153,6 +158,7 @@ final class PlayScreen {
             vt.land(player.takeLanded());
             vt.tick(player.headInWater);
         }
+        if (trade != null) trade.mob.talkTicks = 6; // житель слухає
         if (!vt.dead() && !v.opts.freeze) world.collectItems(bodyPos(), inv);
         if (vt.dead() && !deadHandled && !world.creative()) {
             Pos at = bodyPos();
@@ -291,6 +297,11 @@ final class PlayScreen {
     /** Права кнопка: з'їсти їжу (якщо голодний) або поставити блок з руки. */
     private void useItem() {
         boolean sneak = v.input.down(GLFW_KEY_LEFT_SHIFT) || v.input.down(GLFW_KEY_RIGHT_SHIFT);
+        if (aimedMob != null && !sneak && aimedMob.type.talkable() && !vt.dead()) { // розмова з жителем
+            trade = new TradeScreen(aimedMob, world, inv, icons, new java.util.Random());
+            invOpen = true; grab(false);
+            return;
+        }
         BlockType target = hit == null ? null : world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
         if (target != null && target.interact != null && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
             if ("workbench".equals(target.interact)) { activeScreen = benchScreen; invOpen = true; grab(false); }
@@ -507,7 +518,7 @@ final class PlayScreen {
 
     private void openChat(String initial) { chatOpen = true; v.input.beginText(initial, true); grab(false); }
 
-    private void closeInventory() { openedBlock = false; activeScreen.close(); invOpen = false; grab(true); }
+    private void closeInventory() { if (trade != null) { trade = null; invOpen = false; grab(true); return; } openedBlock = false; activeScreen.close(); invOpen = false; grab(true); }
 
     private void closeChat() { chatOpen = false; v.input.endText(); grab(!invOpen); }
 
@@ -562,7 +573,7 @@ final class PlayScreen {
             Gui.rect(8, Gui.H - 112, 1264, 30, 0, 0, 0, 0.7f);
             Gui.text("> " + in.text() + ((now / 500) % 2 == 0 ? "_" : ""), 14, Gui.H - 107, 2.4f, 1, 1, 0.8f);
         }
-        if (invOpen) activeScreen.draw(g, v.input);
+        if (invOpen) { if (trade != null) { trade.draw(g); if (trade.close) closeInventory(); } else activeScreen.draw(g, v.input); }
         if (hurtFlash > 0) Gui.rect(0, 0, Gui.W, Gui.H, 0.8f, 0.05f, 0.05f, (float) (0.35 * hurtFlash));
         if (System.currentTimeMillis() - bannerAt < 4000 && bannerDay > 1) {
             float a = (float) Math.min(1, (4000 - (System.currentTimeMillis() - bannerAt)) / 1000.0);

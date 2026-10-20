@@ -210,6 +210,25 @@ public final class VanillaContent implements VoxelinMod {
         for (int i = 0; i < 4; i++) { spider.legPart(-0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 == 0); spider.legPart(0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 != 0); }
         r.mob("spider", spider);
 
+        // --- жителі (S6): мирні, живуть біля дому, торгують за золотий злиток; модель - коробки, колір одягу за професією
+        int[][] pal = {{0x8B5A2B, 0xE0C060}, {0x444A55, 0x2B2B30}, {0xE8E4D8, 0xC9C9C9}}; // одяг, капелюх/борода
+        String[] vName = {"villager_farmer", "villager_smith", "villager_elder"}, vTitle = {"Житель-фермер", "Житель-коваль", "Старійшина"};
+        for (int i = 0; i < 3; i++) {
+            MobSettings v = new MobSettings().health(20).speed(1.4f).size(0.6f, 1.8f).behavior(MobSettings.Behavior.PASSIVE).homeRadius(24).persistent(true).title(vTitle[i])
+                    .legPart(-0.13f, 0, 0, 0.24f, 0.8f, 0.24f, 0x5A4630, false).legPart(0.13f, 0, 0, 0.24f, 0.8f, 0.24f, 0x5A4630, true)
+                    .part(0, 0.8f, 0, 0.5f, 0.75f, 0.3f, pal[i][0]).part(0, 1.05f, -0.2f, 0.5f, 0.2f, 0.18f, pal[i][0])
+                    .part(0, 1.5f, 0, 0.45f, 0.5f, 0.45f, 0xD9A87A).part(0, 1.58f, -0.26f, 0.1f, 0.2f, 0.1f, 0xC4906A);
+            if (i == 0) v.part(0, 1.95f, 0, 0.75f, 0.06f, 0.75f, pal[i][1]).part(0, 1.99f, 0, 0.42f, 0.14f, 0.42f, pal[i][1]);
+            if (i == 1) v.part(0, 0.8f, -0.17f, 0.46f, 0.5f, 0.06f, pal[i][1]);
+            if (i == 2) v.part(0, 1.2f, -0.24f, 0.32f, 0.35f, 0.08f, pal[i][1]);
+            if (i == 0) v.greeting("Добрий день! Маю свіже м'ясо, якщо маєш чим розплатитись.", "Яблука з дерев - то найкращі, що я куштував.", "Золото любить тих, хто вміє торгувати.")
+                    .trade("apple", 8, "gold_ingot", 1).trade("raw_beef", 6, "gold_ingot", 1).trade("raw_chicken", 6, "gold_ingot", 1)
+                    .trade("gold_ingot", 1, "steak", 3).trade("gold_ingot", 1, "cooked_chicken", 3);
+            if (i == 1) v.greeting("Залізо любить терпіння. Золото любить мене.", "Принеси злитки - викую щось путнє.", "Піч - перший друг мандрівника.")
+                    .trade("iron_ingot", 4, "gold_ingot", 1).trade("gold_ingot", 3, "iron_pickaxe", 1).trade("gold_ingot", 3, "iron_sword", 1).trade("gold_ingot", 1, "coal", 8);
+            if (i == 2) v.greeting("Тут колись було тихо... Кажуть, під лімінітом земля тонка, як папір.", "Не ходи ночами в печери без світла. Темрява тут - не просто відсутність світла.", "Мандрівники приносять дивні вісті про Шов. Я лише старий і не вірю в казки.", "Є місця, де тиша гучніша за грім. Обминай мовчазні пустища.");
+            r.mob(vName[i], v);
+        }
         r.structure("ruins", Structures.RUINS);
         r.structure("dungeon", Structures.DUNGEON);
         r.structure("mine", Structures.MINE);

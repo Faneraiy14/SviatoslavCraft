@@ -18,6 +18,9 @@ public final class Mob {
     public double vx, vy, vz;
     public float yaw;
     public double health;
+    /** Дім (для жителів: блукають не далі homeRadius) і лічильник розмови (стоїть, поки гравець говорить). */
+    public Pos home;
+    public int talkTicks;
     public int age, hurtTicks, invuln, deathTicks, attackCooldown, fleeTicks, wanderTicks;
     public boolean dying, onGround, provoked, inWater, burning, lootDropped;
     /** Пройдена відстань - для анімації ходьби. */
@@ -53,6 +56,7 @@ public final class Mob {
         if (invuln > 0) invuln--;
         if (attackCooldown > 0) attackCooldown--;
         if (dying) { deathTicks++; return; }
+        if (talkTicks > 0) { talkTicks--; vx *= 0.5; vz *= 0.5; moveHOnly(w); return; }
         long bx = pos.blockX(), bz = pos.blockZ();
         inWater = w.isLiquid(bx, pos.blockY(), bz);
         sunBurn(w);
@@ -86,6 +90,10 @@ public final class Mob {
                 else { double a = rng.nextDouble() * Math.PI * 2; wanderDx = Math.cos(a); wanderDz = Math.sin(a); wanderTicks = 20 + rng.nextInt(40); }
             }
             wanderTicks--;
+            if (home != null && type.homeRadius > 0) { // далеко від дому - повертаємось
+                double hx = home.relX(pos.cx) - pos.x, hz = home.relZ(pos.cz) - pos.z, hd = Math.hypot(hx, hz);
+                if (hd > type.homeRadius) { wanderDx = hx / hd; wanderDz = hz / hd; wanderTicks = Math.max(wanderTicks, 10); }
+            }
             dirX = wanderDx; dirZ = wanderDz; speed = (dirX != 0 || dirZ != 0) ? type.speed * 0.6 : 0;
         }
         if (speed > 0) yaw = (float) Math.toDegrees(Math.atan2(dirX, -dirZ));
@@ -100,6 +108,14 @@ public final class Mob {
         pos.normalize();
         walk += Math.hypot(pos.relX(pos.cx) - x0, pos.relZ(pos.cz) - z0);
         if (pos.y < -30) { health = 0; dying = true; deathTicks = (int) DEATH_TICKS; }
+    }
+
+    /** Під час розмови лише гасимо ковзання й падаємо (гравітація). */
+    private void moveHOnly(World w) {
+        vy = Math.max(-40.0, vy - GRAVITY * DT);
+        moveY(w, vy * DT);
+        moveH(w, vx * DT, vz * DT);
+        pos.normalize();
     }
 
     private boolean daylight(World w) {

@@ -233,6 +233,7 @@ public final class World implements WorldAccess {
         if (mobs.size() >= MAX_MOBS) return null;
         Mob m = new Mob(type, at);
         m.yaw = mobRng.nextFloat() * 360f;
+        if (type.homeRadius > 0) m.home = at.copy();
         mobs.add(m);
         return m;
     }
@@ -289,7 +290,11 @@ public final class World implements WorldAccess {
     private void saveMobs() {
         try {
             StringBuilder sb = new StringBuilder();
-            for (Mob m : mobs) if (m.type.passive() && !m.dying) sb.append(m.type.name).append(' ').append(m.pos.cx).append(' ').append(m.pos.cz).append(' ').append(m.pos.x).append(' ').append(m.pos.y).append(' ').append(m.pos.z).append(' ').append(m.health).append(' ').append(m.yaw).append('\n');
+            for (Mob m : mobs) if ((m.type.passive() || m.type.persistent) && !m.dying) {
+                sb.append(m.type.name).append(' ').append(m.pos.cx).append(' ').append(m.pos.cz).append(' ').append(m.pos.x).append(' ').append(m.pos.y).append(' ').append(m.pos.z).append(' ').append(m.health).append(' ').append(m.yaw);
+                if (m.home != null) sb.append(' ').append(m.home.cx).append(' ').append(m.home.cz).append(' ').append(m.home.x).append(' ').append(m.home.y).append(' ').append(m.home.z);
+                sb.append('\n');
+            }
             File tmp = new File(dir, "mobs.dat.tmp");
             java.nio.file.Files.write(tmp.toPath(), sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
             Files2.replace(tmp, mobsFile());
@@ -302,7 +307,7 @@ public final class World implements WorldAccess {
         try {
             for (String line : java.nio.file.Files.readAllLines(f.toPath(), java.nio.charset.StandardCharsets.UTF_8)) {
                 String[] p = line.trim().split(" ");
-                if (p.length != 8) continue;
+                if (p.length != 8 && p.length != 13) continue;
                 MobType t = mobTypes.get(p[0]);
                 if (t == null || mobs.size() >= 200) continue;
                 try {
@@ -312,6 +317,12 @@ public final class World implements WorldAccess {
                     if (!inRange(cx, cz) || Double.isNaN(x + y + z + hp + yaw) || Double.isInfinite(x + y + z + hp + yaw) || x < 0 || x >= 16 || z < 0 || z >= 16 || y < -30 || y > 400 || hp <= 0) continue;
                     Mob m = new Mob(t, new Pos(cx, cz, x, y, z));
                     m.health = Math.min(hp, t.health); m.yaw = yaw;
+                    if (p.length == 13) {
+                        long hcx = Long.parseLong(p[8]), hcz = Long.parseLong(p[9]);
+                        double hx = Double.parseDouble(p[10]), hy = Double.parseDouble(p[11]), hz = Double.parseDouble(p[12]);
+                        if (!inRange(hcx, hcz) || Double.isNaN(hx + hy + hz) || Double.isInfinite(hx + hy + hz) || hx < 0 || hx >= 16 || hz < 0 || hz >= 16 || hy < -30 || hy > 400) continue;
+                        m.home = new Pos(hcx, hcz, hx, hy, hz);
+                    } else if (t.homeRadius > 0) m.home = m.pos.copy();
                     mobs.add(m);
                 } catch (NumberFormatException e) { /* бита клітинка */ }
             }

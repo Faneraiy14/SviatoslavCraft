@@ -92,6 +92,8 @@ public final class WorldRenderer implements World.Listener {
 
     public int renderDistance = 12;
     public boolean outlines = true;
+    /** Камера під водою: густий синій туман. */
+    public boolean underwater;
     public float[] fogColor = {0.53f, 0.71f, 0.92f};
     /** Статистика (F3, --bench). */
     public int visibleSections, drawnQuads;
@@ -177,6 +179,10 @@ public final class WorldRenderer implements World.Listener {
                 p[ChunkMesher.index(x, y, z)] = (short) id;
             }
         }
+        // швидкий вихід: у секції й її шарі сусідів нема жодної неповної клітинки (повітря, листя, скло) - геометрії нема (глибокий суцільний камінь)
+        boolean anyOpen = false;
+        for (short v : p) if (!props.opaque[v]) { anyOpen = true; break; }
+        if (!anyOpen) return new ChunkMesher.Mesh();
         return mesher.get().build(p, props);
     }
 
@@ -298,6 +304,7 @@ public final class WorldRenderer implements World.Listener {
             if (m.quadsS > 0) vis.add(m);
             if (m.quadsT > 0) trans.add(m);
         }
+        vis.sort(Comparator.comparingDouble(m -> dist2(m, cam))); // від ближніх до дальніх: ранній тест глибини відсікає закрите (менше перемальовування)
         visibleSections = vis.size() + trans.size();
         int quads = 0;
         glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK);
@@ -306,7 +313,7 @@ public final class WorldRenderer implements World.Listener {
         glUniform1f(uScale, S);
         glUniform3f(uCam, (float) (cam.eye.x * S), (float) (cam.eye.y * S), (float) (cam.eye.z * S));
         glUniform3f(uFogColor, fogColor[0], fogColor[1], fogColor[2]);
-        glUniform1f(uFogStart, far * 0.65f); glUniform1f(uFogEnd, far * 0.98f);
+        if (underwater) { glUniform1f(uFogStart, 0f); glUniform1f(uFogEnd, 24 * S); } else { glUniform1f(uFogStart, far * 0.65f); glUniform1f(uFogEnd, far * 0.98f); }
         glUniform1f(uOutline, outlines ? 1f : 0f);
         glActiveTexture(GL_TEXTURE0); tex.bind(); glUniform1i(uTex, 0);
         glUniform1f(uCutout, 1f); // непрозорий прохід: відкидати прозорі пікселі листя

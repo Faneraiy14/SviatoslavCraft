@@ -7,4 +7,8 @@ public interface Generator {
     void generate(Chunk chunk);
     /** Висота поверхні в точці (для пошуку місця появи гравця). */
     int surfaceY(long x, long z);
+    /** Назва біому в колонці (для відладки й HUD). */
+    default String biomeAt(long x, long z) { return ""; }
+    /** Рівень моря (вода до цієї висоти); для місця появи гравця. */
+    default int seaLevel() { return 62; }
 }

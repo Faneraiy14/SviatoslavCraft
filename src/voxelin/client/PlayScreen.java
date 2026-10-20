@@ -28,6 +28,7 @@ final class PlayScreen {
     final Inventory inv = new Inventory();
     private final PlayerActions actions;
     private final Deque<Line> chat = new ArrayDeque<>();
+    private static final float[] SKY = {0.53f, 0.71f, 0.92f}, UNDER_FOG = {0.07f, 0.2f, 0.45f};
     private final Pos spawn;
     private boolean invOpen, chatOpen, debug, hud = true, grabbed;
     private Raycast.Hit hit;
@@ -42,8 +43,9 @@ final class PlayScreen {
         rend = new WorldRenderer(world, v.textures);
         rend.renderDistance = v.opts.renderDistance;
         actions = new LocalActions(world, v.game.commands, Sources.player("Player"));
-        spawn = findSpawn(0, 0);
-        player = new PlayerEntity(world::isSolid, spawn);
+        long[] land = world.findLand(0, 0); // не з'являтись у морі
+        spawn = findSpawn(land[0], land[1]);
+        player = new PlayerEntity(world::isSolid, world::isLiquid, spawn);
         WorldInfo i = world.info;
         if (i.hasPlayer) {
             player.teleport(i.playerPos()); player.yaw = i.playerYaw; player.pitch = i.playerPitch;
@@ -129,6 +131,9 @@ final class PlayScreen {
             double d = Raycast.distance(cam.pos, back ? yaw + 180f : yaw, back ? -pitch : pitch, Camera.THIRD_MAX, this::solidAt);
             cam.thirdDistance = Math.max(0.2, d - 0.2);
         }
+        boolean under = world.isLiquid(cam.pos.blockX(), cam.pos.blockY(), cam.pos.blockZ());
+        rend.underwater = under;
+        rend.fogColor = under ? UNDER_FOG : SKY;
         cam.update(v.window.fbWidth(), v.window.fbHeight(), (rend.renderDistance + 1) * 16 * Units.BLOCK_SIZE);
 
         hit = play || bench != null ? Raycast.cast(cam.pos, yaw, pitch, Raycast.MAX_REACH, this::solidAt) : null;
@@ -307,6 +312,7 @@ final class PlayScreen {
                 "Voxelin " + Voxelin.VERSION,
                 "XYZ: " + p.fmtX() + " " + String.format(Locale.ROOT, "%.1f", p.y - PlayerEntity.EYE) + " " + p.fmtZ() + "  (блоки)",
                 String.format(Locale.ROOT, "Кут: %.0f / %.0f   FPS: %d   чанк: %d %d", player.yaw, player.pitch, v.fps, p.cx, p.cz),
+                "Біом: " + world.biomeAt(p.blockX(), p.blockZ()) + (player.inWater ? "  (у воді)" : ""),
                 "Чанків: " + world.loadedChunks().size() + "  мешів: " + rend.meshCountLoaded() + "  у черзі: " + rend.pending(),
                 "Видно секцій: " + rend.visibleSections + "  граней: " + rend.drawnQuads,
                 String.format(Locale.ROOT, "Мешинг: %.2f мс/секція   Генерація: %.2f мс/чанк", rend.meshCount == 0 ? 0 : rend.meshNanos / 1e6 / rend.meshCount, world.genCount == 0 ? 0 : world.genNanos / 1e6 / world.genCount),
@@ -315,7 +321,7 @@ final class PlayScreen {
         };
         for (int i = 0; i < lines.length; i++) {
             Gui.rect(8, 8 + i * 26, Gui.textWidth(lines[i], 2.1f) + 12, 24, 0, 0, 0, 0.5f);
-            Gui.text(lines[i], 12, 12 + i * 26, 2.1f, i == 7 ? 1f : 0.9f, i == 7 ? 0.85f : 1f, i == 7 ? 0.3f : 0.9f);
+            Gui.text(lines[i], 12, 12 + i * 26, 2.1f, i == lines.length - 1 ? 1f : 0.9f, i == lines.length - 1 ? 0.85f : 1f, i == lines.length - 1 ? 0.3f : 0.9f);
         }
     }
 

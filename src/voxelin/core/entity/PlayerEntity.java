@@ -10,6 +10,8 @@ import voxelin.core.Pos;
  */
 public final class PlayerEntity {
     public interface Solid { boolean at(long x, int y, long z); }
+    /** Рідина (вода) в точці: гравець у ній пливе. */
+    public interface Liquid { boolean at(long x, int y, long z); }
 
     public static final double HEIGHT = 1.8, EYE = 1.6, WIDTH = 0.6;
     private static final double EYE_OFFSET = HEIGHT / 2 - EYE;
@@ -22,8 +24,11 @@ public final class PlayerEntity {
     private double vx, vy, vz;
     private boolean onGround;
     private final Solid world;
+    private final Liquid liquid;
+    public boolean inWater, headInWater;
 
-    public PlayerEntity(Solid world, Pos at) { this.world = world; teleport(at); }
+    public PlayerEntity(Solid world, Pos at) { this(world, (x, y, z) -> false, at); }
+    public PlayerEntity(Solid world, Liquid liquid, Pos at) { this.world = world; this.liquid = liquid; teleport(at); }
 
     public void teleport(Pos p) { pos.set(p); prev.set(p); vx = vy = vz = 0; }
 
@@ -39,9 +44,12 @@ public final class PlayerEntity {
         if (back) { dx -= fx; dz -= fz; }
         if (right) { dx += rx; dz += rz; }
         if (left) { dx -= rx; dz -= rz; }
+        long bx = pos.blockX(), bz = pos.blockZ();
+        inWater = liquid.at(bx, (int) Math.floor(pos.y - EYE + 0.6), bz);   // вода на рівні пояса
+        headInWater = liquid.at(bx, (int) Math.floor(pos.y), bz);            // вода на рівні очей
         double tvx = 0, tvz = 0;
         if (dx != 0 || dz != 0) {
-            double len = Math.sqrt(dx * dx + dz * dz), s = crouch ? SPEED * CROUCH : (sprint && fwd ? SPEED * SPRINT : SPEED);
+            double len = Math.sqrt(dx * dx + dz * dz), s = (crouch ? SPEED * CROUCH : (sprint && fwd ? SPEED * SPRINT : SPEED)) * (inWater ? 0.55 : 1.0);
             tvx = dx / len * s; tvz = dz / len * s;
         }
         double t = Math.min(1.0, ACCEL * dt);
@@ -50,7 +58,10 @@ public final class PlayerEntity {
         eyeOffset += ((crouch ? -CROUCH_DROP : 0.0) - eyeOffset) * Math.min(1.0, 10.0 * dt);
 
         if (jump && onGround) { vy = JUMP; onGround = false; }
-        vy = Math.max(-MAX_FALL, vy - GRAVITY * dt);
+        if (inWater) { // плавання: слабка гравітація, повільне занурення, пробіл - вгору (біля поверхні - сильніший поштовх, щоб вилізти на берег)
+            vy = Math.max(-3.0, vy - GRAVITY * 0.12 * dt);
+            if (jump) vy = Math.max(vy, headInWater ? 3.8 : 5.5);
+        } else vy = Math.max(-MAX_FALL, vy - GRAVITY * dt);
         moveY(vy * dt);
         moveH(vx * dt, vz * dt, crouch);
         pos.normalize();

@@ -3,6 +3,7 @@ import voxelin.api.event.*;
 import voxelin.core.*;
 import voxelin.core.entity.PlayerEntity;
 import voxelin.core.gen.Noise;
+import voxelin.core.gen.TerrainGenerator;
 import voxelin.loader.*;
 import voxelin.client.LocalActions;
 import voxelin.client.PlayerActions;
@@ -31,6 +32,8 @@ public class VoxelinCoreTest {
         pos();
         noise();
         farWorld(root);
+        terrain();
+        swimming();
         mods(root);
         inventory();
         actions(root);
@@ -309,8 +312,9 @@ public class VoxelinCoreTest {
             for (int i = 0; i < 600; i++) { w.update(cx, cx, 1); boolean all = true; for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) if (w.chunk(cx + dx, cx + dz) == null) all = false; if (all) break; Thread.sleep(10); }
             check(w.chunk(cx, cx) != null, "чанк на " + bx + " згенеровано");
             int top = w.surfaceY(bx, bx);
-            check(w.getBlock(bx, top, bx).name().equals("voxelin:grass") && w.getBlock(bx, 0, bx).name().equals("voxelin:bedrock"), "рельєф на " + bx + ": висота " + top);
-            check(top > 10 && top < 240, "розумна висота на " + bx + ": " + top);
+            String surfBlock = w.getBlock(bx, top, bx).name();
+            check(!surfBlock.equals("voxelin:air") && !surfBlock.equals("voxelin:water") && w.getBlock(bx, 0, bx).name().equals("voxelin:bedrock"), "рельєф на " + bx + ": висота " + top + ", поверхня " + surfBlock);
+            check(top >= 6 && top <= 225, "розумна висота на " + bx + ": " + top);
             Source p = Sources.player("T");
             check(w.setBlock(p, bx + 3, 200, bx + 5, g.blocks.byName("voxelin:glass")), "setBlock на " + bx);
             List<String> out = g.commands.execute(p, w, new long[]{bx, 150, bx}, "/fill ~ ~ ~ ~4 ~2 ~4 stone");
@@ -410,6 +414,151 @@ public class VoxelinCoreTest {
         check(!pa.placeBlock(5000, 10, 5000, "voxelin:stone"), "поза завантаженими чанками - false");
         check(pa.command("/help", null).size() == 1, "команда через PlayerActions");
         w.close();
+    }
+
+    static Game vanilla() { return new Game(new File("nope"), null); }
+
+    /** Біоми, води, печери, руди, дерева: детермінованість, охоплення, розумні пропорції. */
+    static void terrain() {
+        Game g = vanilla();
+        int[] block = new int[1];
+        // 1) усі 12 біомів трапляються (об'єднання кількох зерен), на гігантських координатах теж
+        java.util.Set<TerrainGenerator.Biome> seen = java.util.EnumSet.noneOf(TerrainGenerator.Biome.class);
+        for (long seed : new long[]{1, 2, 3, 4, 12345}) {
+            TerrainGenerator tg = new TerrainGenerator(seed, WorldInfo.Type.NORMAL, g.blocks);
+            for (int i = -60; i < 60; i++) for (int j = -60; j < 60; j++) {
+                long x = i * 400L, z = j * 400L; // біоми великі (тисячі блоків) - беремо ±24 000
+                seen.add(tg.biome(x, z));
+                int h = tg.surfaceY(x, z);
+                check(h >= 6 && h <= 225, "висота в межах 6..225: " + h);
+            }
+        }
+        check(seen.size() == TerrainGenerator.Biome.values().length, "усі біоми трапляються: " + seen);
+        for (long base : new long[]{1_000_000_000_000_000L, -9_000_000_000_000_000L}) {
+            TerrainGenerator tg = new TerrainGenerator(7, WorldInfo.Type.NORMAL, g.blocks);
+            java.util.Set<TerrainGenerator.Biome> far = java.util.EnumSet.noneOf(TerrainGenerator.Biome.class);
+            for (int i = 0; i < 80; i++) for (int j = 0; j < 80; j++) { far.add(tg.biome(base + i * 300L, base + j * 300L)); int h = tg.surfaceY(base + i * 300L, base + j * 300L); check(h >= 6 && h <= 225, "висота далеко"); }
+            check(far.size() >= 6, "на " + base + " теж різні біоми: " + far.size());
+        }
+        // 2) детермінованість чанка й незалежність від сусідів
+        TerrainGenerator tg = new TerrainGenerator(555, WorldInfo.Type.NORMAL, g.blocks);
+        for (long[] pos : new long[][]{{0, 0}, {-7, 12}, {300, -300}, {1_000_000_000L, 5}}) {
+            Chunk a = new Chunk(pos[0], pos[1]), b = new Chunk(pos[0], pos[1]);
+            tg.generate(a); new TerrainGenerator(555, WorldInfo.Type.NORMAL, g.blocks).generate(b);
+            boolean same = true;
+            for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) for (int y = 0; y < Chunk.HEIGHT; y++) if (a.get(x, y, z) != b.get(x, y, z)) same = false;
+            check(same, "чанк " + pos[0] + "," + pos[1] + " генерується однаково");
+        }
+        // 2б) рідка сітка клімату: surfaceY (4 вузли) і генерація чанка (спільна сітка 5x5) дають ОДНАКОВУ поверхню; пагорби не мають «швів» на межах чанків
+        for (long[] pos : new long[][]{{0, 0}, {-3, 5}, {40, -40}, {-1_000_000L, 2_000_000L}}) {
+            Chunk ch = new Chunk(pos[0], pos[1]); tg.generate(ch);
+            for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
+                long wx = pos[0] * 16 + x, wz = pos[1] * 16 + z;
+                int sy = tg.surfaceY(wx, wz);
+                int top = 0; for (int y = Chunk.HEIGHT - 1; y > 0; y--) { int id = ch.get(x, y, z); if (id != 0 && id != g.blocks.byName("voxelin:water").id && id != g.blocks.byName("voxelin:oak_leaves").id && id != g.blocks.byName("voxelin:birch_leaves").id && id != g.blocks.byName("voxelin:spruce_leaves").id && id != g.blocks.byName("voxelin:oak_log").id && id != g.blocks.byName("voxelin:birch_log").id && id != g.blocks.byName("voxelin:spruce_log").id && id != g.blocks.byName("voxelin:pale_log").id && id != g.blocks.byName("voxelin:cactus").id && id != g.blocks.byName("voxelin:dune_glass").id && id != g.blocks.byName("voxelin:monolith").id) { top = y; break; } }
+                check(top == sy, "поверхня чанка = surfaceY у " + wx + "," + wz + ": " + top + " проти " + sy);
+            }
+        }
+        // 2в) біоми великі: сусідні точки на відстані 100 блоків здебільшого того ж біому (не «каша»)
+        {
+            long same = 0, total = 0;
+            for (int i = -50; i < 50; i++) for (int j = -50; j < 50; j++) { long x = i * 211L, z = j * 211L; if (tg.biome(x, z) == tg.biome(x + 100, z)) same++; total++; }
+            check(same / (double) total > 0.7, "біоми великі й не «каша» (білий шум дав би ~0.2; решта - узбережжя й зона змішування на межах): " + (same / (double) total) + " сусідніх точок (100 блоків) того ж біому");
+        }
+        // 3) статистика на 24x24 чанках: руди, печери, вода, дерева
+        int stone = g.blocks.byName("voxelin:stone").id, water = g.blocks.byName("voxelin:water").id, bedrock = g.blocks.byName("voxelin:bedrock").id;
+        String[] ores = {"coal_ore", "iron_ore", "copper_ore", "gold_ore", "diamond_ore", "liminite_ore"};
+        int[] oreIds = new int[ores.length], oreCount = new int[ores.length];
+        for (int i = 0; i < ores.length; i++) oreIds[i] = g.blocks.byName("voxelin:" + ores[i]).id;
+        long caveAir = 0, solidUnder = 0, waterBlocks = 0, logs = 0, leaves = 0, badBedrock = 0, columns = 0;
+        long[] forest = locate(tg, TerrainGenerator.Biome.FOREST), oceanSpot = locate(tg, TerrainGenerator.Biome.OCEAN);
+        check(forest != null && oceanSpot != null, "знайдено ліс і океан для статистики");
+        final long fcx = Math.floorDiv(forest[0], 16L), fcz = Math.floorDiv(forest[1], 16L);
+        int oakLog = g.blocks.byName("voxelin:oak_log").id, birchLog = g.blocks.byName("voxelin:birch_log").id, spruceLog = g.blocks.byName("voxelin:spruce_log").id;
+        for (int dx = -12; dx < 12; dx++) for (int dz = -12; dz < 12; dz++) {
+            long cx = fcx + dx, cz = fcz + dz;
+            Chunk c = new Chunk(cx, cz);
+            tg.generate(c);
+            for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
+                columns++;
+                if (c.get(x, 0, z) != bedrock) badBedrock++;
+                int surf = tg.surfaceY(cx * 16L + x, cz * 16L + z);
+                for (int y = 1; y < Chunk.HEIGHT; y++) {
+                    int id = c.get(x, y, z);
+                    for (int o = 0; o < oreIds.length; o++) if (id == oreIds[o]) oreCount[o]++;
+                    if (id == water) { waterBlocks++; check(y <= TerrainGenerator.SEA, "вода лише до рівня моря: y=" + y); }
+                    if (id == oakLog || id == birchLog || id == spruceLog) logs++;
+                    if (y >= 3 && y < surf - 4) { if (id == 0) caveAir++; else solidUnder++; }
+                }
+            }
+        }
+        check(badBedrock == 0, "корінна порода на y=0 всюди");
+        for (int cx = 0; cx < 3; cx++) for (int cz = 0; cz < 3; cz++) {
+            Chunk bc = new Chunk(cx, cz); tg.generate(bc);
+            int thick1 = 0, thick2 = 0;
+            for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
+                check(bc.get(x, 0, z) == bedrock && bc.get(x, 3, z) != bedrock, "корінна порода лише в y 0..2");
+                if (bc.get(x, 1, z) == bedrock) thick1++;
+                if (bc.get(x, 2, z) == bedrock) thick2++;
+            }
+            check(thick1 > 60 && thick1 < 200 && thick2 > 10 && thick2 < 120, "дно світу «рване»: y1=" + thick1 + " y2=" + thick2 + " з 256");
+        }
+        for (int o = 0; o < ores.length; o++) check(oreCount[o] > 0, "руда " + ores[o] + " трапляється: " + oreCount[o]);
+        check(oreCount[0] > oreCount[1] && oreCount[1] > oreCount[3] && oreCount[3] >= oreCount[4], "руди за рідкістю: вугілля > залізо > золото >= діаманти: " + java.util.Arrays.toString(oreCount));
+        double caveFrac = caveAir / (double) (caveAir + solidUnder);
+        check(caveFrac > 0.005 && caveFrac < 0.2, "печери займають розумну частку підземелля: " + caveFrac);
+        // вода: в районі океану її багато й лише до рівня моря (виміряно вище в циклі: y <= SEA)
+        for (int dx = -4; dx < 4; dx++) for (int dz = -4; dz < 4; dz++) {
+            Chunk wc = new Chunk(Math.floorDiv(oceanSpot[0], 16L) + dx, Math.floorDiv(oceanSpot[1], 16L) + dz); tg.generate(wc);
+            for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) for (int y = 1; y <= TerrainGenerator.SEA; y++) if (wc.get(x, y, z) == water) waterBlocks++;
+        }
+        check(waterBlocks > 5000, "в океані багато води: " + waterBlocks);
+        check(logs > 100, "дерева ростуть: " + logs);
+        // 4) океан: під водою дно, вода до рівня моря; плоский світ без печер і руд
+        long[] ocean = null;
+        for (int i = -60; i < 60 && ocean == null; i++) for (int j = -60; j < 60; j++) if (tg.biome(i * 50L, j * 50L) == TerrainGenerator.Biome.OCEAN) { ocean = new long[]{i * 50L, j * 50L}; break; }
+        check(ocean != null, "знайдено океан");
+        Chunk oc = new Chunk(Math.floorDiv(ocean[0], 16L), Math.floorDiv(ocean[1], 16L)); tg.generate(oc);
+        int lx = (int) Math.floorMod(ocean[0], 16L), lz = (int) Math.floorMod(ocean[1], 16L), os = tg.surfaceY(ocean[0], ocean[1]);
+        check(os < TerrainGenerator.SEA && oc.get(lx, os + 1, lz) == water && oc.get(lx, TerrainGenerator.SEA, lz) == water && oc.get(lx, TerrainGenerator.SEA + 1, lz) == 0, "океан: вода над дном до рівня моря");
+        TerrainGenerator flat = new TerrainGenerator(1, WorldInfo.Type.FLAT, g.blocks);
+        Chunk fc = new Chunk(3, 3); flat.generate(fc);
+        check(fc.get(5, 64, 5) == g.blocks.byName("voxelin:grass").id && fc.get(5, 65, 5) == 0 && fc.get(5, 30, 5) == g.blocks.byName("voxelin:stone").id, "плаский світ: рівна трава на 64");
+        // 5) місце появи на суші
+        for (long seed : new long[]{1, 2, 3, 4, 5, 6, 7, 8}) {
+            try {
+                Game gg = new Game(new File(java.nio.file.Files.createTempDirectory("vx-land").toFile(), "s"), null);
+                gg.createWorld("L", seed, WorldInfo.Type.NORMAL);
+                World w = gg.openWorld("L");
+                long[] land = w.findLand(0, 0);
+                check(w.surfaceY(land[0], land[1]) > w.seaLevel() + 1 || (land[0] == 0 && land[1] == 0), "спавн на суші для зерна " + seed + ": " + w.surfaceY(land[0], land[1]));
+                w.close();
+            } catch (Exception e) { throw new RuntimeException(e); }
+        }
+    }
+
+    /** Точка, де біом «глибокий» (сусіди на 60 блоків у 4 напрямках того ж біому), найближча до початку координат (кільцями по 120 блоків, до 30 000). */
+    static long[] locate(TerrainGenerator tg, TerrainGenerator.Biome b) {
+        for (int r = 0; r <= 30000; r += 120) for (int i = -r; i <= r; i += 120) for (long[] p : new long[][]{{i, -r}, {i, r}, {-r, i}, {r, i}}) {
+            if (tg.biome(p[0], p[1]) == b && tg.biome(p[0] + 60, p[1]) == b && tg.biome(p[0] - 60, p[1]) == b && tg.biome(p[0], p[1] + 60) == b && tg.biome(p[0], p[1] - 60) == b) return p;
+        }
+        return null;
+    }
+
+    static void swimming() {
+        PlayerEntity.Solid floor = (x, y, z) -> y <= 0;
+        PlayerEntity.Liquid sea = (x, y, z) -> y >= 1 && y <= 30;
+        PlayerEntity dry = new PlayerEntity(floor, (x, y, z) -> false, Pos.ofBlock(0, 25, 0)), wet = new PlayerEntity(floor, sea, Pos.ofBlock(0, 25, 0));
+        for (int i = 0; i < 20; i++) { dry.tick(0.05, false, false, false, false, false, false, false); wet.tick(0.05, false, false, false, false, false, false, false); }
+        check(25 - wet.pos.y < 4 && 25 - dry.pos.y > 8, "у воді падає повільно: вода " + (25 - wet.pos.y) + " проти " + (25 - dry.pos.y));
+        check(wet.inWater && wet.headInWater, "inWater/headInWater у воді");
+        for (int i = 0; i < 60; i++) wet.tick(0.05, false, false, false, false, true, false, false);
+        check(wet.pos.y > 25 - 2, "пробіл у воді піднімає: y=" + wet.pos.y);
+        // повільніше рухається у воді
+        PlayerEntity a = new PlayerEntity(floor, sea, Pos.ofBlock(0, 10, 0)), b = new PlayerEntity(floor, (x, y, z) -> false, Pos.ofBlock(0, 1 + PlayerEntity.EYE + 0.01, 0));
+        for (int i = 0; i < 40; i++) { a.tick(0.05, true, false, false, false, false, false, false); b.tick(0.05, true, false, false, false, false, false, false); }
+        double da = Math.hypot(a.pos.relX(0) - Pos.ofBlock(0, 0, 0).relX(0), a.pos.relZ(0) - Pos.ofBlock(0, 0, 0).relZ(0)), db = Math.hypot(b.pos.relX(0) - Pos.ofBlock(0, 0, 0).relX(0), b.pos.relZ(0) - Pos.ofBlock(0, 0, 0).relZ(0));
+        check(da < db * 0.8 && da > 0, "у воді повільніше: " + da + " проти " + db);
     }
 
     static void inventory() {

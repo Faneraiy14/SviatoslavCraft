@@ -225,6 +225,27 @@ public final class World implements WorldAccess {
     }
 
     public int surfaceY(long x, long z) { return generator.surfaceY(x, z); }
+    public String biomeAt(long x, long z) { return generator.biomeAt(x, z); }
+
+    /**
+     * Найближча до (x,z) колонка суші (поверхня вище моря, не пляж/вода) - кільцями по 16 блоків до 2048; не знайдено - сама (x,z). Лише генератор,
+     * чанки не потрібні, тож можна викликати до завантаження світу (визначити, що завантажувати для місця появи).
+     */
+    public long[] findLand(long x, long z) {
+        int sea = generator.seaLevel();
+        if (generator.surfaceY(x, z) > sea + 1) return new long[]{x, z};
+        for (int r = 16; r <= 2048; r += 16) {
+            for (int i = -r; i <= r; i += 16) {
+                long[][] cand = {{x + i, z - r}, {x + i, z + r}, {x - r, z + i}, {x + r, z + i}};
+                for (long[] c : cand) if (generator.surfaceY(c[0], c[1]) > sea + 1) return c;
+            }
+        }
+        return new long[]{x, z};
+    }
+    public int seaLevel() { return generator.seaLevel(); }
+
+    /** Чи рідина в точці (вода): гравець у ній пливе. Незавантажене - ні. */
+    public boolean isLiquid(long x, int y, long z) { int id = blockId(x, y, z); return id > 0 && blocks.get(id).liquid; }
 
     /** Доступ до чанка під час генерації для модів (ChunkGeneratedEvent). */
     private final class GenAccess implements ChunkData {

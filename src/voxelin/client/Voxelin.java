@@ -191,8 +191,9 @@ public final class Voxelin {
             return;
         }
         WorldInfo i = loading.info;
-        loadCx = i.hasPlayer ? i.playerCx : 0;
-        loadCz = i.hasPlayer ? i.playerCz : 0;
+        long[] land = loading.findLand(0, 0); // новий світ: з'являємось на суші, а не в морі
+        loadCx = i.hasPlayer ? i.playerCx : Math.floorDiv(land[0], 16L);
+        loadCz = i.hasPlayer ? i.playerCz : Math.floorDiv(land[1], 16L);
         if (opts.hasTp) { loadCx = Math.floorDiv(opts.tpX, 16L); loadCz = Math.floorDiv(opts.tpZ, 16L); }
         loadingSince = System.currentTimeMillis();
         loadError = null;

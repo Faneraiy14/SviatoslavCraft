@@ -60,6 +60,7 @@ public final class VanillaContent implements VoxelinMod {
         tex("grass_side", TextureGen.grassSide()); tex("pale_grass_side", TextureGen.paleGrassSide());
         tex("oak_log_top", TextureGen.oakLogTop()); tex("birch_log_top", TextureGen.birchLogTop()); tex("spruce_log_top", TextureGen.spruceLogTop()); tex("pale_log_top", TextureGen.paleLogTop());
         tex("cactus_top", TextureGen.cactusTop());
+        tex("chest_top", ItemTextureGen.chestTop()); tex("chest_side", ItemTextureGen.chestSide());
         tex("furnace_top", ItemTextureGen.furnaceTop()); tex("furnace_side", ItemTextureGen.furnaceSide());
         tex("workbench_top", ItemTextureGen.workbenchTop()); tex("workbench_side", ItemTextureGen.workbenchSide());
 
@@ -104,6 +105,7 @@ public final class VanillaContent implements VoxelinMod {
         block("lamp", new BlockSettings().texture("lamp").color(cLamp).light(15).tool(ToolKind.PICKAXE).title("Лампа").hardness(0.5f));
         block("workbench", new BlockSettings().textures("workbench_top", "workbench_side", "oak_planks").color(0xB08850).tool(ToolKind.AXE).interact("workbench").title("Верстак").hardness(2f));
         block("furnace", new BlockSettings().textures("furnace_top", "furnace_side", "furnace_top").color(0x777777).tool(ToolKind.PICKAXE).minTier(1).interact("furnace").title("Піч").hardness(3.5f));
+        block("chest", new BlockSettings().textures("chest_top", "chest_side", "chest_top").color(0xA0763C).tool(ToolKind.AXE).interact("chest").title("Скриня").hardness(2.5f));
         // --- предмети (не блоки): матеріали, їжа, інструменти
         tex("stick", ItemTextureGen.stick()); tex("coal", ItemTextureGen.coal()); tex("raw_iron", ItemTextureGen.rawOre(0xE0B49A)); tex("raw_copper", ItemTextureGen.rawOre(0xE0803F));
         tex("raw_gold", ItemTextureGen.rawOre(0xF5D13A)); tex("diamond", ItemTextureGen.diamond()); tex("liminite_shard", ItemTextureGen.shard()); tex("apple", ItemTextureGen.apple());
@@ -143,6 +145,13 @@ public final class VanillaContent implements VoxelinMod {
         r.recipe("workbench", RecipeSettings.shaped("PP", "PP").key('P', "#planks").result("workbench", 1));
         r.recipe("stone_bricks", RecipeSettings.shaped("SS", "SS").key('S', "stone").result("stone_bricks", 4));
         r.recipe("lamp", RecipeSettings.shaped(".G.", "GCG", ".G.").key('G', "glass").key('C', "coal").result("lamp", 2));
+        r.recipe("chest", RecipeSettings.shaped("PPP", "P.P", "PPP").key('P', "#planks").result("chest", 1));
+        r.loot("ruins", new LootSettings().rolls(1, 3).entry("stick", 2, 6, 10).entry("coal", 1, 4, 8).entry("apple", 1, 2, 6).entry("cobblestone", 3, 8, 8)
+                .entry("raw_iron", 1, 3, 5).entry("leather", 1, 2, 4).entry("string", 1, 3, 4).entry("iron_ingot", 1, 2, 2));
+        r.loot("dungeon", new LootSettings().rolls(2, 4).entry("raw_iron", 2, 5, 8).entry("raw_gold", 1, 3, 5).entry("iron_ingot", 1, 3, 5).entry("steak", 2, 4, 6)
+                .entry("leather", 1, 3, 5).entry("string", 2, 4, 5).entry("coal", 3, 6, 6).entry("iron_sword", 1, 1, 2).entry("diamond", 1, 1, 1));
+        r.loot("mine", new LootSettings().rolls(1, 3).entry("coal", 4, 9, 10).entry("raw_iron", 2, 4, 6).entry("raw_copper", 2, 5, 6).entry("stick", 3, 8, 8)
+                .entry("stone_pickaxe", 1, 1, 2).entry("apple", 1, 2, 4).entry("cooked_chicken", 1, 2, 3));
         r.recipe("furnace", RecipeSettings.shaped("C.C", "CKC", "CCC").key('C', "cobblestone").key('K', "coal").result("furnace", 1));
         r.recipe("smelt_iron", RecipeSettings.smelting("raw_iron", 10).result("iron_ingot", 1));
         r.recipe("smelt_copper", RecipeSettings.smelting("raw_copper", 10).result("copper_ingot", 1));

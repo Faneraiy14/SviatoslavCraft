@@ -49,7 +49,7 @@ final class PlayScreen {
     private PlayerTarget playerTarget;
     private Mob aimedMob;
     private double attackCd;
-    private long openedX, openedZ; private int openedY; private boolean openedBlock; // відкрите вікно блока (піч)
+    private long openedX, openedZ; private int openedY; private boolean openedBlock; private String openedKind; // відкрите вікно блока (піч)
     // ламання блока: ціль, прогрес 0..1, пауза між блоками
     private long breakX, breakZ; private int breakY; private boolean breaking;
     private double breakProgress, breakCooldown;
@@ -101,6 +101,13 @@ final class PlayScreen {
         grab(!v.opts.quiet()); // автоперевірки не захоплюють справжній курсор користувача
         if ("inventory".equals(v.opts.open)) invOpen = true;
         if ("workbench".equals(v.opts.open)) { activeScreen = benchScreen; invOpen = true; }
+        if ("chest".equals(v.opts.open)) { // лише для знімків: скриня з жеребом здобичі
+            ChestEntity demo = new ChestEntity(0, 0, 0);
+            LootTable lt = world.loot.get("dungeon");
+            if (lt != null) lt.fill(demo, new java.util.Random(5), world.itemTypes);
+            activeScreen = InventoryScreen.container("СКРИНЯ", new ChestMenu(world.itemTypes, inv, demo), inv, world, icons, st -> { });
+            invOpen = true;
+        }
         if ("furnace".equals(v.opts.open)) { // лише для знімків: піч із вигаданим станом (у світі не існує)
             FurnaceEntity demo = new FurnaceEntity(0, 0, 0);
             demo.input = new Inventory.Stack("voxelin:raw_iron", 5); demo.fuel = new Inventory.Stack("voxelin:coal", 3); demo.output = new Inventory.Stack("voxelin:iron_ingot", 2);
@@ -160,7 +167,7 @@ final class PlayScreen {
     boolean frame(float alpha) {
         Input in = v.input;
         if (leaving) return false;
-        if (invOpen && openedBlock && world.furnaceAt(openedX, openedY, openedZ) == null) closeInventory(); // піч зламано/зникла
+        if (invOpen && openedBlock && !openedKind.equals(world.blocks.get(Math.max(0, world.blockId(openedX, openedY, openedZ))).interact)) closeInventory(); // блок зламано/зник
         if (in.pressed(GLFW_KEY_ESCAPE) && !vt.dead()) {
             if (chatOpen) closeChat(); else if (invOpen) { closeInventory(); } else return false;
         }
@@ -283,11 +290,19 @@ final class PlayScreen {
         BlockType target = hit == null ? null : world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
         if (target != null && target.interact != null && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
             if ("workbench".equals(target.interact)) { activeScreen = benchScreen; invOpen = true; grab(false); }
+            else if ("chest".equals(target.interact)) {
+                ChestEntity ce = world.chestAt(hit.x(), hit.y(), hit.z());
+                if (ce != null) {
+                    activeScreen = InventoryScreen.container("СКРИНЯ", new ChestMenu(world.itemTypes, inv, ce), inv, world, icons, st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
+                    openedX = hit.x(); openedY = hit.y(); openedZ = hit.z(); openedBlock = true; openedKind = "chest";
+                    invOpen = true; grab(false);
+                }
+            }
             else if ("furnace".equals(target.interact)) {
                 FurnaceEntity fe = world.furnaceAt(hit.x(), hit.y(), hit.z());
                 if (fe != null) {
                     activeScreen = InventoryScreen.furnace(new FurnaceMenu(world.itemTypes, v.game.recipes, inv, fe), inv, world, icons, st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
-                    openedX = hit.x(); openedY = hit.y(); openedZ = hit.z(); openedBlock = true;
+                    openedX = hit.x(); openedY = hit.y(); openedZ = hit.z(); openedBlock = true; openedKind = "furnace";
                     invOpen = true; grab(false);
                 }
             }

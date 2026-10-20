@@ -39,6 +39,7 @@ public final class World implements WorldAccess {
     public final ItemRegistry itemTypes;
     public final RecipeRegistry recipes;
     public final MobRegistry mobTypes;
+    public final LootRegistry loot;
     private final EventBus events;
     private final Generator generator;
     private final RegionStorage storage;
@@ -59,8 +60,8 @@ public final class World implements WorldAccess {
     /** Статистика для F3 і --bench. */
     public volatile long genNanos, genCount;
 
-    public World(File dir, WorldInfo info, BlockRegistry blocks, ItemRegistry itemTypes, RecipeRegistry recipes, MobRegistry mobTypes, EventBus events, Generator generator) throws IOException {
-        this.dir = dir; this.info = info; this.blocks = blocks; this.itemTypes = itemTypes; this.recipes = recipes; this.mobTypes = mobTypes; this.events = events; this.generator = generator;
+    public World(File dir, WorldInfo info, BlockRegistry blocks, ItemRegistry itemTypes, RecipeRegistry recipes, MobRegistry mobTypes, LootRegistry loot, EventBus events, Generator generator) throws IOException {
+        this.dir = dir; this.info = info; this.blocks = blocks; this.itemTypes = itemTypes; this.recipes = recipes; this.mobTypes = mobTypes; this.loot = loot; this.events = events; this.generator = generator;
         storage = new RegionStorage(dir);
         light = new LightEngine(blocks, (c, sy) -> { if (listener != null) listener.lightChanged(c, sy); });
         rt2p = new int[blocks.size()];
@@ -332,6 +333,14 @@ public final class World implements WorldAccess {
         return e instanceof FurnaceEntity ? (FurnaceEntity) e : null;
     }
 
+    /** Скриня в цій точці (створюється порожньою, якщо блок - скриня, а стану ще нема). */
+    public ChestEntity chestAt(long x, int y, long z) {
+        int id = blockId(x, y, z);
+        if (id <= 0 || !"chest".equals(blocks.get(id).interact)) return null;
+        BlockEntity e = blockEntities.computeIfAbsent(new BlockPos(x, y, z), k -> new ChestEntity(x, y, z));
+        return e instanceof ChestEntity ? (ChestEntity) e : null;
+    }
+
     private void tickBlockEntities() {
         for (Iterator<BlockEntity> it = blockEntities.values().iterator(); it.hasNext(); ) {
             BlockEntity e = it.next();
@@ -373,14 +382,14 @@ public final class World implements WorldAccess {
         try {
             for (String line : java.nio.file.Files.readAllLines(f.toPath(), java.nio.charset.StandardCharsets.UTF_8)) {
                 String[] p = line.trim().split(" ", 5);
-                if (p.length != 5 || !p[3].equals("furnace")) continue;
+                if (p.length != 5 || !(p[3].equals("furnace") || p[3].equals("chest"))) continue;
                 try {
                     long x = Long.parseLong(p[0]), z = Long.parseLong(p[2]);
                     int y = Integer.parseInt(p[1]);
                     if (y < 0 || y >= Chunk.HEIGHT || !inRange(x >> 4, z >> 4)) continue;
-                    FurnaceEntity fe = new FurnaceEntity(x, y, z);
-                    fe.decode(p[4]);
-                    blockEntities.put(new BlockPos(x, y, z), fe);
+                    BlockEntity be = p[3].equals("furnace") ? new FurnaceEntity(x, y, z) : new ChestEntity(x, y, z);
+                    be.decode(p[4]);
+                    blockEntities.put(new BlockPos(x, y, z), be);
                 } catch (IllegalArgumentException e) { /* бита клітинка - пропускаємо */ }
             }
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось прочитати блок-сутності: " + e); }

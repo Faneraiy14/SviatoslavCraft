@@ -271,4 +271,25 @@ public final class ItemTextureGen {
         for (int[] p : pts) px(a, p[0], p[1], 0xFFFFFFFF);
         return outlined(a);
     }
+
+    // ------------------------------------------------------------------ скриня (текстури блока)
+
+    public static int[] chestTop() {
+        int[] a = TextureGen.oakPlanks().clone();
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) if (x < 1 || y < 1 || x > 14 || y > 14) a[x + y * N] = dark(a[x + y * N], -60);
+        for (int x = 1; x <= 14; x++) a[x + 8 * N] = dark(a[x + 8 * N], -25);
+        return a;
+    }
+
+    /** Бік скрині: дошки, залізна рамка, зверху кришка, по центру застібка. */
+    public static int[] chestSide() {
+        int[] a = TextureGen.oakPlanks().clone();
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            boolean frame = x < 1 || y < 1 || x > 14 || y > 14 || y == 6;
+            if (frame) a[x + y * N] = dark(a[x + y * N], -65);
+        }
+        for (int y = 5; y <= 8; y++) for (int x = 7; x <= 8; x++) a[x + y * N] = 0xFFC9C9C9;
+        a[7 + 8 * N] = 0xFF8A8A8A; a[8 + 8 * N] = 0xFF8A8A8A;
+        return a;
+    }
 }

@@ -33,6 +33,11 @@ final class InventoryScreen {
         return new InventoryScreen(title, menu, new CraftTop(menu), inv, world, icons, dropper);
     }
 
+    /** Вікно скрині: 27 слотів зверху. */
+    static InventoryScreen container(String title, ChestMenu menu, Inventory inv, World world, IconAtlas icons, Consumer<Inventory.Stack> dropper) {
+        return new InventoryScreen(title, menu, new ChestTop(menu), inv, world, icons, dropper);
+    }
+
     /** Вікно печі. */
     static InventoryScreen furnace(FurnaceMenu menu, Inventory inv, World world, IconAtlas icons, Consumer<Inventory.Stack> dropper) {
         return new InventoryScreen("ПІЧ", menu, new FurnaceTop(menu), inv, world, icons, dropper);
@@ -182,6 +187,25 @@ final class InventoryScreen {
             Gui.rect(ax, ay, aw, 16, 0.2f, 0.2f, 0.22f, 1f);
             float pf = f.cookTotal <= 0 ? 0 : Math.min(1f, f.progress / (float) f.cookTotal);
             if (pf > 0) Gui.rect(ax, ay, aw * pf, 16, 0.95f, 0.95f, 0.95f, 1f);
+            return hovered;
+        }
+    }
+
+    /** Скриня: три ряди по дев'ять слотів. */
+    private static final class ChestTop implements Top {
+        private final ChestMenu m;
+        ChestTop(ChestMenu m) { this.m = m; }
+        public float height() { return 3 * (SIZE + GAP); }
+        public void onClose() {}
+        public int draw(InventoryScreen s, Gui g, float x0, float top) {
+            int hovered = -1;
+            for (int k = 0; k < ChestEntity.SIZE; k++) {
+                float x = x0 + (k % 9) * (SIZE + GAP), y = top + (k / 9) * (SIZE + GAP);
+                boolean hov = g.over(x, y, SIZE, SIZE);
+                if (hov) hovered = ChestMenu.CHEST + k;
+                s.slotBox(x, y, SIZE, false, hov);
+                s.drawStack(m.get(ChestMenu.CHEST + k), x, y, SIZE);
+            }
             return hovered;
         }
     }

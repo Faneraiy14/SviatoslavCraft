@@ -16,6 +16,8 @@ public interface Registries {
     /** Зареєструвати вид істоти (назва без двокрапки отримує префікс мода). */
     MobRef mob(String name, MobSettings settings);
     MobRef findMob(String fullName);
+    /** Таблиця здобичі для скринь (id без двокрапки отримує префікс мода). */
+    void loot(String id, LootSettings settings);
     /** Знайти блок за повною назвою ("voxelin:stone") або null. */
     BlockRef findBlock(String fullName);
     /**

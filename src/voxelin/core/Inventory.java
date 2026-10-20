@@ -77,6 +77,23 @@ public final class Inventory implements ItemHolder {
         return out;
     }
 
+    /** Упорядкувати сховище (слоти 9..35): склеїти однакові стопки й відсортувати за назвою. Хотбар не чіпаємо. */
+    public void sortMain() {
+        List<Stack> all = new ArrayList<>();
+        for (int i = HOTBAR; i < SIZE; i++) if (slots[i] != null) { all.add(slots[i]); slots[i] = null; }
+        all.sort(Comparator.comparing((Stack x) -> x.item).thenComparingInt(x -> x.damage).thenComparingInt(x -> -x.count));
+        List<Stack> out = new ArrayList<>();
+        for (Stack x : all) {
+            int max = maxStack(x.item);
+            while (x.count > 0) {
+                Stack last = out.isEmpty() ? null : out.get(out.size() - 1);
+                if (last != null && last.item.equals(x.item) && last.damage == x.damage && last.count < max) { int m = Math.min(max - last.count, x.count); last.count += m; x.count -= m; }
+                else { out.add(x); break; }
+            }
+        }
+        for (int i = 0; i < out.size(); i++) slots[HOTBAR + i] = out.get(i);
+    }
+
     public boolean isEmpty() { for (Stack s : slots) if (s != null) return false; return true; }
 
     // ------------------------------------------------------------------ збереження

@@ -24,6 +24,7 @@ public final class TextureArray {
     private final Map<String, Integer> layers = new HashMap<>();
     public final int count;
     public final List<String> overridden = new ArrayList<>();
+    private final List<int[]> pixelData = new ArrayList<>();
 
     public TextureArray(Map<String, int[][]> textures, int size, File dir) {
         this.size = size;
@@ -40,6 +41,7 @@ public final class TextureArray {
             pixels.add(px);
         }
         count = pixels.size();
+        pixelData.addAll(pixels);
         ByteBuffer buf = MemoryUtil.memAlloc(size * size * 4 * count);
         try {
             for (int[] px : pixels) for (int c : px) { buf.put((byte) (c >> 16)).put((byte) (c >> 8)).put((byte) c).put((byte) (c >>> 24)); }
@@ -64,6 +66,9 @@ public final class TextureArray {
         if (l == null) { System.out.println("[Voxelin] ⚠️ текстуру не знайдено: " + name); return 1; }
         return l;
     }
+
+    /** Піксельні дані шару (ARGB, size x size) - для атласа іконок інтерфейсу. */
+    public int[] pixels(int layer) { return pixelData.get(layer); }
 
     public void bind() { glBindTexture(GL_TEXTURE_2D_ARRAY, id); }
 

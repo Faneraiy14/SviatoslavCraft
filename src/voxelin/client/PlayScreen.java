@@ -1,6 +1,7 @@
 package voxelin.client;
 
 import voxelin.client.render.Camera;
+import voxelin.client.render.IconAtlas;
 import voxelin.client.render.WorldRenderer;
 import voxelin.client.ui.Gui;
 import voxelin.content.VanillaContent;
@@ -32,6 +33,8 @@ final class PlayScreen {
     private final Deque<Line> chat = new ArrayDeque<>();
     private static final float[] UNDER_FOG = {0.07f, 0.2f, 0.45f};
     private final Pos spawn;
+    private InventoryScreen invScreen;
+    private IconAtlas icons;
     private boolean invOpen, chatOpen, debug, hud = true, grabbed;
     private Raycast.Hit hit;
     private long ticks;
@@ -57,6 +60,8 @@ final class PlayScreen {
         actions = new LocalActions(world, v.game.commands, playerSrc);
         vt = world.vitals(playerSrc);
         inv = world.inventory(playerSrc);
+        icons = new IconAtlas(v.textures, world);
+        invScreen = new InventoryScreen(new PlayerMenu(world.itemTypes, inv), inv, world, icons, st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
         prevHealth = vt.health();
         long[] land = world.findLand(0, 0); // не з'являтись у морі
         spawn = findSpawn(land[0], land[1]);
@@ -79,6 +84,7 @@ final class PlayScreen {
         bench = v.opts.benchSeconds > 0 ? new BenchRun(v.opts.benchSeconds) : null;
         debug = v.opts.debug;
         grab(!v.opts.quiet()); // автоперевірки не захоплюють справжній курсор користувача
+        if ("inventory".equals(v.opts.open)) invOpen = true;
         say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера.");
     }
 
@@ -119,7 +125,7 @@ final class PlayScreen {
             Pos at = bodyPos();
             for (Inventory.Stack st : inv.drain()) world.spawnItem(at, st.item, st.count, st.damage, true);
         }
-        if (vt.dead() && !deadHandled) { deadHandled = true; hud = true; invOpen = false; chatOpen = false; v.input.endText(); grab(false); say("Ти загинув."); }
+        if (vt.dead() && !deadHandled) { deadHandled = true; hud = true; if (invOpen) closeInventory(); invOpen = false; chatOpen = false; v.input.endText(); grab(false); say("Ти загинув."); }
         if (player.pos.y < -20) { player.teleport(spawn); if (!vt.dead()) vt.damage(4); say("Ти впав за межі світу - повернено на спавн."); }
         world.update(player.pos.cx, player.pos.cz, rend.renderDistance + 1);
         world.tick();
@@ -132,13 +138,13 @@ final class PlayScreen {
         Input in = v.input;
         if (leaving) return false;
         if (in.pressed(GLFW_KEY_ESCAPE) && !vt.dead()) {
-            if (chatOpen) closeChat(); else if (invOpen) { invOpen = false; grab(true); } else return false;
+            if (chatOpen) closeChat(); else if (invOpen) { closeInventory(); } else return false;
         }
         if (in.pressed(GLFW_KEY_F3)) debug = !debug;
         if (in.pressed(GLFW_KEY_F1)) hud = !hud;
         if (in.pressed(GLFW_KEY_F5)) cam.cycle();
         if (!chatOpen && !vt.dead()) {
-            if (in.pressed(GLFW_KEY_E)) { invOpen = !invOpen; grab(!invOpen); }
+            if (in.pressed(GLFW_KEY_E)) { if (invOpen) closeInventory(); else { invOpen = true; grab(false); } }
             if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); }
         }
         if (chatOpen) { in.updateText(); if (in.pressed(GLFW_KEY_ENTER)) sendChat(); } // не залежить від F1 (HUD)
@@ -383,6 +389,8 @@ final class PlayScreen {
 
     private void openChat(String initial) { chatOpen = true; v.input.beginText(initial, true); grab(false); }
 
+    private void closeInventory() { invScreen.close(); invOpen = false; grab(true); }
+
     private void closeChat() { chatOpen = false; v.input.endText(); grab(!invOpen); }
 
     private void sendChat() {
@@ -428,7 +436,7 @@ final class PlayScreen {
             Gui.rect(8, Gui.H - 112, 1264, 30, 0, 0, 0, 0.7f);
             Gui.text("> " + in.text() + ((now / 500) % 2 == 0 ? "_" : ""), 14, Gui.H - 107, 2.4f, 1, 1, 0.8f);
         }
-        if (invOpen) inventory(g);
+        if (invOpen) invScreen.draw(g, v.input);
         if (hurtFlash > 0) Gui.rect(0, 0, Gui.W, Gui.H, 0.8f, 0.05f, 0.05f, (float) (0.35 * hurtFlash));
         if (System.currentTimeMillis() - bannerAt < 4000 && bannerDay > 1) {
             float a = (float) Math.min(1, (4000 - (System.currentTimeMillis() - bannerAt)) / 1000.0);
@@ -481,57 +489,12 @@ final class PlayScreen {
         grab(true);
     }
 
-    private int colorOf(String item) { ItemType t = world.itemTypes.get(item); return t != null ? t.color : 0xFF00FF; }
-
-    private void slot(Gui g, float x, float y, float size, Inventory.Stack st, boolean selected, boolean hov) {
-        Gui.rect(x - 2, y - 2, size + 4, size + 4, selected ? 1f : 0.08f, selected ? 1f : 0.08f, selected ? 1f : 0.08f, 0.9f);
-        Gui.rect(x, y, size, size, hov ? 0.42f : 0.3f, hov ? 0.42f : 0.3f, hov ? 0.45f : 0.33f, 0.92f);
-        if (st == null) return;
-        float pad = size * 0.2f;
-        Gui.rect(x + pad, y + pad, size - 2 * pad, size - 2 * pad, colorOf(st.item), 1f);
-        Gui.frame(x + pad, y + pad, size - 2 * pad, size - 2 * pad, 1.5f, 0, 0, 0);
-        ItemType it = world.itemTypes.get(st.item);
-        if (it != null && it.durability > 0 && st.damage > 0) { // смужка міцності
-            float f = Math.max(0f, 1f - st.damage / (float) it.durability);
-            Gui.rect(x + pad, y + size - 9, size - 2 * pad, 4, 0, 0, 0, 0.9f);
-            Gui.rect(x + pad, y + size - 9, (size - 2 * pad) * f, 4, 1f - f, f, 0.1f, 1f);
-        }
-        String c = st.count > 1 ? String.valueOf(st.count) : "";
-        Gui.text(c, x + size - Gui.textWidth(c, 1.8f) - 3, y + size - 15, 1.8f, 1, 1, 1);
-    }
-
     private void hotbar(Gui g) {
         float size = 54, gap = 6, total = 9 * (size + gap) - gap, x0 = (Gui.W - total) / 2f, y = Gui.H - size - 14;
         Gui.rect(x0 - 8, y - 8, total + 16, size + 16, 0, 0, 0, 0.45f);
-        for (int i = 0; i < 9; i++) slot(g, x0 + i * (size + gap), y, size, inv.get(i), i == inv.selected(), false);
+        for (int i = 0; i < 9; i++) { float x = x0 + i * (size + gap); invScreen.slotBox(x, y, size, i == inv.selected(), false); invScreen.drawStack(inv.get(i), x, y, size); }
         Inventory.Stack st = inv.selectedStack();
-        if (st != null && !invOpen) Gui.textCentered(st.item.substring(st.item.indexOf(':') + 1).replace('_', ' '), Gui.W / 2f, y - 26, 2.2f, 1, 1, 1);
-    }
-
-    private void inventory(Gui g) {
-        float size = 62, gap = 8, total = 9 * (size + gap) - gap, x0 = (Gui.W - total) / 2f, y0 = 170;
-        Gui.rect(0, 0, Gui.W, Gui.H, 0, 0, 0, 0.5f);
-        Gui.rect(x0 - 24, y0 - 60, total + 48, 4 * (size + gap) + 120, 0.5f, 0.5f, 0.52f, 0.97f);
-        Gui.frame(x0 - 24, y0 - 60, total + 48, 4 * (size + gap) + 120, 3, 0.15f, 0.15f, 0.15f);
-        Gui.text("ІНВЕНТАР", x0 - 8, y0 - 44, 3.2f, 0.15f, 0.15f, 0.15f);
-        String tip = null;
-        for (int row = 0; row < 4; row++) for (int col = 0; col < 9; col++) {
-            int idx = row < 3 ? 9 + row * 9 + col : col; // три рядки сховища, нижче - хотбар
-            float x = x0 + col * (size + gap), y = y0 + row * (size + gap) + (row == 3 ? 14 : 0);
-            boolean hov = g.over(x, y, size, size);
-            slot(g, x, y, size, inv.get(idx), idx == inv.selected(), hov);
-            if (hov) {
-                Inventory.Stack st = inv.get(idx);
-                if (st != null) tip = st.item;
-                if (g.click) {
-                    g.click = false;
-                    if (idx < Inventory.HOTBAR) inv.select(idx);
-                    else { Inventory.Stack a = inv.get(idx), b = inv.get(inv.selected()); inv.set(idx, b); inv.set(inv.selected(), a); }
-                }
-            }
-        }
-        if (tip != null) Gui.text(tip, x0 - 8, y0 + 4 * (size + gap) + 30, 2.4f, 0.1f, 0.1f, 0.1f);
-        Gui.text("Крафт і новий інвентар - етап «Виживання»", x0 - 8, y0 + 4 * (size + gap) + 58, 1.8f, 0.3f, 0.3f, 0.3f);
+        if (st != null && !invOpen) Gui.textCentered(InventoryScreen.titleOf(world, st.item), Gui.W / 2f, y - 26, 2.2f, 1, 1, 1);
     }
 
     private String lightLine() {
@@ -587,9 +550,11 @@ final class PlayScreen {
 
     /** Зберегти позицію й закрити (виклик при виході зі світу чи гри). */
     void close() {
+        if (invOpen) invScreen.close();
         if (vt.dead()) player.teleport(spawn); // збереження в момент смерті: гравець з'явиться на спавні
         world.info.setPlayer(player.pos, player.yaw, player.pitch);
         rend.close();
+        icons.close();
         world.close();
         grab(false);
         v.input.endText();

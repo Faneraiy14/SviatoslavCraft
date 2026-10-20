@@ -9,7 +9,7 @@ public final class ItemSettings {
     float speed = 1f;
     ToolKind tool = ToolKind.NONE;
     int food, color = 0xB0B0B0;
-    String texture, placesBlock;
+    String texture, placesBlock, title;
 
     /** Скільки в стопці (1..64). Інструменти й усе з міцністю - завжди 1. */
     public ItemSettings maxStack(int n) { maxStack = Math.max(1, Math.min(64, n)); return this; }
@@ -25,9 +25,12 @@ public final class ItemSettings {
     /** Предмет ставить цей блок (назва «мод:блок», без двокрапки - блок цього ж мода). */
     public ItemSettings placesBlock(String block) { placesBlock = block; return this; }
 
+    /** Назва для людей (підказка в інвентарі), напр. «Залізна кирка». Без неї - з назви предмета. */
+    public ItemSettings title(String t) { title = t; return this; }
+
     public ItemSettings qualified(String modId) {
         ItemSettings s = new ItemSettings();
-        s.maxStack = maxStack; s.durability = durability; s.tier = tier; s.speed = speed; s.tool = tool; s.food = food; s.color = color;
+        s.title = title; s.maxStack = maxStack; s.durability = durability; s.tier = tier; s.speed = speed; s.tool = tool; s.food = food; s.color = color;
         s.texture = texture == null || texture.indexOf(':') >= 0 ? texture : modId + ":" + texture;
         s.placesBlock = placesBlock == null || placesBlock.indexOf(':') >= 0 ? placesBlock : modId + ":" + placesBlock;
         return s;
@@ -40,6 +43,7 @@ public final class ItemSettings {
     public ToolKind toolKind() { return tool; }
     public int foodValue() { return food; }
     public int colorValue() { return color; }
+    public String titleText() { return title; }
     public String textureName() { return texture; }
     public String placesBlockName() { return placesBlock; }
 }

@@ -97,7 +97,7 @@ public final class ModLoader {
                 BlockSettings q = s.qualified(modId);
                 String full = name.contains(":") ? name : modId + ":" + name;
                 BlockType b = blocks.register(full, q);
-                if (b.hasItem) items.register(full, new ItemSettings().placesBlock(full).color(b.color).texture(b.texSide != null ? b.texSide : b.texTop));
+                if (b.hasItem) items.register(full, new ItemSettings().placesBlock(full).color(b.color).texture(b.texSide != null ? b.texSide : b.texTop).title(q.titleText()));
                 return b;
             }
             public ItemRef item(String name, ItemSettings s) {

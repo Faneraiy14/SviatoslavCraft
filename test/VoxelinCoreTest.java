@@ -30,6 +30,7 @@ public class VoxelinCoreTest {
         mods(root);
         inventory();
         actions(root);
+        border(root);
         noLwjglInCore(new File(a.length > 0 ? a[0] : "out"));
         System.out.println("VoxelinCoreTest: " + n + " перевірок OK");
     }
@@ -287,6 +288,22 @@ public class VoxelinCoreTest {
         check(!pa.placeBlock(1, top + 3, 1, "voxelin:no_such_block"), "невідомий блок - false");
         check(!pa.placeBlock(5000, 10, 5000, "voxelin:stone"), "поза завантаженими чанками - false");
         check(pa.command("/help", null).size() == 1, "команда через PlayerActions");
+        w.close();
+    }
+
+    static void border(File root) throws Exception {
+        Game g = new Game(new File(root, "saves7"), null);
+        World w = newWorld(g, "Border", 11);
+        int edge = (World.BORDER >> 4) - 1; // останній чанк усередині межі
+        check(World.inBorder(edge, 0) && !World.inBorder(edge + 1, 0) && World.inBorder(-(World.BORDER >> 4), 0) && !World.inBorder(-(World.BORDER >> 4) - 1, 0), "межа в чанках симетрична");
+        for (int i = 0; i < 400 && w.chunk(edge, 0) == null; i++) { w.update(edge, 0, 2); Thread.sleep(10); }
+        for (int i = 0; i < 60; i++) { w.update(edge, 0, 2); Thread.sleep(5); } // дати шанс (помилково) створитися чанкам за межею
+        check(w.chunk(edge, 0) != null && w.chunk(edge + 1, 0) == null && w.chunk(edge + 2, 0) == null, "за межею чанки не створюються");
+        check(w.isSolid(World.BORDER, 70, 0) && w.blockId(World.BORDER, 70, 0) == -1, "за межею - суцільна стіна (незавантажене)");
+        check(!w.setBlock(Sources.player("T"), World.BORDER + 3, 70, 0, g.blocks.byName("voxelin:stone")), "за межею блок поставити не можна");
+        PlayerEntity p = new PlayerEntity(w::isSolid, Units.center(World.BORDER - 4), Units.toWorld(w.surfaceY(World.BORDER - 4, 0) + 1) + PlayerEntity.EYE + 0.02f, Units.center(0));
+        for (int i = 0; i < 200; i++) p.tick(0.05f, false, false, false, true, false, true, false); // біжить на схід
+        check(Units.toBlock(p.x) < World.BORDER, "гравець не може вийти за межу: x=" + Units.toBlock(p.x));
         w.close();
     }
 

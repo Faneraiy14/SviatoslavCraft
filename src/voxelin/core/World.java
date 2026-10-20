@@ -21,6 +21,16 @@ public final class World implements WorldAccess {
         void blockChanged(int x, int y, int z);
     }
 
+    /**
+     * Технічна межа світу (не ігрова): блоки від -BORDER до BORDER-1 по X і Z. За нею чанки не створюються - суцільна невидима
+     * стіна (незавантажене вважається суцільним), поставити там блок не можна. 100 тис. - межа, до якої float-позиції ще точні;
+     * після переходу позицій на double її можна майже зняти (див. docs/DESIGN.md).
+     */
+    public static final int BORDER = 100_000;
+    public static boolean inBorder(int chunkX, int chunkZ) {
+        return chunkX >= -(BORDER >> 4) && chunkX < (BORDER >> 4) && chunkZ >= -(BORDER >> 4) && chunkZ < (BORDER >> 4);
+    }
+
     public final File dir;
     public final WorldInfo info;
     public final BlockRegistry blocks;
@@ -122,7 +132,7 @@ public final class World implements WorldAccess {
         if (pending.size() < 16) {
             List<long[]> want = new ArrayList<>();
             for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
-                if (dx * dx + dz * dz > radius * radius + radius) continue;
+                if (dx * dx + dz * dz > radius * radius + radius || !inBorder(centerCx + dx, centerCz + dz)) continue;
                 long k = Chunk.key(centerCx + dx, centerCz + dz);
                 if (!chunks.containsKey(k) && !pending.contains(k)) want.add(new long[]{dx * dx + dz * dz, centerCx + dx, centerCz + dz});
             }

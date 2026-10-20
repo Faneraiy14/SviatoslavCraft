@@ -8,21 +8,81 @@ import voxelin.core.CommandRegistry;
  * Етап «Новий світ» додасть текстури, руди, біоми й решту блоків.
  */
 public final class VanillaContent implements VoxelinMod {
-    /** Блоки, які гравець отримує в хотбар у новому світі (поки немає видобутку й крафту). */
-    public static final String[] STARTER = {"voxelin:grass", "voxelin:dirt", "voxelin:stone", "voxelin:oak_log", "voxelin:oak_leaves", "voxelin:oak_planks", "voxelin:glass"};
+    /** Блоки, які гравець отримує в інвентар у новому світі (поки немає видобутку й крафту): 27 стопок по 64. */
+    public static final String[] STARTER = {
+            "voxelin:grass", "voxelin:dirt", "voxelin:stone", "voxelin:cobblestone", "voxelin:stone_bricks", "voxelin:oak_planks", "voxelin:oak_log", "voxelin:glass", "voxelin:lamp",
+            "voxelin:sand", "voxelin:sandstone", "voxelin:gravel", "voxelin:clay", "voxelin:snow", "voxelin:ice", "voxelin:birch_planks", "voxelin:spruce_planks",
+            "voxelin:oak_leaves", "voxelin:birch_log", "voxelin:spruce_log", "voxelin:cactus", "voxelin:deep_stone", "voxelin:mud", "voxelin:pale_grass", "voxelin:sintered_sand",
+            "voxelin:dune_glass", "voxelin:monolith"};
 
     public static final int MAX_FILL = 32768 * 8;
 
+    private Registries r;
+
+    /** Зареєструвати текстуру й повернути її середній колір (для іконок). */
+    private int tex(String name, int[] px) { r.texture(name, px); return TextureGen.average(px); }
+
+    private void block(String name, BlockSettings s) { r.block(name, s); }
+
     @Override public void init(ModContext ctx) {
-        Registries r = ctx.registries();
-        r.block("grass", new BlockSettings().color(0x339A1A).hardness(0.6f));
-        r.block("dirt", new BlockSettings().color(0x804D1A).hardness(0.5f));
-        r.block("stone", new BlockSettings().color(0x808080).hardness(1.5f));
-        r.block("bedrock", new BlockSettings().color(0x2E2E33).hardness(-1f));
-        r.block("oak_log", new BlockSettings().color(0x66330D).hardness(2f));
-        r.block("oak_leaves", new BlockSettings().color(0x1F7A1F).opaque(false).hardness(0.2f));
-        r.block("oak_planks", new BlockSettings().color(0xA8834D).hardness(2f));
-        r.block("glass", new BlockSettings().color(0xCFEFF5).translucent(true).hardness(0.3f));
+        r = ctx.registries();
+        // --- текстури (малюються кодом; власні PNG у textures/voxelin/<назва>.png перекривають)
+        int cStone = tex("stone", TextureGen.stone()), cDeep = tex("deep_stone", TextureGen.deepStone()), cCobble = tex("cobblestone", TextureGen.cobblestone()),
+                cBricks = tex("stone_bricks", TextureGen.stoneBricks()), cDirt = tex("dirt", TextureGen.dirt()), cMud = tex("mud", TextureGen.mud()),
+                cSand = tex("sand", TextureGen.sand()), cSandstone = tex("sandstone", TextureGen.sandstone()), cSinter = tex("sintered_sand", TextureGen.sinteredSand()),
+                cGravel = tex("gravel", TextureGen.gravel()), cClay = tex("clay", TextureGen.clay()), cSnow = tex("snow", TextureGen.snow()), cBed = tex("bedrock", TextureGen.bedrock()),
+                cGrassTop = tex("grass_top", TextureGen.grassTop()), cPaleTop = tex("pale_grass_top", TextureGen.paleGrassTop()),
+                cWater = tex("water", TextureGen.water()), cIce = tex("ice", TextureGen.ice()), cGlass = tex("glass", TextureGen.glass()), cDune = tex("dune_glass", TextureGen.duneGlass()),
+                cOakLog = tex("oak_log", TextureGen.oakLog()), cOakPlanks = tex("oak_planks", TextureGen.oakPlanks()), cOakLeaves = tex("oak_leaves", TextureGen.oakLeaves()),
+                cBirchLog = tex("birch_log", TextureGen.birchLog()), cBirchPlanks = tex("birch_planks", TextureGen.birchPlanks()), cBirchLeaves = tex("birch_leaves", TextureGen.birchLeaves()),
+                cSpruceLog = tex("spruce_log", TextureGen.spruceLog()), cSprucePlanks = tex("spruce_planks", TextureGen.sprucePlanks()), cSpruceLeaves = tex("spruce_leaves", TextureGen.spruceLeaves()),
+                cPaleLog = tex("pale_log", TextureGen.paleLog()), cCactus = tex("cactus_side", TextureGen.cactusSide()),
+                cCoal = tex("coal_ore", TextureGen.coalOre()), cIron = tex("iron_ore", TextureGen.ironOre()), cCopper = tex("copper_ore", TextureGen.copperOre()),
+                cGold = tex("gold_ore", TextureGen.goldOre()), cDiamond = tex("diamond_ore", TextureGen.diamondOre()), cLim = tex("liminite_ore", TextureGen.liminiteOre()),
+                cMono = tex("monolith", TextureGen.monolith()), cLamp = tex("lamp", TextureGen.lamp());
+        tex("grass_side", TextureGen.grassSide()); tex("pale_grass_side", TextureGen.paleGrassSide());
+        tex("oak_log_top", TextureGen.oakLogTop()); tex("birch_log_top", TextureGen.birchLogTop()); tex("spruce_log_top", TextureGen.spruceLogTop()); tex("pale_log_top", TextureGen.paleLogTop());
+        tex("cactus_top", TextureGen.cactusTop());
+
+        // --- блоки
+        block("stone", new BlockSettings().texture("stone").color(cStone).hardness(1.5f));
+        block("deep_stone", new BlockSettings().texture("deep_stone").color(cDeep).hardness(3f));
+        block("cobblestone", new BlockSettings().texture("cobblestone").color(cCobble).hardness(2f));
+        block("stone_bricks", new BlockSettings().texture("stone_bricks").color(cBricks).hardness(2f));
+        block("bedrock", new BlockSettings().texture("bedrock").color(cBed).hardness(-1f));
+        block("dirt", new BlockSettings().texture("dirt").color(cDirt).hardness(0.5f));
+        block("grass", new BlockSettings().textures("grass_top", "grass_side", "dirt").color(cGrassTop).hardness(0.6f));
+        block("pale_grass", new BlockSettings().textures("pale_grass_top", "pale_grass_side", "dirt").color(cPaleTop).hardness(0.6f));
+        block("mud", new BlockSettings().texture("mud").color(cMud).hardness(0.5f));
+        block("sand", new BlockSettings().texture("sand").color(cSand).hardness(0.5f));
+        block("sandstone", new BlockSettings().texture("sandstone").color(cSandstone).hardness(0.8f));
+        block("sintered_sand", new BlockSettings().texture("sintered_sand").color(cSinter).hardness(1f));
+        block("gravel", new BlockSettings().texture("gravel").color(cGravel).hardness(0.6f));
+        block("clay", new BlockSettings().texture("clay").color(cClay).hardness(0.6f));
+        block("snow", new BlockSettings().texture("snow").color(cSnow).hardness(0.2f));
+        block("ice", new BlockSettings().texture("ice").color(cIce).translucent(true).hardness(0.5f));
+        block("water", new BlockSettings().texture("water").color(cWater).translucent(true).liquid(true).hardness(-1f));
+        block("glass", new BlockSettings().texture("glass").color(cGlass).translucent(true).hardness(0.3f));
+        block("dune_glass", new BlockSettings().texture("dune_glass").color(cDune).translucent(true).hardness(0.4f));
+        block("oak_log", new BlockSettings().textures("oak_log_top", "oak_log", "oak_log_top").color(cOakLog).hardness(2f));
+        block("oak_planks", new BlockSettings().texture("oak_planks").color(cOakPlanks).hardness(2f));
+        block("oak_leaves", new BlockSettings().texture("oak_leaves").color(cOakLeaves).opaque(false).hardness(0.2f));
+        block("birch_log", new BlockSettings().textures("birch_log_top", "birch_log", "birch_log_top").color(cBirchLog).hardness(2f));
+        block("birch_planks", new BlockSettings().texture("birch_planks").color(cBirchPlanks).hardness(2f));
+        block("birch_leaves", new BlockSettings().texture("birch_leaves").color(cBirchLeaves).opaque(false).hardness(0.2f));
+        block("spruce_log", new BlockSettings().textures("spruce_log_top", "spruce_log", "spruce_log_top").color(cSpruceLog).hardness(2f));
+        block("spruce_planks", new BlockSettings().texture("spruce_planks").color(cSprucePlanks).hardness(2f));
+        block("spruce_leaves", new BlockSettings().texture("spruce_leaves").color(cSpruceLeaves).opaque(false).hardness(0.2f));
+        block("pale_log", new BlockSettings().textures("pale_log_top", "pale_log", "pale_log_top").color(cPaleLog).hardness(2f));
+        block("cactus", new BlockSettings().textures("cactus_top", "cactus_side", "cactus_top").color(cCactus).hardness(0.4f));
+        block("coal_ore", new BlockSettings().texture("coal_ore").color(cCoal).hardness(3f));
+        block("iron_ore", new BlockSettings().texture("iron_ore").color(cIron).hardness(3f));
+        block("copper_ore", new BlockSettings().texture("copper_ore").color(cCopper).hardness(3f));
+        block("gold_ore", new BlockSettings().texture("gold_ore").color(cGold).hardness(3f));
+        block("diamond_ore", new BlockSettings().texture("diamond_ore").color(cDiamond).hardness(4f));
+        block("liminite_ore", new BlockSettings().texture("liminite_ore").color(cLim).light(4).hardness(4f));
+        block("monolith", new BlockSettings().texture("monolith").color(cMono).light(3).hardness(6f));
+        block("lamp", new BlockSettings().texture("lamp").color(cLamp).light(15).hardness(0.5f));
 
         Commands c = ctx.commands();
         c.register("setblock", "<x> <y> <z> <блок>", 2, k -> {

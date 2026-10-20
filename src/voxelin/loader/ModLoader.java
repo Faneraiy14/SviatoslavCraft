@@ -93,7 +93,7 @@ public final class ModLoader {
         Registries reg = new Registries() {
             public BlockRef block(String name, BlockSettings s) {
                 if (name.contains(":") && !name.startsWith(modId + ":")) throw new IllegalArgumentException("мод «" + modId + "» може реєструвати лише " + modId + ":... (а не " + name + ")");
-                return blocks.register(name.contains(":") ? name : modId + ":" + name, s);
+                return blocks.register(name.contains(":") ? name : modId + ":" + name, s.qualified(modId));
             }
             public BlockRef findBlock(String full) { return blocks.byName(full); }
             public void texture(String name, int[] px) {

@@ -39,7 +39,7 @@ final class PlayScreen {
 
     PlayScreen(Voxelin v, World world) {
         this.v = v; this.world = world;
-        rend = new WorldRenderer(world);
+        rend = new WorldRenderer(world, v.textures);
         rend.renderDistance = v.opts.renderDistance;
         actions = new LocalActions(world, v.game.commands, Sources.player("Player"));
         spawn = findSpawn(0, 0);

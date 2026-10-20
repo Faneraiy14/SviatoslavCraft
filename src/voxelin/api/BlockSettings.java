@@ -28,6 +28,16 @@ public final class BlockSettings {
     /** Скільки ламати (етап «Виживання»); від'ємне - незламний (корінна порода). */
     public BlockSettings hardness(float h) { hardness = h < 0 ? -1f : h; return this; }
 
+    /** Копія, де назви текстур без простору імен ("stone") отримують префікс мода ("voxelin:stone"). Викликає завантажувач. */
+    public BlockSettings qualified(String modId) {
+        BlockSettings b = new BlockSettings();
+        b.color = color; b.solid = solid; b.opaque = opaque; b.liquid = liquid; b.translucent = translucent; b.light = light; b.hardness = hardness;
+        b.texTop = q(texTop, modId); b.texSide = q(texSide, modId); b.texBottom = q(texBottom, modId);
+        return b;
+    }
+
+    private static String q(String t, String modId) { return t == null || t.indexOf(':') >= 0 ? t : modId + ":" + t; }
+
     public int color() { return color; }
     public String textureTop() { return texTop; }
     public String textureSide() { return texSide; }

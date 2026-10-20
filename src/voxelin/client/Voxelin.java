@@ -14,7 +14,7 @@ import static org.lwjgl.opengl.GL11.*;
  * Клієнт Voxelin: вікно, цикл (логіка 20 тіків/с + малювання на повній швидкості), меню, завантаження й гра.
  * Усе ігрове живе в ядрі (voxelin.core) - тут лише показ і ввід.
  *
- * Параметри (для запуску й перевірок): --saves ТЕКА --mods ТЕКА --render-distance N --msaa N --no-vsync --size ШxВ
+ * Параметри (для запуску й перевірок): --saves ТЕКА --mods ТЕКА --render-distance N --texture-size 16|32|64 --msaa N --no-vsync --size ШxВ
  *   --autoworld НАЗВА[:flat] [--seed N]   одразу зайти у світ (створити, якщо нема)
  *   --menu worlds|create|rename            показати екран меню (з --screenshot)
  *   --tp X,Z,YAW,PITCH,ВИСОТА (X,Z - цілі до ±9e18, можна 1e15)             поставити гравця (блоки) · --cmd "/fill ...;/setblock ..."   команди після завантаження
@@ -26,7 +26,7 @@ public final class Voxelin {
 
     static final class Options {
         File saves = new File("saves"), mods = new File("mods");
-        int renderDistance = 12, msaa = 2, width = 1280, height = 720;
+        int renderDistance = 12, msaa = 2, width = 1280, height = 720, textureSize = 16;
         boolean vsync = true;
         long seed = 12345L;
         String autoWorld, screenshot, benchOut = "bench-result.json";
@@ -49,6 +49,7 @@ public final class Voxelin {
                         case "--saves" -> o.saves = new File(a[++i]);
                         case "--mods" -> o.mods = new File(a[++i]);
                         case "--render-distance" -> o.renderDistance = Math.max(2, Math.min(32, Integer.parseInt(a[++i])));
+                        case "--texture-size" -> o.textureSize = Integer.parseInt(a[++i]) >= 64 ? 64 : (Integer.parseInt(a[i]) >= 32 ? 32 : 16);
                         case "--msaa" -> o.msaa = Math.max(0, Math.min(8, Integer.parseInt(a[++i])));
                         case "--no-vsync" -> o.vsync = false;
                         case "--debug" -> o.debug = true;
@@ -83,6 +84,7 @@ public final class Voxelin {
     Input input;
     Gui gui;
     private Menus menus;
+    voxelin.client.render.TextureArray textures;
     private State state = State.MENU;
     private boolean running = true;
     private PlayScreen play;
@@ -123,6 +125,7 @@ public final class Voxelin {
         window.create("Voxelin", opts.width, opts.height, opts.msaa, opts.vsync, !opts.quiet());
         input = new Input(window);
         gui = new Gui(window, input);
+        textures = new voxelin.client.render.TextureArray(game.textures, opts.textureSize, new File("textures"));
         menus = new Menus(this);
         if (opts.autoWorld != null) autoWorld();
 

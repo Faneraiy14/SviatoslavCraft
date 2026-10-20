@@ -9,7 +9,8 @@ public class VoxelinMeshTest {
     // id: 0 повітря, 1 камінь, 2 земля, 3 скло (напівпрозоре)
     static final ChunkMesher.Props PROPS = new ChunkMesher.Props(
             new boolean[]{false, true, true, false}, new boolean[]{false, false, false, true},
-            new boolean[]{true, false, false, false}, new int[]{0, 0x808080, 0x804D1A, 0xCFEFF5});
+            new boolean[]{true, false, false, false}, new int[]{0, 0x808080, 0x804D1A, 0xCFEFF5},
+            new int[]{0, 0, 0, 0}, new int[]{0, 0, 0, 0}, new int[]{0, 0, 0, 0});
 
     static short[] empty() { return new short[18 * 18 * 18]; }
     static void set(short[] p, int x, int y, int z, int id) { p[ChunkMesher.index(x, y, z)] = (short) id; }

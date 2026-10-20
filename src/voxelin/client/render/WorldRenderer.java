@@ -11,6 +11,8 @@ import java.util.concurrent.*;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL15.*;
 import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
+import static org.lwjgl.opengl.GL13.glActiveTexture;
 import static org.lwjgl.opengl.GL30.*;
 
 /**
@@ -22,31 +24,45 @@ import static org.lwjgl.opengl.GL30.*;
 public final class WorldRenderer implements World.Listener {
     private static final String VS = """
             #version 130
-            in vec3 aPos; in vec4 aColor; in float aFace;
+            in vec3 aPos; in vec4 aColor; in float aFace; in float aLayer;
             uniform mat4 uProjView; uniform vec3 uOffset; uniform float uScale; uniform vec3 uCam;
-            out vec4 vColor; out vec3 vBlock; flat out int vFace; out float vDist;
+            out vec4 vColor; out vec3 vBlock; flat out int vFace; out float vDist; out vec2 vUv; flat out float vLayer;
             void main() {
                 vec3 b = aPos + uOffset;
                 vec3 w = b * uScale;
-                vBlock = b; vColor = aColor; vFace = int(aFace + 0.5); vDist = length(w - uCam);
+                int f = int(aFace + 0.5);
+                vBlock = b; vColor = aColor; vFace = f; vLayer = aLayer + 0.5; vDist = length(w - uCam);
+                // UV за гранню: текстура стоїть вертикально на боках (v вниз), на верху/низу - за X/Z; координати в блоках, тож злиті грані повторюють плитку
+                vec2 uv;
+                if (f == 0) uv = vec2(-b.z, -b.y);
+                else if (f == 1) uv = vec2(b.z, -b.y);
+                else if (f == 2) uv = vec2(b.x, b.z);
+                else if (f == 3) uv = vec2(b.x, -b.z);
+                else if (f == 4) uv = vec2(b.x, -b.y);
+                else uv = vec2(-b.x, -b.y);
+                vUv = uv;
                 gl_Position = uProjView * vec4(w, 1.0);
             }
             """;
     private static final String FS = """
             #version 130
-            in vec4 vColor; in vec3 vBlock; flat in int vFace; in float vDist;
-            uniform vec3 uFogColor; uniform float uFogStart; uniform float uFogEnd; uniform float uOutline;
+            in vec4 vColor; in vec3 vBlock; flat in int vFace; in float vDist; in vec2 vUv; flat in float vLayer;
+            uniform vec3 uFogColor; uniform float uFogStart; uniform float uFogEnd; uniform float uOutline; uniform float uCutout;
+            uniform sampler2DArray uTex;
             out vec4 fragColor;
             void main() {
+                vec4 t = texture(uTex, vec3(vUv, floor(vLayer)));
+                if (uCutout > 0.5 && t.a < 0.5) discard; // листя й інші «дірчасті» текстури
                 vec2 q = vFace < 2 ? vBlock.yz : (vFace < 4 ? vBlock.zx : vBlock.xy);
                 vec2 f = abs(fract(q) - 0.5);
                 float m = max(f.x, f.y);
                 float e = 0.5 - m;
                 float aa = fwidth(m) + 0.0001;
-                float line = 1.0 - smoothstep(0.025, 0.025 + aa, e);
-                vec3 c = vColor.rgb * mix(1.0, 0.72, line * uOutline);
+                float line = 1.0 - smoothstep(0.02, 0.02 + aa, e);
+                vec4 base = t * vColor;
+                vec3 c = base.rgb * mix(1.0, 0.8, line * uOutline);
                 float fog = clamp((vDist - uFogStart) / max(1.0, uFogEnd - uFogStart), 0.0, 1.0);
-                fragColor = vec4(mix(c, uFogColor, fog), vColor.a);
+                fragColor = vec4(mix(c, uFogColor, fog), base.a);
             }
             """;
 
@@ -69,7 +85,8 @@ public final class WorldRenderer implements World.Listener {
     private final ThreadLocal<ChunkMesher> mesher = ThreadLocal.withInitial(ChunkMesher::new);
     private final ThreadLocal<short[]> padded = ThreadLocal.withInitial(() -> new short[ChunkMesher.P * ChunkMesher.P * ChunkMesher.P]);
     private final Shader shader;
-    private final int uProjView, uOffset, uScale, uCam, uFogColor, uFogStart, uFogEnd, uOutline;
+    private final TextureArray tex;
+    private final int uProjView, uOffset, uScale, uCam, uFogColor, uFogStart, uFogEnd, uOutline, uCutout, uTex;
     private int ebo, eboQuads;
     private boolean closed;
 
@@ -80,19 +97,27 @@ public final class WorldRenderer implements World.Listener {
     public int visibleSections, drawnQuads;
     public long meshNanos, meshCount, uploads;
 
-    public WorldRenderer(World world) {
-        this.world = world;
+    public WorldRenderer(World world, TextureArray tex) {
+        this.world = world; this.tex = tex;
         BlockType[] all = world.blocks.all();
         boolean[] opaque = new boolean[all.length], trans = new boolean[all.length], air = new boolean[all.length];
-        int[] color = new int[all.length];
-        for (BlockType t : all) { opaque[t.id] = t.opaque; trans[t.id] = t.translucent; air[t.id] = t.isAir(); color[t.id] = t.color; }
-        props = new ChunkMesher.Props(opaque, trans, air, color);
+        int[] color = new int[all.length], lTop = new int[all.length], lSide = new int[all.length], lBot = new int[all.length];
+        for (BlockType t : all) {
+            opaque[t.id] = t.opaque; trans[t.id] = t.translucent; air[t.id] = t.isAir();
+            boolean textured = t.texTop != null || t.texSide != null || t.texBottom != null;
+            color[t.id] = textured ? 0xFFFFFF : t.color; // з текстурою - білий множник, без - власний колір блока
+            String side = t.texSide != null ? t.texSide : (t.texTop != null ? t.texTop : t.texBottom);
+            lSide[t.id] = tex.layer(side);
+            lTop[t.id] = t.texTop != null ? tex.layer(t.texTop) : lSide[t.id];
+            lBot[t.id] = t.texBottom != null ? tex.layer(t.texBottom) : lSide[t.id];
+        }
+        props = new ChunkMesher.Props(opaque, trans, air, color, lTop, lSide, lBot);
         // потоків мешингу не більше половини ядер: решта - головному потоку (малювання) і робочому столу; -Dvoxelin.meshThreads=N перевизначає
         poolSize = Integer.getInteger("voxelin.meshThreads", Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
         pool = Executors.newFixedThreadPool(poolSize, r -> { Thread t = new Thread(r, "voxelin-mesh"); t.setDaemon(true); t.setPriority(Thread.NORM_PRIORITY - 1); return t; });
-        shader = new Shader(VS, FS, "aPos", "aColor", "aFace");
+        shader = new Shader(VS, FS, "aPos", "aColor", "aFace", "aLayer");
         uProjView = shader.uniform("uProjView"); uOffset = shader.uniform("uOffset"); uScale = shader.uniform("uScale"); uCam = shader.uniform("uCam");
-        uFogColor = shader.uniform("uFogColor"); uFogStart = shader.uniform("uFogStart"); uFogEnd = shader.uniform("uFogEnd"); uOutline = shader.uniform("uOutline");
+        uFogColor = shader.uniform("uFogColor"); uFogStart = shader.uniform("uFogStart"); uFogEnd = shader.uniform("uFogEnd"); uOutline = shader.uniform("uOutline"); uCutout = shader.uniform("uCutout"); uTex = shader.uniform("uTex");
         ebo = glGenBuffers();
         ensureIndices(4096);
         world.setListener(this);
@@ -222,6 +247,7 @@ public final class WorldRenderer implements World.Listener {
             glEnableVertexAttribArray(0); glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
             glEnableVertexAttribArray(1); glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, true, stride, 12);
             glEnableVertexAttribArray(2); glVertexAttribPointer(2, 1, GL_FLOAT, false, stride, 16);
+            glEnableVertexAttribArray(3); glVertexAttribPointer(3, 1, GL_FLOAT, false, stride, 20);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
         } else {
             glBindVertexArray(vao);
@@ -282,6 +308,8 @@ public final class WorldRenderer implements World.Listener {
         glUniform3f(uFogColor, fogColor[0], fogColor[1], fogColor[2]);
         glUniform1f(uFogStart, far * 0.65f); glUniform1f(uFogEnd, far * 0.98f);
         glUniform1f(uOutline, outlines ? 1f : 0f);
+        glActiveTexture(GL_TEXTURE0); tex.bind(); glUniform1i(uTex, 0);
+        glUniform1f(uCutout, 1f); // непрозорий прохід: відкидати прозорі пікселі листя
         for (SectionMesh m : vis) {
             glUniform3f(uOffset, (m.cx - rcx) * 16, m.sy * 16, (m.cz - rcz) * 16);
             glBindVertexArray(m.vaoS);
@@ -291,6 +319,7 @@ public final class WorldRenderer implements World.Listener {
         if (!trans.isEmpty()) { // напівпрозоре - від дальнього до ближнього, без запису глибини
             trans.sort(Comparator.comparingDouble(m -> -dist2(m, cam)));
             glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(false); glDisable(GL_CULL_FACE);
+            glUniform1f(uCutout, 0f);
             for (SectionMesh m : trans) {
                 glUniform3f(uOffset, (m.cx - rcx) * 16, m.sy * 16, (m.cz - rcz) * 16);
                 glBindVertexArray(m.vaoT);
@@ -300,6 +329,7 @@ public final class WorldRenderer implements World.Listener {
             glDepthMask(true); glDisable(GL_BLEND); glEnable(GL_CULL_FACE);
         }
         glBindVertexArray(0);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
         glUseProgram(0);
         drawnQuads = quads;
     }

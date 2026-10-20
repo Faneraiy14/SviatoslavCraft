@@ -184,4 +184,22 @@ public final class ItemTextureGen {
         for (int y = 3; y <= 6; y++) a[11 + y * N] = 0xFF5A3A1A;
         return a;
     }
+
+    // ------------------------------------------------------------------ піч (текстури блока)
+
+    public static int[] furnaceTop() {
+        int[] a = TextureGen.stone().clone();
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) if (x < 1 || y < 1 || x > 14 || y > 14) a[x + y * N] = dark(a[x + y * N], -40);
+        return a;
+    }
+
+    /** Бік печі: бруківка з чорним отвором і вогником. */
+    public static int[] furnaceSide() {
+        int[] a = TextureGen.cobblestone().clone();
+        for (int y = 6; y <= 12; y++) for (int x = 4; x <= 11; x++) a[x + y * N] = 0xFF14110F;
+        for (int x = 4; x <= 11; x++) { a[x + 5 * N] = 0xFF4A4A4E; a[x + 13 * N] = 0xFF4A4A4E; }
+        for (int y = 5; y <= 13; y++) { a[3 + y * N] = 0xFF4A4A4E; a[12 + y * N] = 0xFF4A4A4E; }
+        a[7 + 10 * N] = 0xFFFF9B2B; a[8 + 10 * N] = 0xFFFFC94A; a[8 + 11 * N] = 0xFFFF7A1A; a[7 + 11 * N] = 0xFFE05A10; a[8 + 9 * N] = 0xFFFFE08A;
+        return a;
+    }
 }

@@ -109,6 +109,7 @@ public final class ModLoader {
                 if (id.contains(":") && !id.startsWith(modId + ":")) throw new IllegalArgumentException("мод «" + modId + "» може реєструвати лише " + modId + ":... (а не " + id + ")");
                 recipes.add(id.contains(":") ? id : modId + ":" + id, s.qualified(modId));
             }
+            public void fuel(String item, float seconds) { recipes.fuel(item.contains(":") ? item : modId + ":" + item, seconds); }
             public void tag(String tag, String... names) {
                 String[] q = new String[names.length];
                 for (int i = 0; i < names.length; i++) q[i] = names[i].contains(":") ? names[i] : modId + ":" + names[i];

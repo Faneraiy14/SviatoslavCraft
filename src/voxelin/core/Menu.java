@@ -45,6 +45,9 @@ public class Menu {
 
     private static boolean same(Inventory.Stack a, Inventory.Stack b) { return a.item.equals(b.item) && a.damage == b.damage; }
 
+    /** З урахуванням самого стека (піч розрізняє руду й паливо); за замовчуванням - як shiftTarget(i). */
+    protected int[] shiftTarget(int i, Inventory.Stack st) { return shiftTarget(i); }
+
     /** Діапазон слотів, куди shift-клік переносить стек зі слота i: {від, до} включно; null - нікуди. */
     protected int[] shiftTarget(int i) {
         if (i < Inventory.HOTBAR) return new int[]{Inventory.HOTBAR, Inventory.SIZE - 1};
@@ -104,7 +107,7 @@ public class Menu {
         Slot s = slots.get(i);
         Inventory.Stack st = s.get();
         if (st == null || cursor != null) return;
-        int[] range = shiftTarget(i);
+        int[] range = shiftTarget(i, st);
         if (range == null) return;
         if (s.takeOnly()) { // результат: переносимо, лише якщо влізе повністю (інакше крафт «з'їв» би речі)
             if (!fits(st, range[0], range[1])) return;

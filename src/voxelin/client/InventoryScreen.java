@@ -15,8 +15,12 @@ import static org.lwjgl.glfw.GLFW.*;
  */
 final class InventoryScreen {
     private static final float SIZE = 62, GAP = 8;
-    private final CraftMenu menu;
+    /** Верхня частина вікна (сітка крафту, піч): висота й малювання; повертає номер слота під мишею або -1. */
+    interface Top { float height(); int draw(InventoryScreen s, Gui g, float x0, float top); void onClose(); }
+
+    private final Menu menu;
     private final String title;
+    private final Top top;
     private final Inventory inv;
     private final World world;
     private final IconAtlas icons;
@@ -24,8 +28,18 @@ final class InventoryScreen {
     private int lastSlot = -1;
     private long lastClick;
 
-    InventoryScreen(String title, CraftMenu menu, Inventory inv, World world, IconAtlas icons, Consumer<Inventory.Stack> dropper) {
-        this.title = title; this.menu = menu; this.inv = inv; this.world = world; this.icons = icons; this.dropper = dropper;
+    /** Вікно зі сіткою крафту (інвентар 2x2, верстак 3x3). */
+    static InventoryScreen craft(String title, CraftMenu menu, Inventory inv, World world, IconAtlas icons, Consumer<Inventory.Stack> dropper) {
+        return new InventoryScreen(title, menu, new CraftTop(menu), inv, world, icons, dropper);
+    }
+
+    /** Вікно печі. */
+    static InventoryScreen furnace(FurnaceMenu menu, Inventory inv, World world, IconAtlas icons, Consumer<Inventory.Stack> dropper) {
+        return new InventoryScreen("ПІЧ", menu, new FurnaceTop(menu), inv, world, icons, dropper);
+    }
+
+    private InventoryScreen(String title, Menu menu, Top top, Inventory inv, World world, IconAtlas icons, Consumer<Inventory.Stack> dropper) {
+        this.title = title; this.menu = menu; this.top = top; this.inv = inv; this.world = world; this.icons = icons; this.dropper = dropper;
     }
 
     /** Іконка, смужка міцності й кількість у слоті розміром size з лівим верхнім кутом (x,y) - спільне для хотбару й інвентарю. */
@@ -55,11 +69,9 @@ final class InventoryScreen {
     static String titleOf(World w, String item) { ItemType t = w.itemTypes.get(item); return t != null ? t.title : ItemType.prettify(item); }
 
     void draw(Gui g, Input in) {
-        int n = menu.n;
         float total = 9 * (SIZE + GAP) - GAP, x0 = (Gui.W - total) / 2f;
-        float gridH = n * (SIZE + GAP), craftTop = 58, sy = craftTop + gridH + 26; // відносно верху вікна
+        float craftTop = 58, sy = craftTop + top.height() + 26; // відносно верху вікна
         float pw = total + 48, ph = sy + 4 * (SIZE + GAP) + 14 + 24, px = x0 - 24, py = Math.max(8, (Gui.H - ph) / 2f);
-        float gx = x0 + 3 * (SIZE + GAP), gy = py + craftTop, rx = gx + n * (SIZE + GAP) + 80, ry = gy + (gridH - GAP - SIZE) / 2f;
         Gui.rect(0, 0, Gui.W, Gui.H, 0, 0, 0, 0.5f);
         Gui.rect(px, py, pw, ph, 0.5f, 0.5f, 0.52f, 0.97f);
         Gui.frame(px, py, pw, ph, 3, 0.15f, 0.15f, 0.15f);
@@ -67,20 +79,7 @@ final class InventoryScreen {
         if (g.button("СОРТУВАТИ", px + pw - 180, py + 10, 160, 38)) inv.sortMain();
         boolean shift = in.down(GLFW_KEY_LEFT_SHIFT) || in.down(GLFW_KEY_RIGHT_SHIFT);
         boolean left = g.click, right = in.clicked(GLFW_MOUSE_BUTTON_RIGHT);
-        int hovered = -1;
-        // сітка крафту, стрілка й результат
-        for (int k = 0; k < n * n; k++) {
-            float x = gx + (k % n) * (SIZE + GAP), y = gy + (k / n) * (SIZE + GAP);
-            boolean hov = g.over(x, y, SIZE, SIZE);
-            if (hov) hovered = CraftMenu.GRID + k;
-            slotBox(x, y, SIZE, false, hov);
-            drawStack(menu.gridStack(k), x, y, SIZE);
-        }
-        Gui.text("=>", gx + n * (SIZE + GAP) + 18, ry + 22, 3.2f, 0.15f, 0.15f, 0.15f);
-        boolean hovR = g.over(rx, ry, SIZE, SIZE);
-        if (hovR) hovered = CraftMenu.RESULT;
-        slotBox(rx, ry, SIZE, false, hovR);
-        drawStack(menu.result(), rx, ry, SIZE);
+        int hovered = top.draw(this, g, x0, py + craftTop);
         for (int row = 0; row < 4; row++) for (int col = 0; col < 9; col++) {
             int idx = row < 3 ? 9 + row * 9 + col : col; // три рядки сховища, нижче - хотбар
             float x = x0 + col * (SIZE + GAP), y = py + sy + row * (SIZE + GAP) + (row == 3 ? 14 : 0);
@@ -127,7 +126,63 @@ final class InventoryScreen {
         Inventory.Stack left = menu.closeCursor(inv);
         if (left != null) dropper.accept(left);
         for (Inventory.Stack st : menu.drainExtra()) { int rest = inv.add(st.item, st.count, st.damage); if (rest > 0) dropper.accept(new Inventory.Stack(st.item, rest, st.damage)); }
-        menu.refresh();
+        top.onClose();
         lastSlot = -1;
+    }
+
+    /** Сітка крафту n x n + стрілка + результат. */
+    private static final class CraftTop implements Top {
+        private final CraftMenu m;
+        CraftTop(CraftMenu m) { this.m = m; }
+        public float height() { return m.n * (SIZE + GAP); }
+        public void onClose() { m.refresh(); }
+        public int draw(InventoryScreen s, Gui g, float x0, float top) {
+            int n = m.n, hovered = -1;
+            float gx = x0 + 3 * (SIZE + GAP), gy = top, rx = gx + n * (SIZE + GAP) + 80, ry = gy + (height() - GAP - SIZE) / 2f;
+            for (int k = 0; k < n * n; k++) {
+                float x = gx + (k % n) * (SIZE + GAP), y = gy + (k / n) * (SIZE + GAP);
+                boolean hov = g.over(x, y, SIZE, SIZE);
+                if (hov) hovered = CraftMenu.GRID + k;
+                s.slotBox(x, y, SIZE, false, hov);
+                s.drawStack(m.gridStack(k), x, y, SIZE);
+            }
+            Gui.text("=>", gx + n * (SIZE + GAP) + 18, ry + 22, 3.2f, 0.15f, 0.15f, 0.15f);
+            boolean hovR = g.over(rx, ry, SIZE, SIZE);
+            if (hovR) hovered = CraftMenu.RESULT;
+            s.slotBox(rx, ry, SIZE, false, hovR);
+            s.drawStack(m.result(), rx, ry, SIZE);
+            return hovered;
+        }
+    }
+
+    /** Піч: вхід зверху, паливо знизу, вогник між ними, стрілка прогресу й вихід. */
+    private static final class FurnaceTop implements Top {
+        private final FurnaceMenu m;
+        FurnaceTop(FurnaceMenu m) { this.m = m; }
+        public float height() { return 2 * (SIZE + GAP); }
+        public void onClose() {}
+        public int draw(InventoryScreen s, Gui g, float x0, float top) {
+            FurnaceEntity f = m.furnace;
+            int hovered = -1;
+            float ix = x0 + 3.2f * (SIZE + GAP), iy = top, fy = top + SIZE + GAP, ox = ix + 3 * (SIZE + GAP), oy = top + (SIZE + GAP) / 2f;
+            boolean hi = g.over(ix, iy, SIZE, SIZE), hf = g.over(ix, fy, SIZE, SIZE), ho = g.over(ox, oy, SIZE, SIZE);
+            if (hi) hovered = FurnaceMenu.INPUT;
+            if (hf) hovered = FurnaceMenu.FUEL;
+            if (ho) hovered = FurnaceMenu.OUTPUT;
+            s.slotBox(ix, iy, SIZE, false, hi); s.drawStack(m.get(FurnaceMenu.INPUT), ix, iy, SIZE);
+            s.slotBox(ix, fy, SIZE, false, hf); s.drawStack(m.get(FurnaceMenu.FUEL), ix, fy, SIZE);
+            s.slotBox(ox, oy, SIZE, false, ho); s.drawStack(m.get(FurnaceMenu.OUTPUT), ox, oy, SIZE);
+            // вогник (скільки лишилось палива) між входом і паливом
+            float fx = ix + SIZE + 18, fh = 34, fyy = top + SIZE - 4;
+            Gui.rect(fx, fyy, 20, fh, 0.2f, 0.2f, 0.22f, 1f);
+            float frac = f.burnTotal <= 0 ? 0 : Math.min(1f, f.burnLeft / (float) f.burnTotal);
+            if (frac > 0) Gui.rect(fx, fyy + fh * (1 - frac), 20, fh * frac, 1f, 0.55f, 0.1f, 1f);
+            // стрілка прогресу
+            float ax = ix + SIZE + 70, ay = oy + SIZE / 2f - 8, aw = ox - ax - 14;
+            Gui.rect(ax, ay, aw, 16, 0.2f, 0.2f, 0.22f, 1f);
+            float pf = f.cookTotal <= 0 ? 0 : Math.min(1f, f.progress / (float) f.cookTotal);
+            if (pf > 0) Gui.rect(ax, ay, aw * pf, 16, 0.95f, 0.95f, 0.95f, 1f);
+            return hovered;
+        }
     }
 }

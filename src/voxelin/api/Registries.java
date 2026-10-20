@@ -9,6 +9,8 @@ public interface Registries {
     ItemRef findItem(String fullName);
     /** Рецепт крафту (id без двокрапки отримує префікс мода). */
     void recipe(String id, RecipeSettings settings);
+    /** Скільки секунд горить предмет як паливо в печі. */
+    void fuel(String item, float seconds);
     /** Додати предмети до мітки ("planks", "logs"): у рецептах пишеться "#planks". Мітки спільні для всіх модів. */
     void tag(String tag, String... items);
     /** Знайти блок за повною назвою ("voxelin:stone") або null. */

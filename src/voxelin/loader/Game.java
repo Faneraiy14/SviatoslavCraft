@@ -56,6 +56,6 @@ public final class Game {
     public World openWorld(String name) throws IOException {
         File d = worldDir(name);
         WorldInfo info = WorldInfo.load(d);
-        return new World(d, info, blocks, items, events, new TerrainGenerator(info.seed, info.type, blocks));
+        return new World(d, info, blocks, items, recipes, events, new TerrainGenerator(info.seed, info.type, blocks));
     }
 }

@@ -36,6 +36,7 @@ public final class World implements WorldAccess {
     public final WorldInfo info;
     public final BlockRegistry blocks;
     public final ItemRegistry itemTypes;
+    public final RecipeRegistry recipes;
     private final EventBus events;
     private final Generator generator;
     private final RegionStorage storage;
@@ -56,8 +57,8 @@ public final class World implements WorldAccess {
     /** Статистика для F3 і --bench. */
     public volatile long genNanos, genCount;
 
-    public World(File dir, WorldInfo info, BlockRegistry blocks, ItemRegistry itemTypes, EventBus events, Generator generator) throws IOException {
-        this.dir = dir; this.info = info; this.blocks = blocks; this.itemTypes = itemTypes; this.events = events; this.generator = generator;
+    public World(File dir, WorldInfo info, BlockRegistry blocks, ItemRegistry itemTypes, RecipeRegistry recipes, EventBus events, Generator generator) throws IOException {
+        this.dir = dir; this.info = info; this.blocks = blocks; this.itemTypes = itemTypes; this.recipes = recipes; this.events = events; this.generator = generator;
         storage = new RegionStorage(dir);
         light = new LightEngine(blocks, (c, sy) -> { if (listener != null) listener.lightChanged(c, sy); });
         rt2p = new int[blocks.size()];
@@ -69,6 +70,7 @@ public final class World implements WorldAccess {
         }
         info.save(dir); // палітра могла дописатись новими блоками
         loadItems();
+        loadBlockEntities();
         // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
         int threads = Integer.getInteger("voxelin.genThreads", Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)));
         genPool = Executors.newFixedThreadPool(threads, daemon("voxelin-gen"));
@@ -207,6 +209,75 @@ public final class World implements WorldAccess {
         return n;
     }
 
+    // ------------------------------------------------------------------ блок-сутності (піч)
+
+    private final Map<BlockPos, BlockEntity> blockEntities = new LinkedHashMap<>();
+
+    public Collection<BlockEntity> blockEntities() { return Collections.unmodifiableCollection(blockEntities.values()); }
+    public BlockEntity blockEntityAt(long x, int y, long z) { return blockEntities.get(new BlockPos(x, y, z)); }
+
+    /** Піч у цій точці: якщо блок - піч, а стану ще нема, створюється порожній. Інакше null. */
+    public FurnaceEntity furnaceAt(long x, int y, long z) {
+        int id = blockId(x, y, z);
+        if (id <= 0 || !"furnace".equals(blocks.get(id).interact)) return null;
+        BlockEntity e = blockEntities.computeIfAbsent(new BlockPos(x, y, z), k -> new FurnaceEntity(x, y, z));
+        return e instanceof FurnaceEntity ? (FurnaceEntity) e : null;
+    }
+
+    private void tickBlockEntities() {
+        for (Iterator<BlockEntity> it = blockEntities.values().iterator(); it.hasNext(); ) {
+            BlockEntity e = it.next();
+            if (!chunks.containsKey(new ChunkPos(e.x >> 4, e.z >> 4))) continue;
+            int id = blockId(e.x, e.y, e.z);
+            if (id < 0) continue;
+            if (!e.kind().equals(blocks.get(id).interact)) { // блок зник без нашого відома (світ правили ззовні) - вміст на землю
+                it.remove();
+                for (Inventory.Stack st : e.contents()) spawnItem(Pos.ofBlock(e.x, e.y + 0.5, e.z), st.item, st.count, st.damage, true);
+                continue;
+            }
+            e.tick(this);
+        }
+    }
+
+    /** Блок замінено: якщо там була блок-сутність іншого виду - її вміст випадає предметами, сутність зникає. */
+    private void blockEntityRemovedCheck(long x, int y, long z, BlockType now) {
+        BlockEntity e = blockEntities.get(new BlockPos(x, y, z));
+        if (e == null || e.kind().equals(now.interact)) return;
+        blockEntities.remove(new BlockPos(x, y, z));
+        for (Inventory.Stack st : e.contents()) spawnItem(Pos.ofBlock(x, y + 0.5, z), st.item, st.count, st.damage, true);
+    }
+
+    private File blockEntitiesFile() { return new File(dir, "blockentities.dat"); }
+
+    private void saveBlockEntities() {
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (BlockEntity e : blockEntities.values()) sb.append(e.x).append(' ').append(e.y).append(' ').append(e.z).append(' ').append(e.kind()).append(' ').append(e.encode()).append('\n');
+            File tmp = new File(dir, "blockentities.dat.tmp");
+            java.nio.file.Files.write(tmp.toPath(), sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Files2.replace(tmp, blockEntitiesFile());
+        } catch (IOException ex) { System.out.println("[Voxelin] ⚠️ не вдалось записати блок-сутності: " + ex); }
+    }
+
+    private void loadBlockEntities() {
+        File f = blockEntitiesFile();
+        if (!f.isFile()) return;
+        try {
+            for (String line : java.nio.file.Files.readAllLines(f.toPath(), java.nio.charset.StandardCharsets.UTF_8)) {
+                String[] p = line.trim().split(" ", 5);
+                if (p.length != 5 || !p[3].equals("furnace")) continue;
+                try {
+                    long x = Long.parseLong(p[0]), z = Long.parseLong(p[2]);
+                    int y = Integer.parseInt(p[1]);
+                    if (y < 0 || y >= Chunk.HEIGHT || !inRange(x >> 4, z >> 4)) continue;
+                    FurnaceEntity fe = new FurnaceEntity(x, y, z);
+                    fe.decode(p[4]);
+                    blockEntities.put(new BlockPos(x, y, z), fe);
+                } catch (IllegalArgumentException e) { /* бита клітинка - пропускаємо */ }
+            }
+        } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось прочитати блок-сутності: " + e); }
+    }
+
     private File itemsFile() { return new File(dir, "items.dat"); }
 
     private void saveItems() {
@@ -279,6 +350,7 @@ public final class World implements WorldAccess {
         }
         b[0]++;
         c.set((int) (x & 15), y, (int) (z & 15), nb.id);
+        if (!blockEntities.isEmpty()) blockEntityRemovedCheck(x, y, z, nb);
         if (batchDepth > 0) batchChunks.add(c); else light.blockChanged(c, (int) (x & 15), y, (int) (z & 15), old, nb.id);
         if (listener != null) listener.blockChanged(x, y, z);
         return true;
@@ -369,6 +441,7 @@ public final class World implements WorldAccess {
         tick++;
         info.time++;
         tickItems();
+        tickBlockEntities();
         budgets.clear();
         events.post(new TickEvent(this, tick));
         if (System.currentTimeMillis() - lastAutosave > 30_000) { lastAutosave = System.currentTimeMillis(); autosave(); }
@@ -390,6 +463,7 @@ public final class World implements WorldAccess {
             info.invSelected = mainInventory.selected(); info.hasInv = true;
         }
         saveItems();
+        saveBlockEntities();
         try { info.save(dir); } catch (IOException e) { System.out.println("[Voxelin] ⚠️ " + e); }
     }
 

@@ -60,6 +60,7 @@ public final class VanillaContent implements VoxelinMod {
         tex("grass_side", TextureGen.grassSide()); tex("pale_grass_side", TextureGen.paleGrassSide());
         tex("oak_log_top", TextureGen.oakLogTop()); tex("birch_log_top", TextureGen.birchLogTop()); tex("spruce_log_top", TextureGen.spruceLogTop()); tex("pale_log_top", TextureGen.paleLogTop());
         tex("cactus_top", TextureGen.cactusTop());
+        tex("furnace_top", ItemTextureGen.furnaceTop()); tex("furnace_side", ItemTextureGen.furnaceSide());
         tex("workbench_top", ItemTextureGen.workbenchTop()); tex("workbench_side", ItemTextureGen.workbenchSide());
 
         // --- блоки
@@ -102,6 +103,7 @@ public final class VanillaContent implements VoxelinMod {
         block("monolith", new BlockSettings().texture("monolith").color(cMono).light(3).tool(ToolKind.PICKAXE).minTier(2).title("Моноліт").hardness(6f));
         block("lamp", new BlockSettings().texture("lamp").color(cLamp).light(15).tool(ToolKind.PICKAXE).title("Лампа").hardness(0.5f));
         block("workbench", new BlockSettings().textures("workbench_top", "workbench_side", "oak_planks").color(0xB08850).tool(ToolKind.AXE).interact("workbench").title("Верстак").hardness(2f));
+        block("furnace", new BlockSettings().textures("furnace_top", "furnace_side", "furnace_top").color(0x777777).tool(ToolKind.PICKAXE).minTier(1).interact("furnace").title("Піч").hardness(3.5f));
         // --- предмети (не блоки): матеріали, їжа, інструменти
         tex("stick", ItemTextureGen.stick()); tex("coal", ItemTextureGen.coal()); tex("raw_iron", ItemTextureGen.rawOre(0xE0B49A)); tex("raw_copper", ItemTextureGen.rawOre(0xE0803F));
         tex("raw_gold", ItemTextureGen.rawOre(0xF5D13A)); tex("diamond", ItemTextureGen.diamond()); tex("liminite_shard", ItemTextureGen.shard()); tex("apple", ItemTextureGen.apple());
@@ -130,7 +132,7 @@ public final class VanillaContent implements VoxelinMod {
 
         // --- мітки й рецепти крафту (перша версія - чернетка, правимо разом зі Святославом; усе - дані)
         r.tag("planks", "oak_planks", "birch_planks", "spruce_planks");
-        r.tag("logs", "oak_log", "birch_log", "spruce_log");
+        r.tag("logs", "oak_log", "birch_log", "spruce_log", "pale_log");
         r.recipe("oak_planks", RecipeSettings.shapeless("oak_log").result("oak_planks", 3));
         r.recipe("birch_planks", RecipeSettings.shapeless("birch_log").result("birch_planks", 3));
         r.recipe("spruce_planks", RecipeSettings.shapeless("spruce_log").result("spruce_planks", 3));
@@ -138,6 +140,15 @@ public final class VanillaContent implements VoxelinMod {
         r.recipe("workbench", RecipeSettings.shaped("PP", "PP").key('P', "#planks").result("workbench", 1));
         r.recipe("stone_bricks", RecipeSettings.shaped("SS", "SS").key('S', "stone").result("stone_bricks", 4));
         r.recipe("lamp", RecipeSettings.shaped(".G.", "GCG", ".G.").key('G', "glass").key('C', "coal").result("lamp", 2));
+        r.recipe("furnace", RecipeSettings.shaped("C.C", "CKC", "CCC").key('C', "cobblestone").key('K', "coal").result("furnace", 1));
+        r.recipe("smelt_iron", RecipeSettings.smelting("raw_iron", 10).result("iron_ingot", 1));
+        r.recipe("smelt_copper", RecipeSettings.smelting("raw_copper", 10).result("copper_ingot", 1));
+        r.recipe("smelt_gold", RecipeSettings.smelting("raw_gold", 10).result("gold_ingot", 1));
+        r.recipe("smelt_stone", RecipeSettings.smelting("cobblestone", 10).result("stone", 1));
+        r.recipe("smelt_glass", RecipeSettings.smelting("sand", 10).result("glass", 1));
+        r.recipe("smelt_charcoal", RecipeSettings.smelting("#logs", 15).result("coal", 1));
+        r.fuel("coal", 80); r.fuel("oak_log", 15); r.fuel("birch_log", 15); r.fuel("spruce_log", 15); r.fuel("pale_log", 15);
+        r.fuel("oak_planks", 8); r.fuel("birch_planks", 8); r.fuel("spruce_planks", 8); r.fuel("stick", 4);
         String[] headKey = {"#planks", "cobblestone", "iron_ingot", "diamond"};
         for (int i = 0; i < 4; i++) {
             r.recipe(mat[i] + "_pickaxe", RecipeSettings.shaped("MM", ".S", ".S").key('M', headKey[i]).key('S', "stick").result(mat[i] + "_pickaxe", 1));

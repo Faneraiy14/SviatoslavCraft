@@ -14,6 +14,8 @@ public final class RecipeSettings {
     String result;
     int count = 1;
     boolean mirror = true;
+    String smeltInput;
+    float seconds;
 
     private RecipeSettings(String[] rows, List<String> shapeless) { this.rows = rows; this.shapeless = shapeless; }
 
@@ -29,6 +31,14 @@ public final class RecipeSettings {
         return new RecipeSettings(null, new ArrayList<>(Arrays.asList(ingredients)));
     }
 
+    /** Плавка в печі: вхід (предмет або #мітка) -> результат за seconds секунд. Результат задається .result(...). */
+    public static RecipeSettings smelting(String input, float seconds) {
+        if (input == null || input.isEmpty()) throw new IllegalArgumentException("плавка: нема входу");
+        RecipeSettings r = new RecipeSettings(null, null);
+        r.smeltInput = input; r.seconds = Float.isNaN(seconds) ? 10f : Math.max(0.5f, Math.min(3600f, seconds));
+        return r;
+    }
+
     public RecipeSettings key(char c, String ingredient) { key.put(c, ingredient); return this; }
     public RecipeSettings result(String item, int count) { result = item; this.count = Math.max(1, Math.min(64, count)); return this; }
     /** Заборонити дзеркальне відбиття форми (типово дозволене). */
@@ -38,6 +48,7 @@ public final class RecipeSettings {
 
     public RecipeSettings qualified(String modId) {
         RecipeSettings r = new RecipeSettings(rows, shapeless == null ? null : new ArrayList<>());
+        r.smeltInput = q(smeltInput, modId); r.seconds = seconds;
         if (shapeless != null) for (String s : shapeless) r.shapeless.add(q(s, modId));
         for (Map.Entry<Character, String> e : key.entrySet()) r.key.put(e.getKey(), q(e.getValue(), modId));
         r.result = q(result, modId); r.count = count; r.mirror = mirror;
@@ -45,6 +56,9 @@ public final class RecipeSettings {
     }
 
     public boolean isShaped() { return rows != null; }
+    public boolean isSmelting() { return smeltInput != null; }
+    public String smeltInputItem() { return smeltInput; }
+    public float smeltSeconds() { return seconds; }
     public String[] rows() { return rows == null ? null : rows.clone(); }
     public List<String> ingredients() { return shapeless == null ? null : Collections.unmodifiableList(shapeless); }
     public Map<Character, String> keys() { return Collections.unmodifiableMap(key); }

@@ -404,10 +404,10 @@ public class VoxelinCoreTest {
         loadAround(w, 0, 0, 0);
         PlayerActions pa = new LocalActions(w, g.commands, Sources.player("T"));
         int bed = g.blocks.byName("voxelin:bedrock").id;
-        check(!pa.breakBlock(0, 0, 0) && w.blockId(0, 0, 0) == bed, "корінну породу зламати не можна");
+        check(!pa.breakBlock(0, 0, 0, null, true) && w.blockId(0, 0, 0) == bed, "корінну породу зламати не можна");
         int top = w.surfaceY(1, 1);
-        check(pa.breakBlock(1, top, 1) && w.blockId(1, top, 1) == 0, "ламання трави");
-        check(!pa.breakBlock(1, top + 5, 1), "ламати повітря - false");
+        check(pa.breakBlock(1, top, 1, null, true) && w.blockId(1, top, 1) == 0, "ламання трави");
+        check(!pa.breakBlock(1, top + 5, 1, null, true), "ламати повітря - false");
         check(pa.placeBlock(1, top, 1, "voxelin:stone") && w.getBlock(1, top, 1).name().equals("voxelin:stone"), "постановка в порожнє місце");
         check(!pa.placeBlock(1, top, 1, "voxelin:dirt"), "поставити в зайняте - false");
         check(!pa.placeBlock(1, top + 3, 1, "voxelin:no_such_block"), "невідомий блок - false");

@@ -11,7 +11,7 @@ import static org.lwjgl.glfw.GLFW.*;
 
 /** Меню: головне, список світів, створення й перейменування світу. Малює й обробляє ввід у кадрі (Gui - негайний режим). */
 final class Menus {
-    enum Screen { MAIN, WORLDS, CREATE, RENAME }
+    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS }
 
     private final Voxelin v;
     Screen screen = Screen.MAIN;
@@ -59,6 +59,7 @@ final class Menus {
             case WORLDS -> worlds(g);
             case CREATE -> create(g);
             case RENAME -> rename(g);
+            case SETTINGS -> settings(g);
         }
         Gui.text("Voxelin " + Voxelin.VERSION, 12, Gui.H - 22, 1.8f, 0.55f, 0.6f, 0.7f);
     }
@@ -71,7 +72,46 @@ final class Menus {
     private void main(Gui g) {
         title("VOXELIN", 90);
         if (g.button("ОДИНОЧНА ГРА", 440, 300, 400, 64) || v.input.pressed(GLFW_KEY_ENTER)) show(Screen.WORLDS);
-        if (g.button("ВИХІД", 440, 390, 400, 64) || v.input.pressed(GLFW_KEY_ESCAPE)) v.quit();
+        if (g.button("НАЛАШТУВАННЯ", 440, 390, 400, 64)) { show(Screen.SETTINGS); return; }
+        if (g.button("ВИХІД", 440, 480, 400, 64) || v.input.pressed(GLFW_KEY_ESCAPE)) v.quit();
+    }
+
+    private void settings(Gui g) {
+        Settings st = v.settings;
+        Gui.textCentered("НАЛАШТУВАННЯ", Gui.W / 2f, 36, 5f, 1f, 0.85f, 0.3f);
+        final float x = 250, w = 780, h = 50, gap = 10, y0 = 110;
+        String autoNote = st.textureSize == 0 ? "авто (" + Settings.autoTextureSize(v.window.glRenderer()) + ")" : st.textureSize + "x" + st.textureSize;
+        int[] row = {0};
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Розмір текстур", autoNote)) { st.textureSize = cycle(Settings.TEXTURE_SIZES, st.textureSize, stepDir); }
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Дальність огляду", st.renderDistance + " чанків")) st.renderDistance += 2 * stepDir;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Чутливість миші", String.format(java.util.Locale.ROOT, "%.2f", st.mouseSensitivity))) st.mouseSensitivity += 0.02f * stepDir;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Поле зору", st.fov + "°")) st.fov += 5 * stepDir;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Згладжування (перезапуск)", st.msaa == 0 ? "вимкнено" : st.msaa + "x")) st.msaa = cycle(Settings.MSAA_VALUES, st.msaa, stepDir);
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Верт. синхр. (перезапуск)", st.vsync ? "увімкнено" : "вимкнено")) st.vsync = !st.vsync;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Контури блоків", st.outlines ? "увімкнено" : "вимкнено")) st.outlines = !st.outlines;
+        st.clampAll();
+        Gui.textCentered("Розмір текстур застосується при наступному відкритті світу. Власні PNG - тека textures/.", Gui.W / 2f, y0 + row[0] * (h + gap) + 6, 1.9f, 0.7f, 0.75f, 0.9f);
+        if (g.button("ГОТОВО", 445, 640, 390, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { v.saveSettings(); show(Screen.MAIN); }
+    }
+
+    private int stepDir = 1;
+
+    /** Рядок налаштування: назва ліворуч, «‹ значення ›» праворуч; true - натиснули (напрям у stepDir: -1 ліворуч, +1 праворуч). */
+    private boolean stepper(Gui g, float x, float y, float w, float h, String label, String value) {
+        Gui.rect(x, y, w, h, 0.14f, 0.16f, 0.28f, 0.95f);
+        Gui.text(label, x + 14, y + 16, 2.5f, 1, 1, 1);
+        float bw = 52, vx = x + w - 300;
+        boolean left = g.button("<", vx, y + 4, bw, h - 8), right = g.button(">", x + w - bw - 4, y + 4, bw, h - 8);
+        Gui.textCentered(value, ((vx + bw) + (x + w - bw - 4)) / 2f, y + 16, 2.5f, 1f, 0.9f, 0.5f);
+        if (left) { stepDir = -1; return true; }
+        if (right) { stepDir = 1; return true; }
+        return false;
+    }
+
+    private static int cycle(int[] values, int cur, int dir) {
+        int i = 0;
+        for (int k = 0; k < values.length; k++) if (values[k] == cur) i = k;
+        return values[Math.floorMod(i + dir, values.length)];
     }
 
     private void worlds(Gui g) {

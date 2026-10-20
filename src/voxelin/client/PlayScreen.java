@@ -61,6 +61,8 @@ final class PlayScreen {
         this.v = v; this.world = world;
         rend = new WorldRenderer(world, v.textures);
         rend.renderDistance = v.opts.renderDistance;
+        rend.outlines = v.settings.outlines;
+        cam.fov = v.settings.fov;
         if (v.opts.dayMinutes > 0) world.info.dayMinutes = Math.max(DayCycle.MIN_MINUTES, Math.min(DayCycle.MAX_MINUTES, v.opts.dayMinutes));
         actions = new LocalActions(world, v.game.commands, playerSrc);
         vt = world.vitals(playerSrc);
@@ -182,7 +184,8 @@ final class PlayScreen {
         if (chatOpen) { in.updateText(); if (in.pressed(GLFW_KEY_ENTER)) sendChat(); } // не залежить від F1 (HUD)
         boolean play = grabbed && !chatOpen && !invOpen && !vt.dead();
         if (play) {
-            player.rotate((float) in.mouseDX() * 0.12f, (float) -in.mouseDY() * 0.12f);
+            float sens = v.settings.mouseSensitivity;
+            player.rotate((float) in.mouseDX() * sens, (float) -in.mouseDY() * sens);
             for (int i = 0; i < 9; i++) if (in.pressed(GLFW_KEY_1 + i)) inv.select(i);
             double sc = in.consumeScroll();
             if (sc > 0) inv.scroll(-1); else if (sc < 0) inv.scroll(1);

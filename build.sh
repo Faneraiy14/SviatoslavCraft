@@ -15,7 +15,7 @@ if [ "$1" = "test" ]; then
     trap 'echo "(тимчасова тека тестів: $T)"' EXIT
     javac -encoding UTF-8 -cp "out:lib/*" -d "$T/classes" test/*.java
     OUT="$PWD/out"
-    for t in VoxelinCoreTest VoxelinMeshTest VoxelinLightTest VoxelinSurvivalTest VoxelinMiningTest VoxelinMenuTest VoxelinCraftTest VoxelinFurnaceTest VoxelinMobTest VoxelinChestTest VoxelinStructureTest; do
+    for t in VoxelinSettingsTest VoxelinCoreTest VoxelinMeshTest VoxelinLightTest VoxelinSurvivalTest VoxelinMiningTest VoxelinMenuTest VoxelinCraftTest VoxelinFurnaceTest VoxelinMobTest VoxelinChestTest VoxelinStructureTest; do
         ( mkdir -p "$T/run-$t" && cd "$T/run-$t" && java -cp "$OUT:$PWD/../classes:$OLDPWD/lib/*" "$t" "$OUT" )
     done
 fi

@@ -26,7 +26,9 @@ public final class Voxelin {
 
     static final class Options {
         File saves = new File("saves"), mods = new File("mods");
-        int renderDistance = 12, msaa = 2, width = 1280, height = 720, textureSize = 16;
+        int renderDistance = 12, msaa = 2, width = 1280, height = 720, textureSize = 0; // 0 - авто (за відеокартою) або з налаштувань
+        /** Прапорці, задані в командному рядку: вони перекривають settings.properties. */
+        final java.util.Set<String> explicit = new java.util.HashSet<>();
         boolean vsync = true;
         float sky = -1f; // --sky 0..1: примусова яскравість неба (інакше - за часом доби)
         String open; // --open inventory: відкрити вікно на старті (для знімків)
@@ -48,6 +50,7 @@ public final class Voxelin {
             Options o = new Options();
             for (int i = 0; i < a.length; i++) {
                 String k = a[i];
+                if (k.equals("--render-distance") || k.equals("--texture-size") || k.equals("--msaa") || k.equals("--no-vsync")) o.explicit.add(k);
                 try {
                     switch (k) {
                         case "--saves" -> o.saves = new File(a[++i]);
@@ -106,8 +109,15 @@ public final class Voxelin {
     /** Час фаз кадру (нс) - для розбору мікрозависань у --bench. */
     long tickNs, swapNs;
 
+    Settings settings;
+    File settingsFile;
+
     private Voxelin(Options opts) {
         this.opts = opts;
+        File base = opts.saves.getAbsoluteFile().getParentFile();
+        settingsFile = new File(base == null ? new File(".") : base, "settings.properties");
+        settings = Settings.load(settingsFile);
+        applySettings();
         this.game = new Game(opts.saves, opts.mods);
         System.out.println("[Voxelin] " + VERSION + ", блоків: " + game.blocks.size() + ", модів: " + game.mods.mods().size() + ", saves=" + opts.saves.getAbsolutePath());
     }
@@ -128,12 +138,23 @@ public final class Voxelin {
 
     void quit() { running = false; }
 
+    /** Налаштування з файлу -> Options (прапорці командного рядка мають перевагу). */
+    void applySettings() {
+        if (!opts.explicit.contains("--render-distance")) opts.renderDistance = settings.renderDistance;
+        if (!opts.explicit.contains("--texture-size")) opts.textureSize = settings.textureSize;
+        if (!opts.explicit.contains("--msaa")) opts.msaa = settings.msaa;
+        if (!opts.explicit.contains("--no-vsync")) opts.vsync = settings.vsync;
+    }
+
+    /** Зберегти налаштування й застосувати те, що діє одразу; розмір текстур - при наступному відкритті світу. */
+    void saveSettings() { settings.save(settingsFile); applySettings(); }
+
     private void run() {
         window = new Window();
         window.create("Voxelin", opts.width, opts.height, opts.msaa, opts.vsync, !opts.quiet());
         input = new Input(window);
         gui = new Gui(window, input);
-        textures = new voxelin.client.render.TextureArray(game.textures, opts.textureSize, new File("textures"));
+        textures = new voxelin.client.render.TextureArray(game.textures, textureSizeNow(), new File("textures"));
         menus = new Menus(this);
         if (opts.autoWorld != null) autoWorld();
 
@@ -162,6 +183,14 @@ public final class Voxelin {
         }
     }
 
+    int textureSizeNow() { return opts.textureSize == 0 ? Settings.autoTextureSize(window.glRenderer()) : opts.textureSize; }
+
+    /** Пересобрати масив текстур, якщо розмір змінили в налаштуваннях (викликається перед відкриттям світу). */
+    private void refreshTextures() {
+        int want = textureSizeNow();
+        if (textures != null && textures.size != want) { textures.close(); textures = new voxelin.client.render.TextureArray(game.textures, want, new File("textures")); }
+    }
+
     private void autoWorld() {
         try {
             if (!WorldInfo.exists(new File(opts.saves, opts.autoWorld))) game.createWorld(opts.autoWorld, opts.seed, opts.autoFlat ? WorldInfo.Type.FLAT : WorldInfo.Type.NORMAL);
@@ -175,7 +204,7 @@ public final class Voxelin {
         switch (state) {
             case MENU -> {
                 if (opts.menuScreen != null && frames == 2) { // dev: --menu worlds|create|rename
-                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } default -> { } }
+                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); default -> { } }
                 }
                 glViewport(0, 0, window.fbWidth(), window.fbHeight());
                 glClearColor(0.08f, 0.11f, 0.22f, 1f);
@@ -191,6 +220,7 @@ public final class Voxelin {
     }
 
     void beginLoading(String name) {
+        refreshTextures();
         try {
             loading = game.openWorld(name);
         } catch (IOException | RuntimeException e) {

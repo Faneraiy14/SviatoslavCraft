@@ -19,6 +19,8 @@ public final class World implements WorldAccess {
         void chunkLoaded(Chunk c);
         void chunkUnloaded(Chunk c);
         void blockChanged(long x, int y, long z);
+        /** Світло в секції (чанк, sy) змінилось - меш застарів. */
+        default void lightChanged(Chunk c, int sy) {}
     }
 
     /**
@@ -43,6 +45,9 @@ public final class World implements WorldAccess {
     private final ExecutorService genPool, io;
     private final Map<Source, int[]> budgets = new IdentityHashMap<>();
     private Listener listener;
+    private final LightEngine light;
+    private int batchDepth;
+    private final Set<Chunk> batchChunks = Collections.newSetFromMap(new IdentityHashMap<>());
     private long tick, lastAutosave = System.currentTimeMillis();
     private volatile boolean closed;
     /** Статистика для F3 і --bench. */
@@ -51,6 +56,7 @@ public final class World implements WorldAccess {
     public World(File dir, WorldInfo info, BlockRegistry blocks, EventBus events, Generator generator) throws IOException {
         this.dir = dir; this.info = info; this.blocks = blocks; this.events = events; this.generator = generator;
         storage = new RegionStorage(dir);
+        light = new LightEngine(blocks, (c, sy) -> { if (listener != null) listener.lightChanged(c, sy); });
         rt2p = new int[blocks.size()];
         for (BlockType t : blocks.all()) rt2p[t.id] = info.paletteId(t.name);
         p2rt = new int[info.palette.size()];
@@ -112,8 +118,30 @@ public final class World implements WorldAccess {
         }
         b[0]++;
         c.set((int) (x & 15), y, (int) (z & 15), nb.id);
+        if (batchDepth > 0) batchChunks.add(c); else light.blockChanged(c, (int) (x & 15), y, (int) (z & 15), old, nb.id);
         if (listener != null) listener.blockChanged(x, y, z);
         return true;
+    }
+
+    private void linkNeighbors(Chunk c) {
+        Chunk n;
+        if ((n = chunk(c.cx + 1, c.cz)) != null) LightEngine.connect(c, 0, n);
+        if ((n = chunk(c.cx - 1, c.cz)) != null) LightEngine.connect(c, 1, n);
+        if ((n = chunk(c.cx, c.cz + 1)) != null) LightEngine.connect(c, 2, n);
+        if ((n = chunk(c.cx, c.cz - 1)) != null) LightEngine.connect(c, 3, n);
+    }
+
+    /** Багато змін підряд без окремих оновлень світла: у кінці зачеплені чанки (і їхні сусіди) перераховуються один раз. Головний потік. */
+    @Override public void batch(Runnable changes) {
+        batchDepth++;
+        try { changes.run(); }
+        finally {
+            if (--batchDepth == 0 && !batchChunks.isEmpty()) {
+                List<Chunk> list = new ArrayList<>(batchChunks);
+                batchChunks.clear();
+                light.recompute(list);
+            }
+        }
     }
 
     // ------------------------------------------------------------------ життєвий цикл (головний потік)
@@ -124,6 +152,8 @@ public final class World implements WorldAccess {
             pending.remove(c.pos());
             if (closed) continue;
             chunks.put(c.pos(), c);
+            linkNeighbors(c);
+            light.reconcile(c);
             if (listener != null) listener.chunkLoaded(c);
         }
         // замовлення від найближчих до дальніх, не більше 2 черг на потік
@@ -143,6 +173,8 @@ public final class World implements WorldAccess {
             if (Math.abs(c.cx - centerCx) <= keep && Math.abs(c.cz - centerCz) <= keep) continue;
             it.remove();
             if (listener != null) listener.chunkUnloaded(c);
+            LightEngine.disconnect(c);
+            batchChunks.remove(c);
             if (c.modified) saveAsync(c);
         }
     }
@@ -162,6 +194,7 @@ public final class World implements WorldAccess {
                     c.modified = false; // згенерований без змін гравця - на диск не пишемо, згенерується так само
                     genNanos += System.nanoTime() - t0; genCount++;
                 }
+                light.initLocal(c);
                 ready.add(c);
             } catch (Throwable t) {
                 System.out.println("[Voxelin] ⚠️ чанк " + cx + "," + cz + ": " + t);

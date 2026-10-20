@@ -8,6 +8,8 @@ public interface WorldAccess {
     BlockRef getBlock(long x, int y, long z);
     /** Поставити блок від імені джерела. false - нема прав, ліміт за тік вичерпано, поза світом або чанк не завантажений. */
     boolean setBlock(Source source, long x, int y, long z, BlockRef block);
+    /** Виконати багато змін як одну: світло перераховується один раз у кінці (замість окремо на кожен блок). Типово - просто виконати. */
+    default void batch(Runnable changes) { changes.run(); }
     long seed();
     String name();
 }

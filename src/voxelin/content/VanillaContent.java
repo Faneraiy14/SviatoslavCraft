@@ -60,7 +60,7 @@ public final class VanillaContent implements VoxelinMod {
         block("gravel", new BlockSettings().texture("gravel").color(cGravel).hardness(0.6f));
         block("clay", new BlockSettings().texture("clay").color(cClay).hardness(0.6f));
         block("snow", new BlockSettings().texture("snow").color(cSnow).hardness(0.2f));
-        block("ice", new BlockSettings().texture("ice").color(cIce).translucent(true).hardness(0.5f));
+        block("ice", new BlockSettings().texture("ice").color(cIce).translucent(true).absorb(1).hardness(0.5f));
         block("water", new BlockSettings().texture("water").color(cWater).translucent(true).liquid(true).hardness(-1f));
         block("glass", new BlockSettings().texture("glass").color(cGlass).translucent(true).hardness(0.3f));
         block("dune_glass", new BlockSettings().texture("dune_glass").color(cDune).translucent(true).hardness(0.4f));
@@ -107,7 +107,9 @@ public final class VanillaContent implements VoxelinMod {
             double vol = spanX * Math.max(0, y1 - y0 + 1) * spanZ;
             if (vol > MAX_FILL) throw new Commands.CommandException("Забагато блоків: " + String.format(java.util.Locale.ROOT, "%.0f", vol) + " (максимум " + MAX_FILL + ")");
             long n = 0;
-            for (long x = x0; x <= x1; x++) for (int y = y0; y <= y1; y++) for (long z = z0; z <= z1; z++) if (k.world().setBlock(k.source(), x, y, z, b)) n++;
+            final long fx0 = x0, fx1 = x1, fz0 = z0, fz1 = z1; final int fy0 = y0, fy1 = y1; final BlockRef fb = b; final long[] cnt = {0};
+            k.world().batch(() -> { for (long x = fx0; x <= fx1; x++) for (int y = fy0; y <= fy1; y++) for (long z = fz0; z <= fz1; z++) if (k.world().setBlock(k.source(), x, y, z, fb)) cnt[0]++; });
+            n = cnt[0];
             k.reply("Заповнено " + n + " з " + (long) vol + " блоків" + (n < (long) vol ? " (решта - чанки не завантажені або ліміт)" : ""));
         });
         c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));

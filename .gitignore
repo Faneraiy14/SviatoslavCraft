@@ -1,3 +1,7 @@
 out/
 saves/
 dist/
+voxelin-api.jar
+build-test.*/
+bench-result.json
+examples/hello-mod/hello-mod.jar

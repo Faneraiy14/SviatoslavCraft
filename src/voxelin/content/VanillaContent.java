@@ -123,7 +123,8 @@ public final class VanillaContent implements VoxelinMod {
             tex(mat[i] + "_pickaxe", ItemTextureGen.pickaxe(i)); tex(mat[i] + "_axe", ItemTextureGen.axe(i)); tex(mat[i] + "_shovel", ItemTextureGen.shovel(i));
             r.item(mat[i] + "_pickaxe", new ItemSettings().tool(ToolKind.PICKAXE, tier[i], spd[i]).durability(dur[i]).attack(pickAtk[i]).color(col[i]).texture(mat[i] + "_pickaxe").title(matTitle[i] + " кирка"));
             r.item(mat[i] + "_axe", new ItemSettings().tool(ToolKind.AXE, tier[i], spd[i]).durability(dur[i]).attack(axeAtk[i]).color(col[i]).texture(mat[i] + "_axe").title(matTitle[i] + " сокира"));
-            r.item(mat[i] + "_sword", new ItemSettings().durability(dur[i]).attack(swordAtk[i]).color(col[i]).title(matTitleM[i] + " меч"));
+            tex(mat[i] + "_sword", ItemTextureGen.sword(i));
+            r.item(mat[i] + "_sword", new ItemSettings().durability(dur[i]).attack(swordAtk[i]).color(col[i]).texture(mat[i] + "_sword").title(matTitleM[i] + " меч"));
             r.item(mat[i] + "_shovel", new ItemSettings().tool(ToolKind.SHOVEL, tier[i], spd[i]).durability(dur[i]).attack(shovelAtk[i]).color(col[i]).texture(mat[i] + "_shovel").title(matTitle[i] + " лопата"));
         }
 
@@ -160,14 +161,16 @@ public final class VanillaContent implements VoxelinMod {
         }
 
         // --- їжа й здобич з істот
-        r.item("raw_chicken", new ItemSettings().color(0xE8B8A0).food(2).title("Сире куряче м'ясо"));
-        r.item("cooked_chicken", new ItemSettings().color(0xC98A4A).food(6).title("Смажена курка"));
-        r.item("raw_beef", new ItemSettings().color(0xC0504A).food(3).title("Сира яловичина"));
-        r.item("steak", new ItemSettings().color(0x7A4A2A).food(8).title("Стейк"));
-        r.item("rotten_flesh", new ItemSettings().color(0x6B7A3A).food(1).title("Гнила плоть"));
-        r.item("leather", new ItemSettings().color(0x8A5A32).title("Шкіра"));
-        r.item("feather", new ItemSettings().color(0xF0F0F0).title("Пір'я"));
-        r.item("string", new ItemSettings().color(0xDDDDCC).title("Нитка"));
+        tex("raw_chicken", ItemTextureGen.drumstick(0xE8A890)); tex("cooked_chicken", ItemTextureGen.drumstick(0xC98A4A)); tex("raw_beef", ItemTextureGen.steak(0xC0504A, false)); tex("steak", ItemTextureGen.steak(0x8A4F2A, true));
+        tex("rotten_flesh", ItemTextureGen.rottenFlesh()); tex("leather", ItemTextureGen.leather()); tex("feather", ItemTextureGen.feather()); tex("string", ItemTextureGen.stringItem());
+        r.item("raw_chicken", new ItemSettings().color(0xE8B8A0).food(2).texture("raw_chicken").title("Сире куряче м'ясо"));
+        r.item("cooked_chicken", new ItemSettings().color(0xC98A4A).food(6).texture("cooked_chicken").title("Смажена курка"));
+        r.item("raw_beef", new ItemSettings().color(0xC0504A).food(3).texture("raw_beef").title("Сира яловичина"));
+        r.item("steak", new ItemSettings().color(0x7A4A2A).food(8).texture("steak").title("Стейк"));
+        r.item("rotten_flesh", new ItemSettings().color(0x6B7A3A).food(1).texture("rotten_flesh").title("Гнила плоть"));
+        r.item("leather", new ItemSettings().color(0x8A5A32).texture("leather").title("Шкіра"));
+        r.item("feather", new ItemSettings().color(0xF0F0F0).texture("feather").title("Пір'я"));
+        r.item("string", new ItemSettings().color(0xDDDDCC).texture("string").title("Нитка"));
         r.recipe("cook_chicken", RecipeSettings.smelting("raw_chicken", 10).result("cooked_chicken", 1));
         r.recipe("cook_beef", RecipeSettings.smelting("raw_beef", 10).result("steak", 1));
 

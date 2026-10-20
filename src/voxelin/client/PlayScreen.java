@@ -6,6 +6,7 @@ import voxelin.client.render.WorldRenderer;
 import voxelin.client.ui.Gui;
 import voxelin.content.VanillaContent;
 import voxelin.core.*;
+import voxelin.core.entity.Mob;
 import voxelin.core.entity.PlayerEntity;
 import voxelin.core.entity.Vitals;
 import voxelin.api.Source;
@@ -45,6 +46,9 @@ final class PlayScreen {
     private final Source playerSrc = Sources.player("Player");
     private final Vitals vt;
     private boolean leaving, deadHandled;
+    private PlayerTarget playerTarget;
+    private Mob aimedMob;
+    private double attackCd;
     private long openedX, openedZ; private int openedY; private boolean openedBlock; // відкрите вікно блока (піч)
     // ламання блока: ціль, прогрес 0..1, пауза між блоками
     private long breakX, breakZ; private int breakY; private boolean breaking;
@@ -61,6 +65,13 @@ final class PlayScreen {
         actions = new LocalActions(world, v.game.commands, playerSrc);
         vt = world.vitals(playerSrc);
         inv = world.inventory(playerSrc);
+        playerTarget = new PlayerTarget() {
+            public Pos body() { return bodyPos(); }
+            public boolean alive() { return !vt.dead(); }
+            public boolean creative() { return world.creative(); }
+            public void hurt(double damage, double kx, double kz) { vt.hurt(damage, false); player.knock(kx * 6, 4, kz * 6); }
+        };
+        world.setPlayerTarget(playerTarget);
         icons = new IconAtlas(v.textures, world);
         java.util.function.Consumer<Inventory.Stack> dropper = st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); };
         invScreen = InventoryScreen.craft("ІНВЕНТАР", new CraftMenu(world.itemTypes, v.game.recipes, inv, 2), inv, world, icons, dropper);
@@ -203,13 +214,14 @@ final class PlayScreen {
         double dt = Math.min(0.1, (nowNs - lastFrameNs) / 1e9);
         lastFrameNs = nowNs;
         if (breakCooldown > 0) breakCooldown -= dt;
-        if (play && hit != null) {
-            updateBreaking(in, dt);
-            if (in.clicked(GLFW_MOUSE_BUTTON_RIGHT)) useItem();
-        } else {
-            breaking = false; breakProgress = 0;
-            if (play) { in.clicked(GLFW_MOUSE_BUTTON_LEFT); in.clicked(GLFW_MOUSE_BUTTON_RIGHT); }
-        }
+        attackCd = Math.max(0, attackCd - dt);
+        aimedMob = play ? Combat.raycast(world, cam.pos, yaw, pitch, 3.6, hit == null ? 99 : hit.distance()) : null;
+        boolean pressed = play && in.clicked(GLFW_MOUSE_BUTTON_LEFT);
+        if (pressed && aimedMob != null) attackMob(aimedMob);
+        if (play && aimedMob == null && hit != null) updateBreaking(in, dt);
+        else { breaking = false; breakProgress = 0; }
+        if (play && in.clicked(GLFW_MOUSE_BUTTON_RIGHT)) useItem();
+        else if (!play) { in.clicked(GLFW_MOUSE_BUTTON_RIGHT); }
 
         // світ
         glViewport(0, 0, v.window.fbWidth(), v.window.fbHeight());
@@ -253,11 +265,23 @@ final class PlayScreen {
         if (!world.creative() && tool != null) inv.wearSelected(tool.durability);
     }
 
+    /** Удар по істоті: шкода від предмета в руці (рука - 1), відкидання, зношення зброї, кулдаун 0.4 с. */
+    private void attackMob(Mob m) {
+        if (attackCd > 0) return;
+        attackCd = 0.4;
+        ItemType tool = held();
+        double dmg = tool == null ? 1 : tool.attack;
+        if (Combat.attack(world, m, dmg, bodyPos())) {
+            vt.exhaust(0.1);
+            if (!world.creative() && tool != null) inv.wearSelected(tool.durability);
+        }
+    }
+
     /** Права кнопка: з'їсти їжу (якщо голодний) або поставити блок з руки. */
     private void useItem() {
         boolean sneak = v.input.down(GLFW_KEY_LEFT_SHIFT) || v.input.down(GLFW_KEY_RIGHT_SHIFT);
-        BlockType target = world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
-        if (target.interact != null && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
+        BlockType target = hit == null ? null : world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
+        if (target != null && target.interact != null && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
             if ("workbench".equals(target.interact)) { activeScreen = benchScreen; invOpen = true; grab(false); }
             else if ("furnace".equals(target.interact)) {
                 FurnaceEntity fe = world.furnaceAt(hit.x(), hit.y(), hit.z());
@@ -274,7 +298,7 @@ final class PlayScreen {
         if (t == null) return;
         if (t.food > 0) {
             if (vt.hunger() < Vitals.MAX && !vt.dead()) { vt.feed(t.food); if (!world.creative()) inv.takeSelected(); }
-        } else if (t.placesBlock != null && !player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
+        } else if (hit != null && t.placesBlock != null && !player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
             if (!world.creative()) inv.takeSelected();
         }
     }
@@ -302,6 +326,7 @@ final class PlayScreen {
         }
         drawCracks(rcx, rcz, s);
         drawItems(rcx, rcz, s);
+        drawMobs(s);
         if (cam.mode != Camera.Mode.FIRST) { // заглушка тіла: коробка розміром із хітбокс
             float hw = (float) (PlayerEntity.WIDTH / 2 * s), hh = (float) (PlayerEntity.HEIGHT / 2 * s);
             float px = (float) (player.pos.relX(cam.eye.cx) * s), cy = (float) (player.bodyCenterY() * s), pz = (float) (player.pos.relZ(cam.eye.cz) * s);
@@ -371,6 +396,53 @@ final class PlayScreen {
             case 4: return new float[]{x0, y0 + (y1 - y0) * fu, z0 + (z1 - z0) * fw};
             default: return new float[]{x1, y0 + (y1 - y0) * fu, z0 + (z1 - z0) * fw};
         }
+    }
+
+    /** Істоти: коробчаті моделі з анімацією ходьби (ноги), червоним відтінком при ударі, нахилом на бік при смерті; світло - з рушія світла в точці. */
+    private void drawMobs(float s) {
+        java.util.List<Mob> list = world.mobs();
+        if (list.isEmpty()) return;
+        glDisable(GL_CULL_FACE);
+        int drawn = 0;
+        for (Mob m : list) {
+            double dx = m.pos.relX(cam.eye.cx) - cam.eye.x, dz = m.pos.relZ(cam.eye.cz) - cam.eye.z, dy = m.pos.y - cam.eye.y;
+            if (dx * dx + dz * dz + dy * dy > 64 * 64) continue;
+            if (++drawn > 150) break;
+            Chunk c = world.chunk(m.pos.cx, m.pos.cz);
+            int l = c == null ? 0xF0 : c.lightAt((int) Math.floorMod(m.pos.blockX(), 16L), Math.min(255, m.pos.blockY() + 1), (int) Math.floorMod(m.pos.blockZ(), 16L));
+            float light = (float) Math.max(0.18, Math.max(Math.pow(0.8, 15 - (l >> 4)) * rend.skyBrightness, Math.pow(0.8, 15 - (l & 15))));
+            float tr = 1f, tg = 1f, tb = 1f;
+            if (m.hurtTicks > 0) { tr = 1f; tg = 0.45f; tb = 0.45f; }
+            else if (m.burning) { tr = 1f; tg = 0.75f; tb = 0.4f; }
+            double speed = Math.hypot(m.vx, m.vz);
+            float swing = (float) (Math.sin(m.walk * 3.2) * 38 * Math.min(1, speed / 1.5));
+            glPushMatrix();
+            glTranslatef((float) (m.pos.relX(cam.eye.cx) * s), (float) (m.pos.y * s), (float) (m.pos.relZ(cam.eye.cz) * s));
+            glScalef(s, s, s);
+            glRotatef(-m.yaw, 0, 1, 0);
+            if (m.dying) { float roll = (float) Math.min(90, m.deathTicks / Mob.DEATH_TICKS * 90); glTranslatef((float) m.type.width / 2, 0, 0); glRotatef(-roll, 0, 0, 1); glTranslatef((float) -m.type.width / 2, 0, 0); }
+            for (voxelin.api.MobSettings.Part p : m.type.parts) {
+                float r = ((p.rgb >> 16) & 255) / 255f * light * tr, g = ((p.rgb >> 8) & 255) / 255f * light * tg, b = (p.rgb & 255) / 255f * light * tb;
+                glPushMatrix();
+                if (p.swing != 0) { glTranslatef(p.cx, p.y0 + p.h, p.cz); glRotatef(p.swing == 1 ? swing : -swing, 1, 0, 0); glTranslatef(-p.cx, -(p.y0 + p.h), -p.cz); }
+                box(p.cx, p.y0, p.cz, p.w, p.h, p.d, r, g, b);
+                glPopMatrix();
+            }
+            glPopMatrix();
+        }
+        glEnable(GL_CULL_FACE);
+    }
+
+    private static void box(float cx, float y0, float cz, float w, float h, float d, float r, float g, float b) {
+        float x0 = cx - w / 2, x1 = cx + w / 2, y1 = y0 + h, z0 = cz - d / 2, z1 = cz + d / 2;
+        glBegin(GL_QUADS);
+        glColor3f(r, g, b); glVertex3f(x0, y1, z0); glVertex3f(x0, y1, z1); glVertex3f(x1, y1, z1); glVertex3f(x1, y1, z0); // верх
+        glColor3f(r * 0.5f, g * 0.5f, b * 0.5f); glVertex3f(x0, y0, z0); glVertex3f(x1, y0, z0); glVertex3f(x1, y0, z1); glVertex3f(x0, y0, z1);
+        glColor3f(r * 0.8f, g * 0.8f, b * 0.8f); glVertex3f(x0, y0, z0); glVertex3f(x0, y1, z0); glVertex3f(x1, y1, z0); glVertex3f(x1, y0, z0); // перед (-z)
+        glVertex3f(x0, y0, z1); glVertex3f(x1, y0, z1); glVertex3f(x1, y1, z1); glVertex3f(x0, y1, z1);
+        glColor3f(r * 0.65f, g * 0.65f, b * 0.65f); glVertex3f(x0, y0, z0); glVertex3f(x0, y0, z1); glVertex3f(x0, y1, z1); glVertex3f(x0, y1, z0);
+        glVertex3f(x1, y0, z0); glVertex3f(x1, y1, z0); glVertex3f(x1, y1, z1); glVertex3f(x1, y0, z1);
+        glEnd();
     }
 
     /** Предмети на землі: маленькі кольорові кубики, що крутяться й погойдуються (кольори - з предмета, затемнені вночі). */
@@ -444,6 +516,14 @@ final class PlayScreen {
         }
         hotbar(g);
         vitalsHud();
+        if (aimedMob != null && !invOpen && !chatOpen) {
+            String t = aimedMob.type.title + "  " + Math.max(0, (int) Math.ceil(aimedMob.health)) + "/" + (int) aimedMob.type.health;
+            float w = Gui.textWidth(t, 2.2f) + 16, x = (Gui.W - w) / 2f;
+            Gui.rect(x, 26, w, 44, 0, 0, 0, 0.5f);
+            Gui.text(t, x + 8, 32, 2.2f, 1, 1, 1);
+            Gui.rect(x + 8, 56, w - 16, 8, 0.15f, 0.15f, 0.15f, 1f);
+            Gui.rect(x + 8, 56, (w - 16) * (float) Math.max(0, aimedMob.health / aimedMob.type.health), 8, 0.85f, 0.2f, 0.2f, 1f);
+        }
         if (breaking && breakProgress > 0.01 && cam.mode == Camera.Mode.FIRST) {
             Gui.rect(Gui.W / 2f - 31, Gui.H / 2f + 21, 62, 7, 0, 0, 0, 0.6f);
             Gui.rect(Gui.W / 2f - 30, Gui.H / 2f + 22, (float) (60 * Math.min(1, breakProgress)), 5, 1f, 1f, 1f, 0.95f);
@@ -540,7 +620,7 @@ final class PlayScreen {
                 "XYZ: " + p.fmtX() + " " + String.format(Locale.ROOT, "%.1f", p.y - PlayerEntity.EYE) + " " + p.fmtZ() + "  (блоки)",
                 String.format(Locale.ROOT, "Кут: %.0f / %.0f   FPS: %d   чанк: %d %d", player.yaw, player.pitch, v.fps, p.cx, p.cz),
                 lightLine(),
-                "Режим: " + world.gameMode() + "   предметів на землі: " + world.itemEntities().size(),
+                "Режим: " + world.gameMode() + "   предметів на землі: " + world.itemEntities().size() + "   істот: " + world.mobs().size(),
                 String.format(Locale.ROOT, "День %d, %s (%.0f%%)   небо %.2f   здоров'я %.1f  голод %.1f  повітря %d", world.dayNumber(), DayCycle.phaseName(world.dayPhase()), world.dayPhase() * 100, world.skyLevel(), vt.health(), vt.hunger(), vt.air()),
                 "Біом: " + world.biomeAt(p.blockX(), p.blockZ()) + (player.inWater ? "  (у воді)" : ""),
                 "Чанків: " + world.loadedChunks().size() + "  мешів: " + rend.meshCountLoaded() + "  у черзі: " + rend.pending(),

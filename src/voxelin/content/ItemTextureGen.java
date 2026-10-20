@@ -202,4 +202,73 @@ public final class ItemTextureGen {
         a[7 + 10 * N] = 0xFFFF9B2B; a[8 + 10 * N] = 0xFFFFC94A; a[8 + 11 * N] = 0xFFFF7A1A; a[7 + 11 * N] = 0xFFE05A10; a[8 + 9 * N] = 0xFFFFE08A;
         return a;
     }
+
+    // ------------------------------------------------------------------ меч, їжа й здобич з істот
+
+    public static int[] sword(int mat) {
+        int[] a = new int[256], m = MAT[mat];
+        line(a, 2, 14, 5, 11, HANDLE); line(a, 3, 14, 5, 12, HANDLE_HI);
+        line(a, 4, 9, 8, 13, 0xFF9A7A2A); line(a, 4, 10, 7, 13, 0xFFC9A646); // гарда
+        line(a, 6, 10, 14, 2, m[0]); line(a, 5, 10, 13, 2, m[1]); line(a, 7, 10, 14, 3, m[2]);
+        line(a, 6, 9, 13, 2, m[0]);
+        return outlined(a);
+    }
+
+    /** Окорок: м'ясо (колір base) на кістці. */
+    public static int[] drumstick(int base) {
+        int[] a = new int[256];
+        line(a, 7, 9, 3, 13, 0xFFF0E6D0); px(a, 2, 12, 0xFFF0E6D0); px(a, 3, 14, 0xFFF0E6D0); px(a, 2, 14, 0xFFD9CDB4); px(a, 1, 13, 0xFFD9CDB4);
+        int[] c = {0xFF000000 | base, 0xFF000000 | shadeRgb(base, 45), 0xFF000000 | shadeRgb(base, -45)};
+        ellipse(a, 9.5, 6.5, 4.6, 4.0, (x, y, nx, ny) -> lit(c, nx, ny));
+        return outlined(a);
+    }
+
+    /** Стейк: пласка шматина з жирком по краю; cooked - ґратки. */
+    public static int[] steak(int base, boolean cooked) {
+        int[] a = new int[256];
+        int[] c = {0xFF000000 | base, 0xFF000000 | shadeRgb(base, 40), 0xFF000000 | shadeRgb(base, -40)};
+        ellipse(a, 8, 8.5, 6.2, 4.6, (x, y, nx, ny) -> {
+            double r = nx * nx + ny * ny;
+            if (r > 0.62) return cooked ? 0xFF000000 | shadeRgb(base, -20) : 0xFFF1D6CC;
+            if (cooked && ((x + y) % 4 == 0) && r < 0.5) return c[2];
+            return lit(c, nx, ny);
+        });
+        return outlined(a);
+    }
+
+    public static int[] leather() {
+        int[] a = new int[256];
+        for (int y = 3; y <= 13; y++) for (int x = 4; x <= 12; x++) {
+            boolean edge = x == 4 || x == 12 || y == 3 || y == 13;
+            a[x + y * N] = edge ? 0xFF6B4423 : ((x + y) % 5 == 0 ? 0xFFA06A3C : 0xFF8A5A32);
+        }
+        for (int i = 5; i <= 11; i += 2) { px(a, i, 5, 0xFFC9A070); px(a, i, 11, 0xFFC9A070); }
+        a[4 + 3 * N] = 0; a[12 + 3 * N] = 0; a[4 + 13 * N] = 0; a[12 + 13 * N] = 0;
+        return outlined(a);
+    }
+
+    public static int[] feather() {
+        int[] a = new int[256];
+        line(a, 3, 13, 12, 3, 0xFFD8D8D8);
+        for (int i = 0; i < 8; i++) { int x = 4 + i, y = 12 - i; px(a, x + 1, y, 0xFFF5F5F5); px(a, x, y + 1, 0xFFEAEAEA); if (i > 1 && i < 7) { px(a, x + 2, y, 0xFFFFFFFF); px(a, x, y + 2, 0xFFE0E0E0); } }
+        px(a, 12, 2, 0xFFFFFFFF); px(a, 13, 3, 0xFFF0F0F0);
+        return outlined(a);
+    }
+
+    public static int[] rottenFlesh() {
+        int[] a = new int[256];
+        ellipse(a, 8, 8.5, 5.6, 4.4, (x, y, nx, ny) -> {
+            int h = hash(x, y, 21) % 6;
+            return h == 0 ? 0xFF4A5A22 : (h == 1 ? 0xFF8C6A3A : (nx + ny < -0.4 ? 0xFF7C8C4A : 0xFF667538));
+        });
+        return outlined(a);
+    }
+
+    public static int[] stringItem() {
+        int[] a = new int[256];
+        int[][] pts = {{3, 13}, {5, 10}, {4, 8}, {8, 6}, {7, 3}, {11, 2}, {13, 5}};
+        for (int i = 0; i + 1 < pts.length; i++) line(a, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 0xFFE6E6D8);
+        for (int[] p : pts) px(a, p[0], p[1], 0xFFFFFFFF);
+        return outlined(a);
+    }
 }

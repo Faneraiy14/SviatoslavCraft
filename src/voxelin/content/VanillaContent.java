@@ -62,44 +62,62 @@ public final class VanillaContent implements VoxelinMod {
         tex("cactus_top", TextureGen.cactusTop());
 
         // --- блоки
-        block("stone", new BlockSettings().texture("stone").color(cStone).hardness(1.5f));
-        block("deep_stone", new BlockSettings().texture("deep_stone").color(cDeep).hardness(3f));
-        block("cobblestone", new BlockSettings().texture("cobblestone").color(cCobble).hardness(2f));
-        block("stone_bricks", new BlockSettings().texture("stone_bricks").color(cBricks).hardness(2f));
-        block("bedrock", new BlockSettings().texture("bedrock").color(cBed).hardness(-1f));
-        block("dirt", new BlockSettings().texture("dirt").color(cDirt).hardness(0.5f));
-        block("grass", new BlockSettings().textures("grass_top", "grass_side", "dirt").color(cGrassTop).hardness(0.6f));
-        block("pale_grass", new BlockSettings().textures("pale_grass_top", "pale_grass_side", "dirt").color(cPaleTop).hardness(0.6f));
-        block("mud", new BlockSettings().texture("mud").color(cMud).hardness(0.5f));
-        block("sand", new BlockSettings().texture("sand").color(cSand).hardness(0.5f));
-        block("sandstone", new BlockSettings().texture("sandstone").color(cSandstone).hardness(0.8f));
-        block("sintered_sand", new BlockSettings().texture("sintered_sand").color(cSinter).hardness(1f));
-        block("gravel", new BlockSettings().texture("gravel").color(cGravel).hardness(0.6f));
-        block("clay", new BlockSettings().texture("clay").color(cClay).hardness(0.6f));
-        block("snow", new BlockSettings().texture("snow").color(cSnow).hardness(0.2f));
-        block("ice", new BlockSettings().texture("ice").color(cIce).translucent(true).absorb(1).hardness(0.5f));
-        block("water", new BlockSettings().texture("water").color(cWater).translucent(true).liquid(true).hardness(-1f));
-        block("glass", new BlockSettings().texture("glass").color(cGlass).translucent(true).hardness(0.3f));
-        block("dune_glass", new BlockSettings().texture("dune_glass").color(cDune).translucent(true).hardness(0.4f));
-        block("oak_log", new BlockSettings().textures("oak_log_top", "oak_log", "oak_log_top").color(cOakLog).hardness(2f));
-        block("oak_planks", new BlockSettings().texture("oak_planks").color(cOakPlanks).hardness(2f));
-        block("oak_leaves", new BlockSettings().texture("oak_leaves").color(cOakLeaves).opaque(false).hardness(0.2f));
-        block("birch_log", new BlockSettings().textures("birch_log_top", "birch_log", "birch_log_top").color(cBirchLog).hardness(2f));
-        block("birch_planks", new BlockSettings().texture("birch_planks").color(cBirchPlanks).hardness(2f));
-        block("birch_leaves", new BlockSettings().texture("birch_leaves").color(cBirchLeaves).opaque(false).hardness(0.2f));
-        block("spruce_log", new BlockSettings().textures("spruce_log_top", "spruce_log", "spruce_log_top").color(cSpruceLog).hardness(2f));
-        block("spruce_planks", new BlockSettings().texture("spruce_planks").color(cSprucePlanks).hardness(2f));
-        block("spruce_leaves", new BlockSettings().texture("spruce_leaves").color(cSpruceLeaves).opaque(false).hardness(0.2f));
-        block("pale_log", new BlockSettings().textures("pale_log_top", "pale_log", "pale_log_top").color(cPaleLog).hardness(2f));
-        block("cactus", new BlockSettings().textures("cactus_top", "cactus_side", "cactus_top").color(cCactus).hardness(0.4f));
-        block("coal_ore", new BlockSettings().texture("coal_ore").color(cCoal).hardness(3f));
-        block("iron_ore", new BlockSettings().texture("iron_ore").color(cIron).hardness(3f));
-        block("copper_ore", new BlockSettings().texture("copper_ore").color(cCopper).hardness(3f));
-        block("gold_ore", new BlockSettings().texture("gold_ore").color(cGold).hardness(3f));
-        block("diamond_ore", new BlockSettings().texture("diamond_ore").color(cDiamond).hardness(4f));
-        block("liminite_ore", new BlockSettings().texture("liminite_ore").color(cLim).light(4).hardness(4f));
-        block("monolith", new BlockSettings().texture("monolith").color(cMono).light(3).hardness(6f));
-        block("lamp", new BlockSettings().texture("lamp").color(cLamp).light(15).hardness(0.5f));
+        block("stone", new BlockSettings().texture("stone").color(cStone).tool(ToolKind.PICKAXE).minTier(1).drops("cobblestone").hardness(1.5f));
+        block("deep_stone", new BlockSettings().texture("deep_stone").color(cDeep).tool(ToolKind.PICKAXE).minTier(1).drops("cobblestone").hardness(3f));
+        block("cobblestone", new BlockSettings().texture("cobblestone").color(cCobble).tool(ToolKind.PICKAXE).minTier(1).hardness(2f));
+        block("stone_bricks", new BlockSettings().texture("stone_bricks").color(cBricks).tool(ToolKind.PICKAXE).minTier(1).hardness(2f));
+        block("bedrock", new BlockSettings().texture("bedrock").color(cBed).noItem().hardness(-1f));
+        block("dirt", new BlockSettings().texture("dirt").color(cDirt).tool(ToolKind.SHOVEL).hardness(0.5f));
+        block("grass", new BlockSettings().textures("grass_top", "grass_side", "dirt").color(cGrassTop).tool(ToolKind.SHOVEL).drops("dirt").hardness(0.6f));
+        block("pale_grass", new BlockSettings().textures("pale_grass_top", "pale_grass_side", "dirt").color(cPaleTop).tool(ToolKind.SHOVEL).drops("dirt").hardness(0.6f));
+        block("mud", new BlockSettings().texture("mud").color(cMud).tool(ToolKind.SHOVEL).hardness(0.5f));
+        block("sand", new BlockSettings().texture("sand").color(cSand).tool(ToolKind.SHOVEL).hardness(0.5f));
+        block("sandstone", new BlockSettings().texture("sandstone").color(cSandstone).tool(ToolKind.PICKAXE).minTier(1).hardness(0.8f));
+        block("sintered_sand", new BlockSettings().texture("sintered_sand").color(cSinter).tool(ToolKind.PICKAXE).minTier(1).hardness(1f));
+        block("gravel", new BlockSettings().texture("gravel").color(cGravel).tool(ToolKind.SHOVEL).hardness(0.6f));
+        block("clay", new BlockSettings().texture("clay").color(cClay).tool(ToolKind.SHOVEL).hardness(0.6f));
+        block("snow", new BlockSettings().texture("snow").color(cSnow).tool(ToolKind.SHOVEL).hardness(0.2f));
+        block("ice", new BlockSettings().texture("ice").color(cIce).translucent(true).absorb(1).noDrops().hardness(0.5f));
+        block("water", new BlockSettings().texture("water").color(cWater).translucent(true).liquid(true).noItem().noDrops().hardness(-1f));
+        block("glass", new BlockSettings().texture("glass").color(cGlass).translucent(true).noDrops().hardness(0.3f));
+        block("dune_glass", new BlockSettings().texture("dune_glass").color(cDune).translucent(true).noDrops().hardness(0.4f));
+        block("oak_log", new BlockSettings().textures("oak_log_top", "oak_log", "oak_log_top").color(cOakLog).tool(ToolKind.AXE).hardness(2f));
+        block("oak_planks", new BlockSettings().texture("oak_planks").color(cOakPlanks).tool(ToolKind.AXE).hardness(2f));
+        block("oak_leaves", new BlockSettings().texture("oak_leaves").color(cOakLeaves).opaque(false).drops("apple", 1, 1, 0.05f).drops("stick", 1, 2, 0.1f).hardness(0.2f));
+        block("birch_log", new BlockSettings().textures("birch_log_top", "birch_log", "birch_log_top").color(cBirchLog).tool(ToolKind.AXE).hardness(2f));
+        block("birch_planks", new BlockSettings().texture("birch_planks").color(cBirchPlanks).tool(ToolKind.AXE).hardness(2f));
+        block("birch_leaves", new BlockSettings().texture("birch_leaves").color(cBirchLeaves).opaque(false).drops("stick", 1, 2, 0.1f).hardness(0.2f));
+        block("spruce_log", new BlockSettings().textures("spruce_log_top", "spruce_log", "spruce_log_top").color(cSpruceLog).tool(ToolKind.AXE).hardness(2f));
+        block("spruce_planks", new BlockSettings().texture("spruce_planks").color(cSprucePlanks).tool(ToolKind.AXE).hardness(2f));
+        block("spruce_leaves", new BlockSettings().texture("spruce_leaves").color(cSpruceLeaves).opaque(false).drops("stick", 1, 2, 0.1f).hardness(0.2f));
+        block("pale_log", new BlockSettings().textures("pale_log_top", "pale_log", "pale_log_top").color(cPaleLog).tool(ToolKind.AXE).hardness(2f));
+        block("cactus", new BlockSettings().textures("cactus_top", "cactus_side", "cactus_top").color(cCactus).tool(ToolKind.AXE).hardness(0.4f));
+        block("coal_ore", new BlockSettings().texture("coal_ore").color(cCoal).tool(ToolKind.PICKAXE).minTier(1).drops("coal").hardness(3f));
+        block("iron_ore", new BlockSettings().texture("iron_ore").color(cIron).tool(ToolKind.PICKAXE).minTier(2).drops("raw_iron").hardness(3f));
+        block("copper_ore", new BlockSettings().texture("copper_ore").color(cCopper).tool(ToolKind.PICKAXE).minTier(2).drops("raw_copper", 2, 3, 1f).hardness(3f));
+        block("gold_ore", new BlockSettings().texture("gold_ore").color(cGold).tool(ToolKind.PICKAXE).minTier(3).drops("raw_gold").hardness(3f));
+        block("diamond_ore", new BlockSettings().texture("diamond_ore").color(cDiamond).tool(ToolKind.PICKAXE).minTier(3).drops("diamond").hardness(4f));
+        block("liminite_ore", new BlockSettings().texture("liminite_ore").color(cLim).light(4).tool(ToolKind.PICKAXE).minTier(4).drops("liminite_shard", 1, 2, 1f).hardness(4f));
+        block("monolith", new BlockSettings().texture("monolith").color(cMono).light(3).tool(ToolKind.PICKAXE).minTier(2).hardness(6f));
+        block("lamp", new BlockSettings().texture("lamp").color(cLamp).light(15).tool(ToolKind.PICKAXE).hardness(0.5f));
+        // --- предмети (не блоки): матеріали, їжа, інструменти
+        r.item("stick", new ItemSettings().color(0x8B6B3A));
+        r.item("coal", new ItemSettings().color(0x2B2B2B));
+        r.item("raw_iron", new ItemSettings().color(0xC9A88F));
+        r.item("raw_copper", new ItemSettings().color(0xC8764A));
+        r.item("raw_gold", new ItemSettings().color(0xE6C34A));
+        r.item("diamond", new ItemSettings().color(0x5DE6E0));
+        r.item("liminite_shard", new ItemSettings().color(0x8F6BFF));
+        r.item("apple", new ItemSettings().color(0xD62C2C).food(4));
+        String[] mat = {"wooden", "stone", "iron", "diamond"};
+        int[] tier = {1, 2, 3, 4}, dur = {60, 132, 251, 1562}, col = {0xA9824B, 0x8A8A8A, 0xD8D8D8, 0x5DE6E0};
+        float[] spd = {2f, 4f, 6f, 8f};
+        for (int i = 0; i < 4; i++) {
+            r.item(mat[i] + "_pickaxe", new ItemSettings().tool(ToolKind.PICKAXE, tier[i], spd[i]).durability(dur[i]).color(col[i]));
+            r.item(mat[i] + "_axe", new ItemSettings().tool(ToolKind.AXE, tier[i], spd[i]).durability(dur[i]).color(col[i]));
+            r.item(mat[i] + "_shovel", new ItemSettings().tool(ToolKind.SHOVEL, tier[i], spd[i]).durability(dur[i]).color(col[i]));
+        }
+
 
         Commands c = ctx.commands();
         c.register("setblock", "<x> <y> <z> <блок>", 2, k -> {
@@ -155,7 +173,36 @@ public final class VanillaContent implements VoxelinMod {
         c.register("heal", "", 2, k -> { vit(k).heal(Vitals.MAX); k.reply("Здоров'я відновлено"); });
         c.register("hurt", "<шкода>", 2, k -> { vit(k).damage(amount(k)); k.reply("Шкода завдана (здоров'я " + vit(k).health() + ")"); });
         c.register("eat", "<їжа>", 2, k -> { vit(k).feed(amount(k)); k.reply("Голод " + vit(k).hunger()); });
-        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
+        c.register("give", "<предмет> [кількість]", 2, k -> {
+            ItemHolder h = k.world().items(k.source());
+            if (h == null) throw new Commands.CommandException("У цього джерела нема інвентаря");
+            if (k.args().isEmpty() || k.args().size() > 2) throw new Commands.CommandException("Потрібна назва предмета й (необов'язково) кількість");
+            String name = k.args().get(0).toLowerCase(java.util.Locale.ROOT);
+            if (name.indexOf(':') < 0) name = "voxelin:" + name;
+            if (!(k.world() instanceof voxelin.core.World)) throw new Commands.CommandException("Недоступно");
+            voxelin.core.ItemType t = ((voxelin.core.World) k.world()).itemTypes.get(name);
+            if (t == null) throw new Commands.CommandException("Невідомий предмет: " + k.args().get(0));
+            int n = 1;
+            if (k.args().size() == 2) try { n = Integer.parseInt(k.args().get(1)); } catch (NumberFormatException e) { throw new Commands.CommandException("Не число: " + k.args().get(1)); }
+            if (n < 1 || n > 2304) throw new Commands.CommandException("Кількість від 1 до 2304: " + n);
+            int left = h.give(t.name, n);
+            k.reply("Видано " + (n - left) + " x " + t.name + (left > 0 ? " (не влізло " + left + ")" : ""));
+        });
+        c.register("clear", "", 2, k -> {
+            ItemHolder h = k.world().items(k.source());
+            if (h == null) throw new Commands.CommandException("У цього джерела нема інвентаря");
+            h.clear(); k.reply("Інвентар очищено");
+        });
+        c.register("gamemode", "<survival|creative>", 2, k -> {
+            if (k.args().size() != 1) throw new Commands.CommandException("Потрібен один аргумент");
+            boolean was = k.world().gameMode().equals("creative");
+            if (!k.world().setGameMode(k.args().get(0))) throw new Commands.CommandException("Невідомий режим: " + k.args().get(0));
+            boolean now = k.world().gameMode().equals("creative");
+            ItemHolder h = k.world().items(k.source());
+            if (now && !was && h != null) for (String s : STARTER) h.give(s, 64);
+            k.reply("Режим гри: " + k.world().gameMode());
+        });
+        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /clear, /gamemode, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
     }
 
     /** Назва блока з аргументу команди: "stone" = "voxelin:stone". */

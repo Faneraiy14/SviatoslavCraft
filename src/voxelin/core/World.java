@@ -2,6 +2,7 @@ package voxelin.core;
 
 import voxelin.api.*;
 import voxelin.api.event.*;
+import voxelin.core.entity.ItemEntity;
 import voxelin.core.entity.Vitals;
 import voxelin.core.gen.Generator;
 
@@ -34,6 +35,7 @@ public final class World implements WorldAccess {
     public final File dir;
     public final WorldInfo info;
     public final BlockRegistry blocks;
+    public final ItemRegistry itemTypes;
     private final EventBus events;
     private final Generator generator;
     private final RegionStorage storage;
@@ -54,8 +56,8 @@ public final class World implements WorldAccess {
     /** Статистика для F3 і --bench. */
     public volatile long genNanos, genCount;
 
-    public World(File dir, WorldInfo info, BlockRegistry blocks, EventBus events, Generator generator) throws IOException {
-        this.dir = dir; this.info = info; this.blocks = blocks; this.events = events; this.generator = generator;
+    public World(File dir, WorldInfo info, BlockRegistry blocks, ItemRegistry itemTypes, EventBus events, Generator generator) throws IOException {
+        this.dir = dir; this.info = info; this.blocks = blocks; this.itemTypes = itemTypes; this.events = events; this.generator = generator;
         storage = new RegionStorage(dir);
         light = new LightEngine(blocks, (c, sy) -> { if (listener != null) listener.lightChanged(c, sy); });
         rt2p = new int[blocks.size()];
@@ -66,6 +68,7 @@ public final class World implements WorldAccess {
             p2rt[p] = t != null ? t.id : blocks.unknown().id;
         }
         info.save(dir); // палітра могла дописатись новими блоками
+        loadItems();
         // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
         int threads = Integer.getInteger("voxelin.genThreads", Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)));
         genPool = Executors.newFixedThreadPool(threads, daemon("voxelin-gen"));
@@ -97,6 +100,7 @@ public final class World implements WorldAccess {
         if (v == null) {
             v = mainVitals == null && info.hasVitals ? new Vitals(info.health, info.hunger, info.saturation) : new Vitals();
             if (v.dead()) v = new Vitals();
+            v.setGod(info.mode == WorldInfo.Mode.CREATIVE);
             vitals.put(s, v);
             if (mainVitals == null) mainVitals = v;
         }
@@ -104,6 +108,135 @@ public final class World implements WorldAccess {
     }
 
     @Override public Vitality vitality(Source s) { return s.kind() == Source.Kind.PLAYER ? vitals(s) : null; }
+
+    // ------------------------------------------------------------------ режим гри, інвентар, предмети на землі
+
+    @Override public String gameMode() { return info.mode.name().toLowerCase(Locale.ROOT); }
+
+    @Override public boolean setGameMode(String mode) {
+        WorldInfo.Mode m;
+        switch (mode == null ? "" : mode.toLowerCase(Locale.ROOT)) {
+            case "survival": case "виживання": case "s": case "0": m = WorldInfo.Mode.SURVIVAL; break;
+            case "creative": case "творчий": case "креатив": case "c": case "1": m = WorldInfo.Mode.CREATIVE; break;
+            default: return false;
+        }
+        info.mode = m;
+        for (Vitals v : vitals.values()) v.setGod(m == WorldInfo.Mode.CREATIVE);
+        return true;
+    }
+
+    public boolean creative() { return info.mode == WorldInfo.Mode.CREATIVE; }
+
+    private final Map<Source, Inventory> inventories = new IdentityHashMap<>();
+    private Inventory mainInventory;
+
+    /** Інвентар джерела (створюється при першому зверненні; перший - гравця одиночної гри - відновлюється зі збереження). */
+    public Inventory inventory(Source s) {
+        Inventory inv = inventories.get(s);
+        if (inv == null) {
+            inv = new Inventory(itemTypes);
+            if (mainInventory == null && info.hasInv) inv.decode(info.inv, info.invSelected);
+            inventories.put(s, inv);
+            if (mainInventory == null) mainInventory = inv;
+        }
+        return inv;
+    }
+
+    @Override public ItemHolder items(Source s) { return s.kind() == Source.Kind.PLAYER ? inventory(s) : null; }
+
+    public static final int MAX_ITEMS = 512;
+    private final List<ItemEntity> items = new ArrayList<>();
+    private final Random itemRng = new Random();
+
+    public List<ItemEntity> itemEntities() { return Collections.unmodifiableList(items); }
+
+    /** Випустити предмет на землю в точці (блоки) із малим випадковим поштовхом. Понад MAX_ITEMS найстаріший зникає. */
+    public ItemEntity spawnItem(Pos at, String item, int count, int damage, boolean toss) {
+        if (count <= 0) return null;
+        ItemEntity e = new ItemEntity(at, item, count, damage);
+        if (toss) { e.vx = (itemRng.nextDouble() - 0.5) * 3; e.vz = (itemRng.nextDouble() - 0.5) * 3; e.vy = 3 + itemRng.nextDouble(); }
+        items.add(e);
+        if (items.size() > MAX_ITEMS) items.remove(0);
+        return e;
+    }
+
+    /**
+     * Зламати блок: замінити повітрям і викинути дроп (якщо dropItems). tool - предмет у руці (або null). true - блок зламано.
+     * Міцність інструмента знімає той, хто викликає (вона в його інвентарі).
+     */
+    public boolean harvest(Source src, long x, int y, long z, ItemType tool, boolean dropItems) {
+        int id = blockId(x, y, z);
+        if (id <= 0 || blocks.get(id).hardness < 0) return false;
+        BlockType b = blocks.get(id);
+        if (!setBlock(src, x, y, z, blocks.air())) return false;
+        if (dropItems) for (Inventory.Stack st : Mining.drops(b, tool, itemRng)) spawnItem(Pos.ofBlock(x, y + 0.5, z), st.item, st.count, st.damage, true);
+        return true;
+    }
+
+    private void tickItems() {
+        for (Iterator<ItemEntity> it = items.iterator(); it.hasNext(); ) {
+            ItemEntity e = it.next();
+            if (e.expired()) { it.remove(); continue; }
+            e.tick(this::isSolid, this::isLiquid);
+            if (e.pos.y < -30) it.remove(); // випав за межі світу
+        }
+        if (tick % 10 == 0 && items.size() > 1) { // злиття (раз на півсекунди)
+            for (int i = 0; i < items.size(); i++) {
+                ItemEntity a = items.get(i);
+                for (int j = i + 1; j < items.size(); j++) {
+                    ItemEntity b = items.get(j);
+                    if (a.canMerge(b, itemTypes.maxStack(a.item))) { a.count += b.count; a.age = Math.min(a.age, b.age); items.remove(j--); }
+                }
+            }
+        }
+    }
+
+    /** Підбір: усе, що лежить у радіусі від гравця (центр тіла at) і влізає в інвентар, переходить до нього. Повертає, скільки предметів підібрано. */
+    public int collectItems(Pos at, Inventory inv) {
+        int n = 0;
+        for (Iterator<ItemEntity> it = items.iterator(); it.hasNext(); ) {
+            ItemEntity e = it.next();
+            if (e.pickupDelay > 0) continue;
+            double dx = e.pos.relX(at.cx) - at.x, dz = e.pos.relZ(at.cz) - at.z, dy = e.pos.y - at.y;
+            if (dx * dx + dz * dz + dy * dy > ItemEntity.PICKUP_RADIUS * ItemEntity.PICKUP_RADIUS) continue;
+            if (!inv.canFit(e.item, e.count, e.damage)) continue;
+            inv.add(e.item, e.count, e.damage);
+            n += e.count;
+            it.remove();
+        }
+        return n;
+    }
+
+    private File itemsFile() { return new File(dir, "items.dat"); }
+
+    private void saveItems() {
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (ItemEntity e : items) sb.append(e.pos.cx).append(' ').append(e.pos.cz).append(' ').append(e.pos.x).append(' ').append(e.pos.y).append(' ').append(e.pos.z).append(' ').append(e.item).append(' ').append(e.count).append(' ').append(e.damage).append('\n');
+            File tmp = new File(dir, "items.dat.tmp");
+            java.nio.file.Files.write(tmp.toPath(), sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Files2.replace(tmp, itemsFile());
+        } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати предмети: " + e); }
+    }
+
+    private void loadItems() {
+        File f = itemsFile();
+        if (!f.isFile()) return;
+        try {
+            for (String line : java.nio.file.Files.readAllLines(f.toPath(), java.nio.charset.StandardCharsets.UTF_8)) {
+                String[] p = line.trim().split(" ");
+                if (p.length != 8 || !p[5].matches("[a-z0-9_]+:[a-z0-9_/]+")) continue;
+                try {
+                    int c = Integer.parseInt(p[6]), d = Integer.parseInt(p[7]);
+                    double x = Double.parseDouble(p[2]), y = Double.parseDouble(p[3]), z = Double.parseDouble(p[4]);
+                    if (c < 1 || c > 64 || d < 0 || Double.isNaN(x + y + z) || Double.isInfinite(x + y + z) || x < 0 || x >= 16 || z < 0 || z >= 16 || y < -30 || y > 400) continue;
+                    long cx = Long.parseLong(p[0]), cz = Long.parseLong(p[1]);
+                    if (!inRange(cx, cz) || items.size() >= MAX_ITEMS) continue;
+                    items.add(new ItemEntity(new Pos(cx, cz, x, y, z), p[5], c, d));
+                } catch (NumberFormatException e) { /* бита клітинка */ }
+            }
+        } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось прочитати предмети: " + e); }
+    }
 
     // ------------------------------------------------------------------ читання
 
@@ -235,6 +368,7 @@ public final class World implements WorldAccess {
     public void tick() {
         tick++;
         info.time++;
+        tickItems();
         budgets.clear();
         events.post(new TickEvent(this, tick));
         if (System.currentTimeMillis() - lastAutosave > 30_000) { lastAutosave = System.currentTimeMillis(); autosave(); }
@@ -243,8 +377,20 @@ public final class World implements WorldAccess {
     public long tickCount() { return tick; }
 
     public void autosave() {
+        syncPlayerData();
         for (Chunk c : chunks.values()) if (c.modified) saveAsync(c);
         io.execute(this::flushQuiet);
+    }
+
+    /** Інвентар і предмети на землі -> у файли світу (автозбереження й закриття). */
+    private void syncPlayerData() {
+        if (mainInventory != null) {
+            String[] enc = mainInventory.encode();
+            System.arraycopy(enc, 0, info.inv, 0, enc.length);
+            info.invSelected = mainInventory.selected(); info.hasInv = true;
+        }
+        saveItems();
+        try { info.save(dir); } catch (IOException e) { System.out.println("[Voxelin] ⚠️ " + e); }
     }
 
     private void saveAsync(Chunk c) {
@@ -282,6 +428,7 @@ public final class World implements WorldAccess {
         io.shutdown();
         try { if (!io.awaitTermination(15, TimeUnit.SECONDS)) System.out.println("[Voxelin] ⚠️ збереження не завершилось за 15 с"); }
         catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        syncPlayerData();
         if (mainVitals != null) { Vitals mv = mainVitals; info.hasVitals = true; info.health = mv.dead() ? 20 : mv.health(); info.hunger = mv.dead() ? 20 : mv.hunger(); info.saturation = mv.dead() ? 5 : mv.saturation(); }
         try { info.save(dir); } catch (IOException e) { System.out.println("[Voxelin] ⚠️ " + e); }
         chunks.clear();

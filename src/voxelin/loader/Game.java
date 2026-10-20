@@ -14,11 +14,12 @@ import java.util.*;
  */
 public final class Game {
     public final BlockRegistry blocks = new BlockRegistry();
+    public final ItemRegistry items = new ItemRegistry();
     public final EventBus events = new EventBus();
     public final CommandRegistry commands = new CommandRegistry();
     /** Текстури з реєстру (назва -> {пікселі 16x16}); етап «Новий світ» збирає з них атлас. */
     public final Map<String, int[][]> textures = new LinkedHashMap<>();
-    public final ModLoader mods = new ModLoader(blocks, events, commands, textures);
+    public final ModLoader mods = new ModLoader(blocks, items, events, commands, textures);
     public final File savesDir;
 
     public Game(File savesDir, File modsDir) {
@@ -27,6 +28,7 @@ public final class Game {
         if (v.status != ModLoader.Status.OK) throw new IllegalStateException("ванільний вміст не завантажився: " + v.message);
         if (modsDir != null && modsDir.isDirectory()) mods.loadDir(modsDir);
         blocks.freeze();
+        items.freeze();
     }
 
     public File worldDir(String name) {
@@ -52,6 +54,6 @@ public final class Game {
     public World openWorld(String name) throws IOException {
         File d = worldDir(name);
         WorldInfo info = WorldInfo.load(d);
-        return new World(d, info, blocks, events, new TerrainGenerator(info.seed, info.type, blocks));
+        return new World(d, info, blocks, items, events, new TerrainGenerator(info.seed, info.type, blocks));
     }
 }

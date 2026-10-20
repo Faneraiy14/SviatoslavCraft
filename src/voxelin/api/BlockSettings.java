@@ -11,6 +11,16 @@ public final class BlockSettings {
     int light = 0;
     float hardness = 1f;
     int absorb = -1;
+    ToolKind tool = ToolKind.NONE;
+    int minTier;
+    boolean noItem, noDrops;
+    java.util.List<Drop> drops;
+
+    /** Один запис дропу: предмет, скільки (min..max) і шанс 0..1. */
+    public static final class Drop {
+        public final String item; public final int min, max; public final float chance;
+        public Drop(String item, int min, int max, float chance) { this.item = item; this.min = Math.max(0, min); this.max = Math.max(this.min, max); this.chance = Float.isNaN(chance) ? 1f : Math.max(0f, Math.min(1f, chance)); }
+    }
 
     /** RGB 0xRRGGBB. */
     public BlockSettings color(int rgb) { color = rgb & 0xFFFFFF; return this; }
@@ -28,13 +38,25 @@ public final class BlockSettings {
     public BlockSettings light(int level) { light = Math.max(0, Math.min(15, level)); return this; }
     /** Скільки рівнів світла гасить блок (0..15; 15 - повна перешкода). Типово: непрозорий 15, рідина 2, листя 1, решта 0. */
     public BlockSettings absorb(int a) { absorb = Math.max(0, Math.min(15, a)); return this; }
+    /** Яким інструментом ламати швидше. */
+    public BlockSettings tool(ToolKind k) { tool = k == null ? ToolKind.NONE : k; return this; }
+    /** Мінімальний рівень інструмента, щоб блок взагалі дав дроп (0 - дає завжди; руки не вистачає, якщо > 0). */
+    public BlockSettings minTier(int t) { minTier = Math.max(0, t); return this; }
+    /** Що випадає (можна кілька записів). Без жодного виклику - сам предмет-блок. */
+    public BlockSettings drops(String item, int min, int max, float chance) { if (drops == null) drops = new java.util.ArrayList<>(); drops.add(new Drop(item, min, max, chance)); return this; }
+    public BlockSettings drops(String item) { return drops(item, 1, 1, 1f); }
+    /** Нічого не випадає (скло, лід). */
+    public BlockSettings noDrops() { noDrops = true; return this; }
+    /** Без предмета-блока (вода, корінна порода): його не можна мати в інвентарі. */
+    public BlockSettings noItem() { noItem = true; return this; }
     /** Скільки ламати (етап «Виживання»); від'ємне - незламний (корінна порода). */
     public BlockSettings hardness(float h) { hardness = h < 0 ? -1f : h; return this; }
 
     /** Копія, де назви текстур без простору імен ("stone") отримують префікс мода ("voxelin:stone"). Викликає завантажувач. */
     public BlockSettings qualified(String modId) {
         BlockSettings b = new BlockSettings();
-        b.color = color; b.solid = solid; b.opaque = opaque; b.liquid = liquid; b.translucent = translucent; b.light = light; b.hardness = hardness; b.absorb = absorb;
+        b.color = color; b.solid = solid; b.opaque = opaque; b.liquid = liquid; b.translucent = translucent; b.light = light; b.hardness = hardness; b.absorb = absorb; b.tool = tool; b.minTier = minTier; b.noItem = noItem; b.noDrops = noDrops;
+        if (drops != null) { b.drops = new java.util.ArrayList<>(); for (Drop d : drops) b.drops.add(new Drop(d.item.indexOf(':') >= 0 ? d.item : modId + ":" + d.item, d.min, d.max, d.chance)); }
         b.texTop = q(texTop, modId); b.texSide = q(texSide, modId); b.texBottom = q(texBottom, modId);
         return b;
     }
@@ -53,5 +75,11 @@ public final class BlockSettings {
     /** -1 - не задано (рахується типове). */
     public int absorbValue() { return absorb; }
     public float hardnessValue() { return hardness; }
+    public ToolKind toolKind() { return tool; }
+    public int minTierValue() { return minTier; }
+    public boolean hasNoItem() { return noItem; }
+    public boolean hasNoDrops() { return noDrops; }
+    /** null - типовий дроп (сам блок). */
+    public java.util.List<Drop> dropList() { return drops; }
     public boolean isUnbreakable() { return hardness < 0; }
 }

@@ -4,6 +4,9 @@ package voxelin.api;
 public interface Registries {
     /** Зареєструвати блок. name без двокрапки отримує префікс мода: "ruby" -> "mymod:ruby". */
     BlockRef block(String name, BlockSettings settings);
+    /** Зареєструвати предмет (не блок). name без двокрапки отримує префікс мода. Предмети-блоки створюються автоматично разом із блоками. */
+    ItemRef item(String name, ItemSettings settings);
+    ItemRef findItem(String fullName);
     /** Знайти блок за повною назвою ("voxelin:stone") або null. */
     BlockRef findBlock(String fullName);
     /**

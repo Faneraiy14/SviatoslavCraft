@@ -17,6 +17,12 @@ public interface WorldAccess {
     default long dayTicks() { return 24000; }
     /** Здоров'я/голод гравця-джерела; null - у цього джерела їх нема. */
     default Vitality vitality(Source source) { return null; }
+    /** Інвентар джерела-гравця; null - у цього джерела його нема. */
+    default ItemHolder items(Source source) { return null; }
+    /** "survival" або "creative". */
+    default String gameMode() { return "survival"; }
+    /** false - невідомий режим. */
+    default boolean setGameMode(String mode) { return false; }
     long seed();
     String name();
 }

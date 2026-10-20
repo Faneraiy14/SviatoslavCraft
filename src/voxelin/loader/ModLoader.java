@@ -25,13 +25,14 @@ public final class ModLoader {
     }
 
     private final BlockRegistry blocks;
+    private final ItemRegistry items;
     private final EventBus events;
     private final CommandRegistry commands;
     private final Map<String, int[][]> textures;
     private final List<ModInfo> mods = new ArrayList<>();
 
-    public ModLoader(BlockRegistry blocks, EventBus events, CommandRegistry commands, Map<String, int[][]> textures) {
-        this.blocks = blocks; this.events = events; this.commands = commands; this.textures = textures;
+    public ModLoader(BlockRegistry blocks, ItemRegistry items, EventBus events, CommandRegistry commands, Map<String, int[][]> textures) {
+        this.blocks = blocks; this.items = items; this.events = events; this.commands = commands; this.textures = textures;
     }
 
     public List<ModInfo> mods() { return Collections.unmodifiableList(mods); }
@@ -93,8 +94,17 @@ public final class ModLoader {
         Registries reg = new Registries() {
             public BlockRef block(String name, BlockSettings s) {
                 if (name.contains(":") && !name.startsWith(modId + ":")) throw new IllegalArgumentException("мод «" + modId + "» може реєструвати лише " + modId + ":... (а не " + name + ")");
-                return blocks.register(name.contains(":") ? name : modId + ":" + name, s.qualified(modId));
+                BlockSettings q = s.qualified(modId);
+                String full = name.contains(":") ? name : modId + ":" + name;
+                BlockType b = blocks.register(full, q);
+                if (b.hasItem) items.register(full, new ItemSettings().placesBlock(full).color(b.color).texture(b.texSide != null ? b.texSide : b.texTop));
+                return b;
             }
+            public ItemRef item(String name, ItemSettings s) {
+                if (name.contains(":") && !name.startsWith(modId + ":")) throw new IllegalArgumentException("мод «" + modId + "» може реєструвати лише " + modId + ":... (а не " + name + ")");
+                return items.register(name.contains(":") ? name : modId + ":" + name, s.qualified(modId));
+            }
+            public ItemRef findItem(String full) { return items.get(full); }
             public BlockRef findBlock(String full) { return blocks.byName(full); }
             public void texture(String name, int[] px) {
                 if (px == null || px.length != 256) throw new IllegalArgumentException("текстура має бути 16x16 = 256 пікселів");

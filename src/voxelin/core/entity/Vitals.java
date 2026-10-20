@@ -14,6 +14,7 @@ public final class Vitals implements Vitality {
     private double health = MAX, hunger = MAX, saturation = 5, exhaustion;
     private int air = (int) MAX_AIR, foodTimer, invuln;
     private boolean dead;
+    private boolean god;
 
     public Vitals() {}
 
@@ -29,6 +30,9 @@ public final class Vitals implements Vitality {
     @Override public double hunger() { return hunger; }
     public double saturation() { return saturation; }
     public int air() { return air; }
+    /** Креатив: шкоди й голоду нема. */
+    public void setGod(boolean g) { god = g; if (g && !dead) { hunger = MAX; saturation = 5; exhaustion = 0; air = (int) MAX_AIR; } }
+    public boolean god() { return god; }
     @Override public boolean dead() { return dead; }
 
     /** Шкода, що минає невразливість (команди, сюжетні події). */
@@ -36,7 +40,7 @@ public final class Vitals implements Vitality {
 
     /** Природна шкода (голод, падіння, вода): з коротким вікном невразливості. */
     public void hurt(double amount, boolean ignoreInvuln) {
-        if (dead || !(amount > 0)) return; // NaN теж відкидається
+        if (dead || god || !(amount > 0)) return; // NaN теж відкидається
         if (!ignoreInvuln && invuln > 0) return;
         health = Math.max(0, health - Math.min(amount, 1e6));
         if (!ignoreInvuln) invuln = INVULN_TICKS;
@@ -53,7 +57,7 @@ public final class Vitals implements Vitality {
     }
 
     /** Виснаження від дій (МС: біг на метр 0.1, стрибок 0.05, ламання блока 0.005). */
-    public void exhaust(double e) { if (!dead && e > 0) exhaustion += Math.min(e, 40); }
+    public void exhaust(double e) { if (!dead && !god && e > 0) exhaustion += Math.min(e, 40); }
 
     /** Падіння з висоти (блоків) при приземленні: шкода за кожен блок понад безпечні 3. */
     public void land(double fallBlocks) {
@@ -63,6 +67,7 @@ public final class Vitals implements Vitality {
     /** Один тік: голод, відновлення, повітря під водою. */
     public void tick(boolean headInWater) {
         if (dead) return;
+        if (god) { air = (int) MAX_AIR; return; }
         if (invuln > 0) invuln--;
         while (exhaustion >= 4) {
             exhaustion -= 4;

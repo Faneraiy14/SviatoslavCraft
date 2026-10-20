@@ -13,6 +13,7 @@ public final class WorldInfo {
     public static final String FILE = "voxelin.world";
     public static final int FORMAT = 2;
     public enum Type { NORMAL, FLAT }
+    public enum Mode { SURVIVAL, CREATIVE }
 
     public String name;
     public long seed;
@@ -29,6 +30,12 @@ public final class WorldInfo {
     /** Стан гравця (здоров'я/голод/насиченість); hasVitals=false - значення за замовчуванням. */
     public boolean hasVitals;
     public double health = 20, hunger = 20, saturation = 5;
+    /** Режим гри. Старі світи без поля лишаються творчими (як у них грали), нові - виживання. */
+    public Mode mode = Mode.CREATIVE;
+    /** Інвентар гравця: слоти «назва|кількість|зношеність» (null - порожній) і вибраний слот; hasInv=false - ще не зберігали. */
+    public boolean hasInv;
+    public final String[] inv = new String[Inventory.SIZE];
+    public int invSelected;
     public final List<String> palette = new ArrayList<>();
 
     public static boolean isValidName(String n) {
@@ -40,7 +47,7 @@ public final class WorldInfo {
 
     public static WorldInfo create(File dir, String name, long seed, Type type) throws IOException {
         WorldInfo w = new WorldInfo();
-        w.name = name; w.seed = seed; w.type = type; w.created = System.currentTimeMillis();
+        w.name = name; w.seed = seed; w.type = type; w.mode = Mode.SURVIVAL; w.created = System.currentTimeMillis();
         w.palette.add(BlockRegistry.AIR);
         w.save(dir);
         return w;
@@ -68,6 +75,10 @@ public final class WorldInfo {
         try { w.time = Math.max(0, Long.parseLong(p.getProperty("time", "0").trim())); } catch (NumberFormatException e) { w.time = 0; }
         try { double m = Double.parseDouble(p.getProperty("dayMinutes", String.valueOf(DayCycle.DEFAULT_MINUTES)).trim()); w.dayMinutes = Double.isNaN(m) ? DayCycle.DEFAULT_MINUTES : Math.max(DayCycle.MIN_MINUTES, Math.min(DayCycle.MAX_MINUTES, m)); }
         catch (NumberFormatException e) { w.dayMinutes = DayCycle.DEFAULT_MINUTES; }
+        try { w.mode = Mode.valueOf(p.getProperty("mode", "CREATIVE").trim()); } catch (IllegalArgumentException e) { w.mode = Mode.CREATIVE; }
+        w.hasInv = "true".equals(p.getProperty("hasInv"));
+        for (int i = 0; i < Inventory.SIZE; i++) w.inv[i] = p.getProperty("inv." + i);
+        try { w.invSelected = Math.max(0, Math.min(Inventory.HOTBAR - 1, Integer.parseInt(p.getProperty("invSelected", "0").trim()))); } catch (NumberFormatException e) { w.invSelected = 0; }
         w.hasVitals = "true".equals(p.getProperty("hasVitals"));
         if (w.hasVitals) try {
             w.health = Double.parseDouble(p.getProperty("health")); w.hunger = Double.parseDouble(p.getProperty("hunger")); w.saturation = Double.parseDouble(p.getProperty("saturation", "0"));
@@ -87,6 +98,8 @@ public final class WorldInfo {
         p.setProperty("type", type.name());
         p.setProperty("created", String.valueOf(created));
         p.setProperty("palette", String.join(",", palette));
+        p.setProperty("mode", mode.name());
+        if (hasInv) { p.setProperty("hasInv", "true"); p.setProperty("invSelected", String.valueOf(invSelected)); for (int i = 0; i < Inventory.SIZE; i++) if (inv[i] != null) p.setProperty("inv." + i, inv[i]); }
         p.setProperty("time", String.valueOf(time));
         p.setProperty("dayMinutes", String.valueOf(dayMinutes));
         if (hasVitals) { p.setProperty("hasVitals", "true"); p.setProperty("health", String.valueOf(health)); p.setProperty("hunger", String.valueOf(hunger)); p.setProperty("saturation", String.valueOf(saturation)); }

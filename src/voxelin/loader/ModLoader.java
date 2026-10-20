@@ -27,13 +27,14 @@ public final class ModLoader {
     private final BlockRegistry blocks;
     private final ItemRegistry items;
     private final RecipeRegistry recipes;
+    private final MobRegistry mobTypes;
     private final EventBus events;
     private final CommandRegistry commands;
     private final Map<String, int[][]> textures;
     private final List<ModInfo> mods = new ArrayList<>();
 
-    public ModLoader(BlockRegistry blocks, ItemRegistry items, RecipeRegistry recipes, EventBus events, CommandRegistry commands, Map<String, int[][]> textures) {
-        this.blocks = blocks; this.items = items; this.recipes = recipes; this.events = events; this.commands = commands; this.textures = textures;
+    public ModLoader(BlockRegistry blocks, ItemRegistry items, RecipeRegistry recipes, MobRegistry mobTypes, EventBus events, CommandRegistry commands, Map<String, int[][]> textures) {
+        this.blocks = blocks; this.items = items; this.recipes = recipes; this.mobTypes = mobTypes; this.events = events; this.commands = commands; this.textures = textures;
     }
 
     public List<ModInfo> mods() { return Collections.unmodifiableList(mods); }
@@ -109,6 +110,11 @@ public final class ModLoader {
                 if (id.contains(":") && !id.startsWith(modId + ":")) throw new IllegalArgumentException("мод «" + modId + "» може реєструвати лише " + modId + ":... (а не " + id + ")");
                 recipes.add(id.contains(":") ? id : modId + ":" + id, s.qualified(modId));
             }
+            public MobRef mob(String name, MobSettings s) {
+                if (name.contains(":") && !name.startsWith(modId + ":")) throw new IllegalArgumentException("мод «" + modId + "» може реєструвати лише " + modId + ":... (а не " + name + ")");
+                return mobTypes.register(name.contains(":") ? name : modId + ":" + name, s.qualified(modId));
+            }
+            public MobRef findMob(String full) { return mobTypes.get(full); }
             public void fuel(String item, float seconds) { recipes.fuel(item.contains(":") ? item : modId + ":" + item, seconds); }
             public void tag(String tag, String... names) {
                 String[] q = new String[names.length];

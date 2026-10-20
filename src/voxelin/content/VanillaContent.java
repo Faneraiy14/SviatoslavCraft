@@ -117,12 +117,14 @@ public final class VanillaContent implements VoxelinMod {
         r.item("apple", new ItemSettings().color(0xD62C2C).food(4).texture("apple").title("Яблуко"));
         String[] mat = {"wooden", "stone", "iron", "diamond"}, matTitle = {"Дерев'яна", "Кам'яна", "Залізна", "Алмазна"};
         int[] tier = {1, 2, 3, 4}, dur = {60, 132, 251, 1562}, col = {0xA9824B, 0x8A8A8A, 0xD8D8D8, 0x5DE6E0};
-        float[] spd = {2f, 4f, 6f, 8f};
+        float[] spd = {2f, 4f, 6f, 8f}, pickAtk = {2f, 3f, 4f, 5f}, axeAtk = {3f, 4f, 5f, 6f}, shovelAtk = {1.5f, 2.5f, 3.5f, 4.5f}, swordAtk = {4f, 5f, 6f, 7f};
+        String[] matTitleM = {"Дерев'яний", "Кам'яний", "Залізний", "Алмазний"};
         for (int i = 0; i < 4; i++) {
             tex(mat[i] + "_pickaxe", ItemTextureGen.pickaxe(i)); tex(mat[i] + "_axe", ItemTextureGen.axe(i)); tex(mat[i] + "_shovel", ItemTextureGen.shovel(i));
-            r.item(mat[i] + "_pickaxe", new ItemSettings().tool(ToolKind.PICKAXE, tier[i], spd[i]).durability(dur[i]).color(col[i]).texture(mat[i] + "_pickaxe").title(matTitle[i] + " кирка"));
-            r.item(mat[i] + "_axe", new ItemSettings().tool(ToolKind.AXE, tier[i], spd[i]).durability(dur[i]).color(col[i]).texture(mat[i] + "_axe").title(matTitle[i] + " сокира"));
-            r.item(mat[i] + "_shovel", new ItemSettings().tool(ToolKind.SHOVEL, tier[i], spd[i]).durability(dur[i]).color(col[i]).texture(mat[i] + "_shovel").title(matTitle[i] + " лопата"));
+            r.item(mat[i] + "_pickaxe", new ItemSettings().tool(ToolKind.PICKAXE, tier[i], spd[i]).durability(dur[i]).attack(pickAtk[i]).color(col[i]).texture(mat[i] + "_pickaxe").title(matTitle[i] + " кирка"));
+            r.item(mat[i] + "_axe", new ItemSettings().tool(ToolKind.AXE, tier[i], spd[i]).durability(dur[i]).attack(axeAtk[i]).color(col[i]).texture(mat[i] + "_axe").title(matTitle[i] + " сокира"));
+            r.item(mat[i] + "_sword", new ItemSettings().durability(dur[i]).attack(swordAtk[i]).color(col[i]).title(matTitleM[i] + " меч"));
+            r.item(mat[i] + "_shovel", new ItemSettings().tool(ToolKind.SHOVEL, tier[i], spd[i]).durability(dur[i]).attack(shovelAtk[i]).color(col[i]).texture(mat[i] + "_shovel").title(matTitle[i] + " лопата"));
         }
 
         tex("iron_ingot", ItemTextureGen.ingot(0xD8D8D8)); tex("copper_ingot", ItemTextureGen.ingot(0xC8764A)); tex("gold_ingot", ItemTextureGen.ingot(0xF5D13A));
@@ -153,8 +155,48 @@ public final class VanillaContent implements VoxelinMod {
         for (int i = 0; i < 4; i++) {
             r.recipe(mat[i] + "_pickaxe", RecipeSettings.shaped("MM", ".S", ".S").key('M', headKey[i]).key('S', "stick").result(mat[i] + "_pickaxe", 1));
             r.recipe(mat[i] + "_axe", RecipeSettings.shaped("M.", "MS", ".S").key('M', headKey[i]).key('S', "stick").result(mat[i] + "_axe", 1));
+            r.recipe(mat[i] + "_sword", RecipeSettings.shaped("M", "M", "S").key('M', headKey[i]).key('S', "stick").result(mat[i] + "_sword", 1));
             r.recipe(mat[i] + "_shovel", RecipeSettings.shaped("M", "S", "S").key('M', headKey[i]).key('S', "stick").result(mat[i] + "_shovel", 1));
         }
+
+        // --- їжа й здобич з істот
+        r.item("raw_chicken", new ItemSettings().color(0xE8B8A0).food(2).title("Сире куряче м'ясо"));
+        r.item("cooked_chicken", new ItemSettings().color(0xC98A4A).food(6).title("Смажена курка"));
+        r.item("raw_beef", new ItemSettings().color(0xC0504A).food(3).title("Сира яловичина"));
+        r.item("steak", new ItemSettings().color(0x7A4A2A).food(8).title("Стейк"));
+        r.item("rotten_flesh", new ItemSettings().color(0x6B7A3A).food(1).title("Гнила плоть"));
+        r.item("leather", new ItemSettings().color(0x8A5A32).title("Шкіра"));
+        r.item("feather", new ItemSettings().color(0xF0F0F0).title("Пір'я"));
+        r.item("string", new ItemSettings().color(0xDDDDCC).title("Нитка"));
+        r.recipe("cook_chicken", RecipeSettings.smelting("raw_chicken", 10).result("cooked_chicken", 1));
+        r.recipe("cook_beef", RecipeSettings.smelting("raw_beef", 10).result("steak", 1));
+
+        // --- істоти (моделі - прості коробки; своє й текстуровані - пізніше)
+        r.mob("chicken", new MobSettings().health(4).speed(1.6f).size(0.4f, 0.75f).behavior(MobSettings.Behavior.PASSIVE).spawnOn("grass").title("Курка")
+                .drops("raw_chicken", 1, 1, 1f).drops("feather", 0, 2, 1f)
+                .part(0, 0.25f, 0, 0.36f, 0.30f, 0.5f, 0xF2F2F2).part(0, 0.5f, -0.3f, 0.2f, 0.3f, 0.2f, 0xF2F2F2).part(0, 0.52f, -0.43f, 0.1f, 0.07f, 0.08f, 0xF0A030)
+                .part(0, 0.78f, -0.3f, 0.06f, 0.07f, 0.1f, 0xD03030).part(0, 0.4f, 0.28f, 0.2f, 0.2f, 0.08f, 0xE6E6E6)
+                .legPart(-0.09f, 0, 0, 0.06f, 0.25f, 0.06f, 0xF0A030, false).legPart(0.09f, 0, 0, 0.06f, 0.25f, 0.06f, 0xF0A030, true));
+        r.mob("cow", new MobSettings().health(10).speed(1.5f).size(0.9f, 1.4f).behavior(MobSettings.Behavior.PASSIVE).spawnOn("grass").title("Корова")
+                .drops("raw_beef", 1, 3, 1f).drops("leather", 0, 2, 1f)
+                .part(0, 0.55f, 0, 0.8f, 0.7f, 1.2f, 0x6B4A2B).part(0, 1.0f, 0.1f, 0.5f, 0.06f, 0.6f, 0xE8E0D0)
+                .part(0, 0.95f, -0.75f, 0.5f, 0.5f, 0.4f, 0x5C3E22).part(0, 0.9f, -0.97f, 0.3f, 0.2f, 0.08f, 0xE8B0B0)
+                .part(-0.22f, 1.4f, -0.7f, 0.06f, 0.15f, 0.06f, 0xDDDDDD).part(0.22f, 1.4f, -0.7f, 0.06f, 0.15f, 0.06f, 0xDDDDDD)
+                .legPart(-0.28f, 0, -0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, false).legPart(0.28f, 0, -0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, true)
+                .legPart(-0.28f, 0, 0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, true).legPart(0.28f, 0, 0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, false));
+        r.mob("zombie", new MobSettings().health(20).speed(2.4f).size(0.6f, 1.8f).behavior(MobSettings.Behavior.HOSTILE).attack(3, 1.2f, 1f).detect(16).burnsInSun(true).title("Зомбі")
+                .drops("rotten_flesh", 0, 2, 1f)
+                .legPart(-0.14f, 0, 0, 0.25f, 0.8f, 0.25f, 0x2B3F8F, false).legPart(0.14f, 0, 0, 0.25f, 0.8f, 0.25f, 0x2B3F8F, true)
+                .part(0, 0.8f, 0, 0.5f, 0.7f, 0.25f, 0x2F8F8F)
+                .part(-0.38f, 1.0f, -0.25f, 0.2f, 0.2f, 0.6f, 0x5B8F3A).part(0.38f, 1.0f, -0.25f, 0.2f, 0.2f, 0.6f, 0x5B8F3A)
+                .part(0, 1.5f, 0, 0.5f, 0.5f, 0.5f, 0x5B8F3A));
+        MobSettings spider = new MobSettings().health(16).speed(3.2f).size(1.0f, 0.6f).behavior(MobSettings.Behavior.NEUTRAL_DAY).attack(2, 1.3f, 0.8f).detect(12).title("Павук")
+                .drops("string", 0, 2, 1f)
+                .part(0, 0.25f, 0.15f, 0.6f, 0.35f, 0.6f, 0x2A2420).part(0, 0.28f, -0.4f, 0.4f, 0.3f, 0.35f, 0x3A302A)
+                .part(-0.1f, 0.4f, -0.58f, 0.07f, 0.07f, 0.04f, 0xCC2020).part(0.1f, 0.4f, -0.58f, 0.07f, 0.07f, 0.04f, 0xCC2020);
+        float[] legZ = {-0.25f, -0.05f, 0.15f, 0.35f};
+        for (int i = 0; i < 4; i++) { spider.legPart(-0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 == 0); spider.legPart(0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 != 0); }
+        r.mob("spider", spider);
 
         Commands c = ctx.commands();
         c.register("setblock", "<x> <y> <z> <блок>", 2, k -> {
@@ -238,6 +280,28 @@ public final class VanillaContent implements VoxelinMod {
             w.spawnItem(voxelin.core.Pos.ofBlock(o[0], o[1] + 1.2, o[2]), t.name, n, 0, true);
             k.reply("Викинуто " + n + " x " + t.name);
         });
+        c.register("summon", "<вид> [кількість]", 2, k -> {
+            if (!(k.world() instanceof voxelin.core.World)) throw new Commands.CommandException("Недоступно");
+            voxelin.core.World w = (voxelin.core.World) k.world();
+            if (k.args().isEmpty() || k.args().size() > 2) throw new Commands.CommandException("Потрібен вид істоти й (необов'язково) кількість");
+            voxelin.core.MobType t = w.mobTypes.find(k.args().get(0));
+            if (t == null) throw new Commands.CommandException("Невідомий вид: " + k.args().get(0));
+            int n = 1;
+            if (k.args().size() == 2) try { n = Integer.parseInt(k.args().get(1)); } catch (NumberFormatException e) { throw new Commands.CommandException("Не число: " + k.args().get(1)); }
+            if (n < 1 || n > 32) throw new Commands.CommandException("Кількість від 1 до 32: " + n);
+            long[] o = k.origin();
+            int made = 0;
+            for (int i = 0; i < n; i++) if (w.summon(t, o[0] + 2 + i % 4, (int) o[1], o[2] + i / 4) != null) made++;
+            k.reply(made == 0 ? "Не вдалось (чанк не завантажено або забагато істот)" : "Створено " + made + " x " + t.name);
+        });
+        c.register("killall", "[вид]", 2, k -> {
+            if (!(k.world() instanceof voxelin.core.World)) throw new Commands.CommandException("Недоступно");
+            voxelin.core.World w = (voxelin.core.World) k.world();
+            if (k.args().size() > 1) throw new Commands.CommandException("Потрібен щонайбільше один аргумент");
+            voxelin.core.MobType t = null;
+            if (k.args().size() == 1) { t = w.mobTypes.find(k.args().get(0)); if (t == null) throw new Commands.CommandException("Невідомий вид: " + k.args().get(0)); }
+            k.reply("Прибрано істот: " + w.killAll(t));
+        });
         c.register("clear", "", 2, k -> {
             ItemHolder h = k.world().items(k.source());
             if (h == null) throw new Commands.CommandException("У цього джерела нема інвентаря");
@@ -252,7 +316,7 @@ public final class VanillaContent implements VoxelinMod {
             if (now && !was && h != null) for (String s : STARTER) h.give(s, 64);
             k.reply("Режим гри: " + k.world().gameMode());
         });
-        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
+        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /summon, /killall, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
     }
 
     /** Назва блока з аргументу команди: "stone" = "voxelin:stone". */

@@ -8,7 +8,7 @@ import voxelin.api.ToolKind;
 public final class ItemType implements ItemRef {
     public final String name;
     public final int maxStack, durability, tier, food, color;
-    public final float speed;
+    public final float speed, attack;
     public final ToolKind tool;
     public final String texture;
     /** Назва для людей. */
@@ -20,6 +20,7 @@ public final class ItemType implements ItemRef {
         this.name = name;
         title = s.titleText() != null ? s.titleText() : prettify(name);
         durability = s.durabilityValue(); maxStack = durability > 0 ? 1 : s.maxStackValue(); tier = s.tierValue(); speed = s.speedValue(); tool = s.toolKind();
+        attack = s.attackValue();
         food = s.foodValue(); color = s.colorValue(); texture = s.textureName(); placesBlock = s.placesBlockName();
     }
 

@@ -13,6 +13,9 @@ public interface Registries {
     void fuel(String item, float seconds);
     /** Додати предмети до мітки ("planks", "logs"): у рецептах пишеться "#planks". Мітки спільні для всіх модів. */
     void tag(String tag, String... items);
+    /** Зареєструвати вид істоти (назва без двокрапки отримує префікс мода). */
+    MobRef mob(String name, MobSettings settings);
+    MobRef findMob(String fullName);
     /** Знайти блок за повною назвою ("voxelin:stone") або null. */
     BlockRef findBlock(String fullName);
     /**

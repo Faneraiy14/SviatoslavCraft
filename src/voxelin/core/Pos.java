@@ -28,6 +28,9 @@ public final class Pos {
     /** Зсунути на (dx,dy,dz) блоків (малі зсуви) і нормалізувати. */
     public Pos add(double dx, double dy, double dz) { x += dx; y += dy; z += dz; return normalize(); }
 
+    /** Координата блока за чанком (long) і зсувом усередині чанка (може виходити за 0..16). */
+    public static long blockOf(long chunk, double local) { return chunk * 16 + (long) Math.floor(local); }
+
     /** Координата блока X/Z, у якому лежить позиція. */
     public long blockX() { return cx * 16 + (long) Math.floor(x); }
     public long blockZ() { return cz * 16 + (long) Math.floor(z); }

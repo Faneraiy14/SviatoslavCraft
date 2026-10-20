@@ -16,11 +16,12 @@ public final class Game {
     public final BlockRegistry blocks = new BlockRegistry();
     public final ItemRegistry items = new ItemRegistry();
     public final RecipeRegistry recipes = new RecipeRegistry();
+    public final MobRegistry mobTypes = new MobRegistry();
     public final EventBus events = new EventBus();
     public final CommandRegistry commands = new CommandRegistry();
     /** Текстури з реєстру (назва -> {пікселі 16x16}); етап «Новий світ» збирає з них атлас. */
     public final Map<String, int[][]> textures = new LinkedHashMap<>();
-    public final ModLoader mods = new ModLoader(blocks, items, recipes, events, commands, textures);
+    public final ModLoader mods = new ModLoader(blocks, items, recipes, mobTypes, events, commands, textures);
     public final File savesDir;
 
     public Game(File savesDir, File modsDir) {
@@ -31,6 +32,7 @@ public final class Game {
         blocks.freeze();
         items.freeze();
         recipes.freeze(items);
+        mobTypes.freeze();
     }
 
     public File worldDir(String name) {
@@ -56,6 +58,6 @@ public final class Game {
     public World openWorld(String name) throws IOException {
         File d = worldDir(name);
         WorldInfo info = WorldInfo.load(d);
-        return new World(d, info, blocks, items, recipes, events, new TerrainGenerator(info.seed, info.type, blocks));
+        return new World(d, info, blocks, items, recipes, mobTypes, events, new TerrainGenerator(info.seed, info.type, blocks));
     }
 }

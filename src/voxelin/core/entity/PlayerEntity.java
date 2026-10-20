@@ -38,6 +38,9 @@ public final class PlayerEntity {
     /** Висота падіння (блоків), накопичена до приземлення в цьому тіку; читання скидає. Падіння у воду не рахується. */
     public double takeLanded() { double f = landedFall; landedFall = 0; return f; }
 
+    /** Поштовх (відкидання від удару), блоків/с. */
+    public void knock(double kx, double ky, double kz) { vx += kx; vz += kz; vy = Math.max(vy, ky); if (ky > 0) onGround = false; }
+
     public void rotate(float dYaw, float dPitch) { yaw += dYaw; pitch = Math.max(-89f, Math.min(89f, pitch + dPitch)); }
 
     /** Один тік: рух за клавішами, стрибок, гравітація, колізії. */

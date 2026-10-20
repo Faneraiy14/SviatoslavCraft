@@ -3,6 +3,7 @@ package voxelin.core;
 import voxelin.api.*;
 import voxelin.api.event.*;
 import voxelin.core.entity.ItemEntity;
+import voxelin.core.entity.Mob;
 import voxelin.core.entity.Vitals;
 import voxelin.core.gen.Generator;
 
@@ -37,6 +38,7 @@ public final class World implements WorldAccess {
     public final BlockRegistry blocks;
     public final ItemRegistry itemTypes;
     public final RecipeRegistry recipes;
+    public final MobRegistry mobTypes;
     private final EventBus events;
     private final Generator generator;
     private final RegionStorage storage;
@@ -57,8 +59,8 @@ public final class World implements WorldAccess {
     /** Статистика для F3 і --bench. */
     public volatile long genNanos, genCount;
 
-    public World(File dir, WorldInfo info, BlockRegistry blocks, ItemRegistry itemTypes, RecipeRegistry recipes, EventBus events, Generator generator) throws IOException {
-        this.dir = dir; this.info = info; this.blocks = blocks; this.itemTypes = itemTypes; this.recipes = recipes; this.events = events; this.generator = generator;
+    public World(File dir, WorldInfo info, BlockRegistry blocks, ItemRegistry itemTypes, RecipeRegistry recipes, MobRegistry mobTypes, EventBus events, Generator generator) throws IOException {
+        this.dir = dir; this.info = info; this.blocks = blocks; this.itemTypes = itemTypes; this.recipes = recipes; this.mobTypes = mobTypes; this.events = events; this.generator = generator;
         storage = new RegionStorage(dir);
         light = new LightEngine(blocks, (c, sy) -> { if (listener != null) listener.lightChanged(c, sy); });
         rt2p = new int[blocks.size()];
@@ -71,6 +73,7 @@ public final class World implements WorldAccess {
         info.save(dir); // палітра могла дописатись новими блоками
         loadItems();
         loadBlockEntities();
+        loadMobs();
         // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
         int threads = Integer.getInteger("voxelin.genThreads", Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)));
         genPool = Executors.newFixedThreadPool(threads, daemon("voxelin-gen"));
@@ -207,6 +210,111 @@ public final class World implements WorldAccess {
             it.remove();
         }
         return n;
+    }
+
+    // ------------------------------------------------------------------ істоти
+
+    public static final int MAX_MOBS = 256;
+    private final List<Mob> mobs = new ArrayList<>();
+    private final Random mobRng = new Random();
+    private final MobSpawner spawner = new MobSpawner();
+    private PlayerTarget target;
+    /** Вимкнути природний спавн (тести, /gamerule пізніше). */
+    public boolean naturalSpawning = true;
+
+    public List<Mob> mobs() { return Collections.unmodifiableList(mobs); }
+    public void setPlayerTarget(PlayerTarget t) { target = t; }
+    public Random mobRandom() { return mobRng; }
+    public MobSpawner spawner() { return spawner; }
+
+    /** Створити істоту; null - забагато істот у світі. */
+    public Mob spawnMob(MobType type, Pos at) {
+        if (mobs.size() >= MAX_MOBS) return null;
+        Mob m = new Mob(type, at);
+        m.yaw = mobRng.nextFloat() * 360f;
+        mobs.add(m);
+        return m;
+    }
+
+    /** Для команд: поставити істоту біля блока (x,y,z), піднявши її, якщо там твердо (до 5 блоків). */
+    public Mob summon(MobType type, long x, int y, long z) {
+        int yy = y;
+        for (int i = 0; i < 6 && (isSolid(x, yy, z) || isSolid(x, yy + 1, z)); i++) yy++;
+        if (blockId(x, yy, z) < 0) return null; // чанк не завантажено
+        return spawnMob(type, Pos.ofBlock(x, yy, z));
+    }
+
+    /** Прибрати всіх істот (type == null) або лише цього виду, без дропу. Повертає, скільки. */
+    public int killAll(MobType type) {
+        int n = 0;
+        for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) { Mob m = it.next(); if (type == null || m.type == type) { it.remove(); n++; } }
+        return n;
+    }
+
+    /** Удар по істоті (шкода, поштовх від (kx,kz)); дроп - у момент смерті. */
+    public boolean hurtMob(Mob m, double damage, double kx, double kz, Pos from) {
+        boolean ok = m.damage(damage, kx, kz, from);
+        if (ok && m.dying) dropLoot(m);
+        return ok;
+    }
+
+    private void dropLoot(Mob m) {
+        if (m.lootDropped) return;
+        m.lootDropped = true;
+        for (voxelin.api.BlockSettings.Drop d : m.type.drops) {
+            if (d.chance < 1f && mobRng.nextFloat() >= d.chance) continue;
+            int n = d.min + (d.max > d.min ? mobRng.nextInt(d.max - d.min + 1) : 0);
+            if (n > 0) spawnItem(new Pos(m.pos.cx, m.pos.cz, m.pos.x, m.pos.y + m.type.height / 2, m.pos.z), d.item, n, 0, true);
+        }
+    }
+
+    private void tickMobs() {
+        if (naturalSpawning) spawner.tick(this, target, mobRng, tick);
+        Pos pc = target == null ? null : target.body();
+        for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
+            Mob m = it.next();
+            m.tick(this, target, mobRng);
+            if (m.dying && !m.lootDropped) dropLoot(m);
+            if (m.removable()) { it.remove(); continue; }
+            if (pc != null) { // далекі зникають (вороги ближче, ніж мирні)
+                double dx = m.pos.relX(pc.cx) - pc.x, dz = m.pos.relZ(pc.cz) - pc.z, d2 = dx * dx + dz * dz;
+                if (naturalSpawning && ((m.type.hostile() && d2 > 80 * 80) || d2 > 128 * 128)) it.remove();
+            }
+        }
+    }
+
+    private File mobsFile() { return new File(dir, "mobs.dat"); }
+
+    private void saveMobs() {
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (Mob m : mobs) if (m.type.passive() && !m.dying) sb.append(m.type.name).append(' ').append(m.pos.cx).append(' ').append(m.pos.cz).append(' ').append(m.pos.x).append(' ').append(m.pos.y).append(' ').append(m.pos.z).append(' ').append(m.health).append(' ').append(m.yaw).append('\n');
+            File tmp = new File(dir, "mobs.dat.tmp");
+            java.nio.file.Files.write(tmp.toPath(), sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Files2.replace(tmp, mobsFile());
+        } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати істот: " + e); }
+    }
+
+    private void loadMobs() {
+        File f = mobsFile();
+        if (!f.isFile()) return;
+        try {
+            for (String line : java.nio.file.Files.readAllLines(f.toPath(), java.nio.charset.StandardCharsets.UTF_8)) {
+                String[] p = line.trim().split(" ");
+                if (p.length != 8) continue;
+                MobType t = mobTypes.get(p[0]);
+                if (t == null || mobs.size() >= 200) continue;
+                try {
+                    long cx = Long.parseLong(p[1]), cz = Long.parseLong(p[2]);
+                    double x = Double.parseDouble(p[3]), y = Double.parseDouble(p[4]), z = Double.parseDouble(p[5]), hp = Double.parseDouble(p[6]);
+                    float yaw = Float.parseFloat(p[7]);
+                    if (!inRange(cx, cz) || Double.isNaN(x + y + z + hp + yaw) || Double.isInfinite(x + y + z + hp + yaw) || x < 0 || x >= 16 || z < 0 || z >= 16 || y < -30 || y > 400 || hp <= 0) continue;
+                    Mob m = new Mob(t, new Pos(cx, cz, x, y, z));
+                    m.health = Math.min(hp, t.health); m.yaw = yaw;
+                    mobs.add(m);
+                } catch (NumberFormatException e) { /* бита клітинка */ }
+            }
+        } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось прочитати істот: " + e); }
     }
 
     // ------------------------------------------------------------------ блок-сутності (піч)
@@ -442,6 +550,7 @@ public final class World implements WorldAccess {
         info.time++;
         tickItems();
         tickBlockEntities();
+        tickMobs();
         budgets.clear();
         events.post(new TickEvent(this, tick));
         if (System.currentTimeMillis() - lastAutosave > 30_000) { lastAutosave = System.currentTimeMillis(); autosave(); }
@@ -464,6 +573,7 @@ public final class World implements WorldAccess {
         }
         saveItems();
         saveBlockEntities();
+        saveMobs();
         try { info.save(dir); } catch (IOException e) { System.out.println("[Voxelin] ⚠️ " + e); }
     }
 

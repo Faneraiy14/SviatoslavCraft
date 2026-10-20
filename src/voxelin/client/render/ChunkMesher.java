@@ -15,6 +15,11 @@ public final class ChunkMesher {
     /** Властивості блоків за id (знімок реєстру; незмінні). */
     public static final class Props {
         final boolean[] opaque, translucent, air;
+        public boolean[] opaque() { return opaque; }
+        public boolean[] translucent() { return translucent; }
+        public boolean[] air() { return air; }
+        /** Власне світло блока (0..15) - лампа сяє й сама; null - ні в кого. */
+        public int[] emit;
         final int[] color, layerTop, layerSide, layerBottom;
         /** color - множник кольору (білий для блоків із текстурою); layer* - шар масиву текстур для верху/боків/низу (0 - біла плитка). */
         public Props(boolean[] opaque, boolean[] translucent, boolean[] air, int[] color, int[] layerTop, int[] layerSide, int[] layerBottom) {
@@ -31,10 +36,16 @@ public final class ChunkMesher {
 
     public static int index(int x, int y, int z) { return (x + 1) + (z + 1) * P + (y + 1) * P * P; }
 
+    /** Світло невідомого/«все небо»: небо 15, блоки 0. */
+    public static final byte FULL_SKY = (byte) 0xF0;
     private final int[] mask = new int[16 * 16];
     private FloatList solid = new FloatList(), trans = new FloatList();
 
-    public Mesh build(short[] padded, Props props) {
+    /** Без світла (повне небо): для тестів і простих випадків. */
+    public Mesh build(short[] padded, Props props) { return build(padded, null, props); }
+
+    /** light - такий самий обгорнутий масив 18^3 (небо<<4 | блок) або null. Грані з різним світлом не зливаються. */
+    public Mesh build(short[] padded, byte[] light, Props props) {
         solid.clear(); trans.clear();
         int[] pos = new int[3], step = new int[3];
         for (int face = 0; face < 6; face++) {
@@ -50,24 +61,29 @@ public final class ChunkMesher {
                         pos[axis] += positive ? 1 : -1;
                         int nb = padded[index(pos[0], pos[1], pos[2])];
                         boolean visible = nb <= 0 || props.air[nb] || (!props.opaque[nb] && nb != id);
-                        if (visible) m = id;
+                        if (visible) {
+                            int lv = light == null ? 0xF0 : light[index(pos[0], pos[1], pos[2])] & 0xFF; // світло клітинки, у яку дивиться грань
+                            if (props.emit != null && props.emit[id] > (lv & 15)) lv = (lv & 0xF0) | props.emit[id];
+                            m = id | (lv << 16);
+                        }
                     }
                     mask[a + b * 16] = m;
                 }
                 // жадібне злиття прямокутників
                 for (int b = 0; b < 16; b++) for (int a = 0; a < 16; ) {
-                    int id = mask[a + b * 16];
-                    if (id == 0) { a++; continue; }
+                    int key = mask[a + b * 16];
+                    if (key == 0) { a++; continue; }
+                    int id = key & 0xFFFF, lv = key >>> 16;
                     int w = 1;
-                    while (a + w < 16 && mask[a + w + b * 16] == id) w++;
+                    while (a + w < 16 && mask[a + w + b * 16] == key) w++;
                     int h = 1;
                     outer:
                     while (b + h < 16) {
-                        for (int k = 0; k < w; k++) if (mask[a + k + (b + h) * 16] != id) break outer;
+                        for (int k = 0; k < w; k++) if (mask[a + k + (b + h) * 16] != key) break outer;
                         h++;
                     }
                     for (int hh = 0; hh < h; hh++) for (int k = 0; k < w; k++) mask[a + k + (b + hh) * 16] = 0;
-                    quad(props.translucent[id] ? trans : solid, face, axis, u, v, positive ? s + 1 : s, a, b, a + w, b + h, color(props, id, face), layer(props, id, face));
+                    quad(props.translucent[id] ? trans : solid, face, axis, u, v, positive ? s + 1 : s, a, b, a + w, b + h, color(props, id, face), layer(props, id, face), face + 8 * (lv >> 4) + 128 * (lv & 15));
                     a += w;
                 }
             }
@@ -90,7 +106,7 @@ public final class ChunkMesher {
     private static int layer(Props p, int id, int face) { return face == 2 ? p.layerTop[id] : (face == 3 ? p.layerBottom[id] : p.layerSide[id]); }
 
     /** Чотирикутник проти годинникової стрілки, якщо дивитись ззовні (для відсікання задніх граней). */
-    private static void quad(FloatList out, int face, int axis, int u, int v, int plane, int u0, int v0, int u1, int v1, int rgba, int layer) {
+    private static void quad(FloatList out, int face, int axis, int u, int v, int plane, int u0, int v0, int u1, int v1, int rgba, int layer, int faceLight) {
         int[][] corners = (face & 1) == 0
                 ? new int[][]{{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}}
                 : new int[][]{{u0, v0}, {u0, v1}, {u1, v1}, {u1, v0}};
@@ -98,7 +114,7 @@ public final class ChunkMesher {
         float[] p = new float[3];
         for (int[] c : corners) {
             p[axis] = plane; p[u] = c[0]; p[v] = c[1];
-            out.add(p[0]); out.add(p[1]); out.add(p[2]); out.add(colorBits); out.add(face); out.add(layer);
+            out.add(p[0]); out.add(p[1]); out.add(p[2]); out.add(colorBits); out.add(faceLight); out.add(layer);
         }
     }
 

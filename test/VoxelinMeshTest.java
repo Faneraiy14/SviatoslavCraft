@@ -69,8 +69,29 @@ public class VoxelinMeshTest {
         // вершини в межах секції й грань кодується числом 0..5
         for (int i = 0; i < r.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) {
             check(r.solid[i] >= 0 && r.solid[i] <= 16 && r.solid[i + 1] >= 0 && r.solid[i + 1] <= 16 && r.solid[i + 2] >= 0 && r.solid[i + 2] <= 16, "вершина в межах секції");
-            check(r.solid[i + 4] >= 0 && r.solid[i + 4] <= 5, "номер грані");
+            int pf = (int) r.solid[i + 4];
+            check((pf & 7) <= 5 && (pf >> 3 & 15) == 15 && (pf >> 7) == 0, "номер грані + повне небо без блокового світла: " + pf);
         }
+        // світло: грані з різним світлом не зливаються, з однаковим - зливаються; пакування aFace = грань + 8*небо + 128*блок
+        p = empty();
+        for (int x = 0; x < 4; x++) for (int z = 0; z < 4; z++) set(p, x, 0, z, 1); // плита 4x4, верх дивиться в y=1
+        byte[] lp = new byte[18 * 18 * 18];
+        java.util.Arrays.fill(lp, (byte) 0xF0);
+        r = m.build(p, lp, PROPS);
+        check(r.solidQuads == 6, "плита з однаковим світлом - шість склеєних граней: " + r.solidQuads);
+        lp[ChunkMesher.index(2, 1, 1)] = (byte) 0x5A; // над одним блоком інше світло: небо 5, блок 10
+        r = m.build(p, lp, PROPS);
+        check(r.solidQuads > 6, "різне світло ламає склеювання: " + r.solidQuads);
+        boolean found = false;
+        for (int i = 0; i < r.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) if ((int) r.solid[i + 4] == 2 + 8 * 5 + 128 * 10) found = true;
+        check(found, "світло запаковане в aFace (верхня грань, небо 5, блок 10)");
+        lp[ChunkMesher.index(2, 1, 1)] = (byte) 0xF0;
+        ChunkMesher.Props pe = new ChunkMesher.Props(PROPS.opaque(), PROPS.translucent(), PROPS.air(), new int[]{0, 0x808080, 0x804D1A, 0xCFEFF5}, new int[4], new int[4], new int[4]);
+        pe.emit = new int[]{0, 12, 0, 0}; // «камінь» тут світиться сам на 12
+        r = m.build(p, lp, pe);
+        found = false;
+        for (int i = 0; i < r.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) if ((int) r.solid[i + 4] >> 7 == 12) found = true;
+        check(found, "блок, що світиться, сяє й сам (emit піднімає блокове світло граней)");
         // ключі секцій: від'ємні й гігантські координати чанків (регресія - з них зникав світ ліворуч від початку)
         long[] cs = {0, 1, -1, 5, -5, 1000, -1000, 8_388_607, -8_388_608, 1L << 40, -(1L << 40), Long.MAX_VALUE >> 5, -(Long.MAX_VALUE >> 5)};
         java.util.Set<SectionPos> set = new java.util.HashSet<>();

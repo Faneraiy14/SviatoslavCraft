@@ -37,6 +37,14 @@ public final class Chunk {
     public int blockLight(int x, int y, int z) { return y < 0 || y >= HEIGHT ? 0 : blkIdx(x | (z << 4) | (y << 8)); }
     public Chunk neighbor(int dir) { return nb[dir]; }
 
+    /** Світло клітинки одним байтом: небо<<4 | блок (y поза світом: нижче 0 - темно, вище - небо). Для мешера. */
+    public int lightAt(int x, int y, int z) {
+        if (y < 0) return 0;
+        if (y >= HEIGHT) return 0xF0;
+        byte[] a = light[y >> 4];
+        return a == null ? 0xF0 : a[(x | (z << 4) | (y << 8)) & 4095] & 0xFF;
+    }
+
     int skyIdx(int idx) { byte[] a = light[idx >> 12]; return a == null ? 15 : (a[idx & 4095] >> 4) & 15; }
     int blkIdx(int idx) { byte[] a = light[idx >> 12]; return a == null ? 0 : a[idx & 4095] & 15; }
 

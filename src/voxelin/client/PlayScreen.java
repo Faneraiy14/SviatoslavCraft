@@ -42,6 +42,7 @@ final class PlayScreen {
         this.v = v; this.world = world;
         rend = new WorldRenderer(world, v.textures);
         rend.renderDistance = v.opts.renderDistance;
+        rend.skyBrightness = v.opts.sky;
         actions = new LocalActions(world, v.game.commands, Sources.player("Player"));
         long[] land = world.findLand(0, 0); // не з'являтись у морі
         spawn = findSpawn(land[0], land[1]);
@@ -306,12 +307,22 @@ final class PlayScreen {
         Gui.text("Крафт і новий інвентар - етап «Виживання»", x0 - 8, y0 + 4 * (size + gap) + 58, 1.8f, 0.3f, 0.3f, 0.3f);
     }
 
+    private String lightLine() {
+        Pos p = player.pos;
+        Chunk c = world.chunk(p.cx, p.cz);
+        if (c == null) return "Світло: -";
+        int lx = p.blockX() >= 0 ? (int) (p.blockX() & 15) : (int) (p.blockX() & 15), lz = (int) (p.blockZ() & 15);
+        int y = (int) Math.floor(p.y - PlayerEntity.EYE + 0.5), l = c.lightAt(lx, y, lz);
+        return "Світло: небо " + (l >> 4) + "  блок " + (l & 15);
+    }
+
     private void debugText() {
         Pos p = player.pos;
         String[] lines = {
                 "Voxelin " + Voxelin.VERSION,
                 "XYZ: " + p.fmtX() + " " + String.format(Locale.ROOT, "%.1f", p.y - PlayerEntity.EYE) + " " + p.fmtZ() + "  (блоки)",
                 String.format(Locale.ROOT, "Кут: %.0f / %.0f   FPS: %d   чанк: %d %d", player.yaw, player.pitch, v.fps, p.cx, p.cz),
+                lightLine(),
                 "Біом: " + world.biomeAt(p.blockX(), p.blockZ()) + (player.inWater ? "  (у воді)" : ""),
                 "Чанків: " + world.loadedChunks().size() + "  мешів: " + rend.meshCountLoaded() + "  у черзі: " + rend.pending(),
                 "Видно секцій: " + rend.visibleSections + "  граней: " + rend.drawnQuads,

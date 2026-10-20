@@ -25,12 +25,18 @@ public final class WorldRenderer implements World.Listener {
     private static final String VS = """
             #version 130
             in vec3 aPos; in vec4 aColor; in float aFace; in float aLayer;
-            uniform mat4 uProjView; uniform vec3 uOffset; uniform float uScale; uniform vec3 uCam;
+            uniform mat4 uProjView; uniform vec3 uOffset; uniform float uScale; uniform vec3 uCam; uniform float uSky;
+            flat out float vLight;
             out vec4 vColor; out vec3 vBlock; flat out int vFace; out float vDist; out vec2 vUv; flat out float vLayer;
             void main() {
                 vec3 b = aPos + uOffset;
                 vec3 w = b * uScale;
-                int f = int(aFace + 0.5);
+                int pf = int(aFace + 0.5);
+                int f = pf & 7;
+                int sky = (pf >> 3) & 15, blk = pf >> 7;
+                float ls = sky == 0 ? 0.0 : pow(0.8, float(15 - sky)) * uSky;
+                float lb = blk == 0 ? 0.0 : pow(0.8, float(15 - blk));
+                vLight = max(max(ls, lb), 0.04);
                 vBlock = b; vColor = aColor; vFace = f; vLayer = aLayer + 0.5; vDist = length(w - uCam);
                 // UV за гранню: текстура стоїть вертикально на боках (v вниз), на верху/низу - за X/Z; координати в блоках, тож злиті грані повторюють плитку
                 vec2 uv;
@@ -46,7 +52,7 @@ public final class WorldRenderer implements World.Listener {
             """;
     private static final String FS = """
             #version 130
-            in vec4 vColor; in vec3 vBlock; flat in int vFace; in float vDist; in vec2 vUv; flat in float vLayer;
+            flat in float vLight; in vec4 vColor; in vec3 vBlock; flat in int vFace; in float vDist; in vec2 vUv; flat in float vLayer;
             uniform vec3 uFogColor; uniform float uFogStart; uniform float uFogEnd; uniform float uOutline; uniform float uCutout;
             uniform sampler2DArray uTex;
             out vec4 fragColor;
@@ -60,7 +66,7 @@ public final class WorldRenderer implements World.Listener {
                 float aa = fwidth(m) + 0.0001;
                 float line = 1.0 - smoothstep(0.02, 0.02 + aa, e);
                 vec4 base = t * vColor;
-                vec3 c = base.rgb * mix(1.0, 0.8, line * uOutline);
+                vec3 c = base.rgb * vLight * mix(1.0, 0.8, line * uOutline);
                 float fog = clamp((vDist - uFogStart) / max(1.0, uFogEnd - uFogStart), 0.0, 1.0);
                 fragColor = vec4(mix(c, uFogColor, fog), base.a);
             }
@@ -84,14 +90,17 @@ public final class WorldRenderer implements World.Listener {
     private final int poolSize;
     private final ThreadLocal<ChunkMesher> mesher = ThreadLocal.withInitial(ChunkMesher::new);
     private final ThreadLocal<short[]> padded = ThreadLocal.withInitial(() -> new short[ChunkMesher.P * ChunkMesher.P * ChunkMesher.P]);
+    private final ThreadLocal<byte[]> paddedLight = ThreadLocal.withInitial(() -> new byte[ChunkMesher.P * ChunkMesher.P * ChunkMesher.P]);
     private final Shader shader;
     private final TextureArray tex;
-    private final int uProjView, uOffset, uScale, uCam, uFogColor, uFogStart, uFogEnd, uOutline, uCutout, uTex;
+    private final int uProjView, uOffset, uScale, uCam, uFogColor, uFogStart, uFogEnd, uOutline, uCutout, uTex, uSkyU;
     private int ebo, eboQuads;
     private boolean closed;
 
     public int renderDistance = 12;
     public boolean outlines = true;
+    /** Яскравість неба 0..1 (1 - день); пізніше її змінюватиме час доби. */
+    public float skyBrightness = 1f;
     /** Камера під водою: густий синій туман. */
     public boolean underwater;
     public float[] fogColor = {0.53f, 0.71f, 0.92f};
@@ -114,12 +123,14 @@ public final class WorldRenderer implements World.Listener {
             lBot[t.id] = t.texBottom != null ? tex.layer(t.texBottom) : lSide[t.id];
         }
         props = new ChunkMesher.Props(opaque, trans, air, color, lTop, lSide, lBot);
+        props.emit = new int[all.length];
+        for (BlockType t : all) props.emit[t.id] = t.light;
         // потоків мешингу не більше половини ядер: решта - головному потоку (малювання) і робочому столу; -Dvoxelin.meshThreads=N перевизначає
         poolSize = Integer.getInteger("voxelin.meshThreads", Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
         pool = Executors.newFixedThreadPool(poolSize, r -> { Thread t = new Thread(r, "voxelin-mesh"); t.setDaemon(true); t.setPriority(Thread.NORM_PRIORITY - 1); return t; });
         shader = new Shader(VS, FS, "aPos", "aColor", "aFace", "aLayer");
         uProjView = shader.uniform("uProjView"); uOffset = shader.uniform("uOffset"); uScale = shader.uniform("uScale"); uCam = shader.uniform("uCam");
-        uFogColor = shader.uniform("uFogColor"); uFogStart = shader.uniform("uFogStart"); uFogEnd = shader.uniform("uFogEnd"); uOutline = shader.uniform("uOutline"); uCutout = shader.uniform("uCutout"); uTex = shader.uniform("uTex");
+        uFogColor = shader.uniform("uFogColor"); uFogStart = shader.uniform("uFogStart"); uFogEnd = shader.uniform("uFogEnd"); uOutline = shader.uniform("uOutline"); uCutout = shader.uniform("uCutout"); uTex = shader.uniform("uTex"); uSkyU = shader.uniform("uSky");
         ebo = glGenBuffers();
         ensureIndices(4096);
         world.setListener(this);
@@ -145,6 +156,11 @@ public final class WorldRenderer implements World.Listener {
             SectionMesh m = meshes.remove(k);
             if (m != null) free(m);
         }
+    }
+
+    @Override public void lightChanged(Chunk c, int sy) {
+        SectionPos k = new SectionPos(c.cx, sy, c.cz);
+        if (meshes.containsKey(k) && !urgent.contains(k)) dirty.add(k); // секції без меша світло не змінює
     }
 
     @Override public void blockChanged(long x, int y, long z) {
@@ -183,7 +199,15 @@ public final class WorldRenderer implements World.Listener {
         boolean anyOpen = false;
         for (short v : p) if (!props.opaque[v]) { anyOpen = true; break; }
         if (!anyOpen) return new ChunkMesher.Mesh();
-        return mesher.get().build(p, props);
+        byte[] lp = paddedLight.get();
+        for (int y = -1; y <= 16; y++) {
+            int wy = baseY + y;
+            for (int z = -1; z <= 16; z++) for (int x = -1; x <= 16; x++) {
+                Chunk c = around[((x >> 4) + 1) + ((z >> 4) + 1) * 3];
+                lp[ChunkMesher.index(x, y, z)] = (byte) (c == null ? 0xF0 : c.lightAt(x & 15, wy, z & 15));
+            }
+        }
+        return mesher.get().build(p, lp, props);
     }
 
     /** Квадрат відстані між чанками; дуже далекі вважаються нескінченно далекими (без переповнення long). */
@@ -311,6 +335,7 @@ public final class WorldRenderer implements World.Listener {
         glUseProgram(shader.id);
         glUniformMatrix4fv(uProjView, false, cam.projView.m);
         glUniform1f(uScale, S);
+        glUniform1f(uSkyU, skyBrightness);
         glUniform3f(uCam, (float) (cam.eye.x * S), (float) (cam.eye.y * S), (float) (cam.eye.z * S));
         glUniform3f(uFogColor, fogColor[0], fogColor[1], fogColor[2]);
         if (underwater) { glUniform1f(uFogStart, 0f); glUniform1f(uFogEnd, 24 * S); } else { glUniform1f(uFogStart, far * 0.65f); glUniform1f(uFogEnd, far * 0.98f); }

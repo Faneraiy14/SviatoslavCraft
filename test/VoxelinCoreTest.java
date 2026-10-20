@@ -2,6 +2,7 @@ import voxelin.api.*;
 import voxelin.api.event.*;
 import voxelin.core.*;
 import voxelin.core.entity.PlayerEntity;
+import voxelin.core.gen.Noise;
 import voxelin.loader.*;
 import voxelin.client.LocalActions;
 import voxelin.client.PlayerActions;
@@ -27,10 +28,12 @@ public class VoxelinCoreTest {
         generation(root);
         raycast();
         physics();
+        pos();
+        noise();
+        farWorld(root);
         mods(root);
         inventory();
         actions(root);
-        border(root);
         noLwjglInCore(new File(a.length > 0 ? a[0] : "out"));
         System.out.println("VoxelinCoreTest: " + n + " перевірок OK");
     }
@@ -49,7 +52,10 @@ public class VoxelinCoreTest {
         check(c.get(1, 200, 1) == 3 && c.section(200 >> 4) != null, "висота 256: блок на y=200");
         c.set(1, 300, 1, 3); c.set(1, -1, 1, 3);
         check(c.get(1, 300, 1) == 0 && c.get(1, -1, 1) == 0, "поза висотою ігнорується");
-        check(Chunk.key(-1, 5) != Chunk.key(5, -1) && Chunk.key(-1, -1) != Chunk.key(0, 0), "ключі чанків не злипаються");
+        check(!new ChunkPos(-1, 5).equals(new ChunkPos(5, -1)) && !new ChunkPos(-1, -1).equals(new ChunkPos(0, 0)), "ключі чанків не злипаються");
+        java.util.Set<Integer> hashes = new java.util.HashSet<>();
+        for (int x = -50; x <= 50; x++) for (int z = -50; z <= 50; z++) hashes.add(new ChunkPos(x, z).hashCode());
+        check(hashes.size() > 10000, "хеш ChunkPos добре розподілений: " + hashes.size() + " із 10201");
     }
 
     static void registry() {
@@ -90,10 +96,10 @@ public class VoxelinCoreTest {
         World w = newWorld(g, "W", 1);
         loadAround(w, 0, 0, 1);
         Source p = Sources.player("Test");
-        List<String> out = g.commands.execute(p, w, new int[]{0, 100, 0}, "/fill 0 100 0 9 104 9 stone");
+        List<String> out = g.commands.execute(p, w, new long[]{0, 100, 0}, "/fill 0 100 0 9 104 9 stone");
         check(out.get(0).startsWith("Заповнено 500 з 500"), "fill 10x5x10: " + out);
         check(w.getBlock(9, 104, 9).name().equals("voxelin:stone"), "fill поставив блоки");
-        out = g.commands.execute(p, w, new int[]{5, 100, 5}, "setblock ~ ~10 ~-2 glass");
+        out = g.commands.execute(p, w, new long[]{5, 100, 5}, "setblock ~ ~10 ~-2 glass");
         check(w.getBlock(5, 110, 3).name().equals("voxelin:glass"), "setblock з ~: " + out);
         out = g.commands.execute(p, w, null, "/fill 0 0 0 1000 255 1000 stone");
         check(out.get(0).contains("Забагато"), "fill має ліміт обсягу");
@@ -195,51 +201,165 @@ public class VoxelinCoreTest {
         a.close(); b.close(); c.close();
     }
 
+    static final Raycast.Solid NOTHING = (x, y, z) -> false;
+
     static void raycast() {
-        Raycast.Solid wall = (x, y, z) -> x == 3 && y == 0 && z == 0;
-        Raycast.Hit h = Raycast.cast(Units.center(0), Units.center(0), Units.center(0), 90, 0, 10 * Units.BLOCK_SIZE, wall);
-        check(h != null && h.x() == 3 && h.px() == 2, "промінь на схід влучає в стіну, клітинка перед нею вільна");
-        // два блоки, що торкаються лише ребром: промінь рівно по діагоналі не має проскочити між ними
-        Raycast.Solid corner = (x, y, z) -> (x == 1 && y == 0 && z == 0) || (x == 0 && y == 0 && z == -1);
-        Raycast.Hit d = Raycast.cast(Units.center(0), Units.center(0), Units.center(0), 45, 0, 10 * Units.BLOCK_SIZE, corner);
-        check(d != null && d.distance() < 2 * Units.BLOCK_SIZE, "діагональний кут не проскочити (DDA)");
-        check(Raycast.cast(0, 0, 0, 0, 0, Units.BLOCK_SIZE * 3, (x, y, z) -> false) == null, "порожньо - null");
+        for (long base : new long[]{0, 1_000_000_000_000L, -4_000_000_000_000_000L}) { // однаково біля нуля й далеко
+            final long bx = base;
+            Raycast.Solid wall = (x, y, z) -> x == bx + 3 && y == 5 && z == bx;
+            Raycast.Hit h = Raycast.cast(Pos.ofBlock(bx, 5.5, bx), 90, 0, 10, wall);
+            check(h != null && h.x() == bx + 3 && h.px() == bx + 2, "промінь на схід влучає в стіну на " + base + ": " + h);
+            Raycast.Solid corner = (x, y, z) -> (x == bx + 1 && y == 5 && z == bx) || (x == bx && y == 5 && z == bx - 1);
+            Raycast.Hit d = Raycast.cast(Pos.ofBlock(bx, 5.5, bx), 45, 0, 10, corner);
+            check(d != null && d.distance() < 2, "діагональний кут не проскочити (DDA) на " + base);
+        }
+        check(Raycast.cast(Pos.ofBlock(0, 5, 0), 0, 0, 3, NOTHING) == null, "порожньо - null");
     }
 
+    /** Одна й та сама поведінка гравця на будь-якій відстані: падіння, стрибок, стіна, присід біля краю. */
     static void physics() {
-        PlayerEntity.Solid floor = (x, y, z) -> y <= 0;
-        PlayerEntity p = new PlayerEntity(floor, 0, 40, 0);
-        for (int i = 0; i < 200; i++) p.tick(0.05f, false, false, false, false, false, false, false);
-        float feet = p.bodyCenterY() - PlayerEntity.HEIGHT / 2f;
-        check(p.onGround() && Math.abs(feet - Units.BLOCK_SIZE) < 0.26f, "падіння з висоти: стоїть на підлозі без зависання, ноги на " + feet);
-        float y0 = p.y;
-        p.tick(0.05f, false, false, false, false, true, false, false);
-        for (int i = 0; i < 3; i++) p.tick(0.05f, false, false, false, false, false, false, false);
-        check(p.y > y0, "стрибок");
-        PlayerEntity w = new PlayerEntity((x, y, z) -> y <= 0 || x == 5, Units.center(0), Units.BLOCK_SIZE + PlayerEntity.EYE + 0.01f, Units.center(0));
-        for (int i = 0; i < 200; i++) w.tick(0.05f, false, false, false, true, false, true, false);
-        check(w.x < Units.toWorld(5) && w.x > Units.toWorld(3), "стіна зупиняє рух: x=" + w.x);
-        PlayerEntity e = new PlayerEntity((x, y, z) -> y <= 0 && x <= 0, Units.center(0), Units.BLOCK_SIZE + PlayerEntity.EYE + 0.01f, Units.center(0));
-        for (int i = 0; i < 5; i++) e.tick(0.05f, false, false, false, false, false, false, false);
-        for (int i = 0; i < 100; i++) e.tick(0.05f, false, false, false, true, false, false, true);
-        check(e.onGround() && e.x < Units.toWorld(1) + PlayerEntity.WIDTH, "присід не дає впасти з краю: x=" + e.x);
-        check(new PlayerEntity(floor, Units.center(0), 3, Units.center(0)).overlapsBlock(0, 1, 0), "не замурувати себе блоком");
+        for (long base : new long[]{0, 7, -123_456, 1_000_000_000_000L, 1_000_000_000_000_000L, -100_000_000_000_000_000L}) {
+            final long bx = base;
+            PlayerEntity.Solid floor = (x, y, z) -> y <= 0;
+            PlayerEntity p = new PlayerEntity(floor, Pos.ofBlock(bx, 40, bx));
+            for (int i = 0; i < 200; i++) p.tick(0.05, false, false, false, false, false, false, false);
+            double feet = p.pos.y - PlayerEntity.EYE;
+            check(p.onGround() && Math.abs(feet - 1.0) < 0.2, "падіння з висоти на " + base + ": ноги на " + feet);
+            check(p.pos.blockX() == bx && p.pos.blockZ() == bx, "стоячи не зсувається на " + base + ": " + p.pos);
+            double y0 = p.pos.y;
+            p.tick(0.05, false, false, false, false, true, false, false);
+            for (int i = 0; i < 3; i++) p.tick(0.05, false, false, false, false, false, false, false);
+            check(p.pos.y > y0, "стрибок на " + base);
+            // стіна на x = bx + 5
+            PlayerEntity w = new PlayerEntity((x, y, z) -> y <= 0 || x == bx + 5, Pos.ofBlock(bx, 1 + PlayerEntity.EYE + 0.01, bx));
+            for (int i = 0; i < 200; i++) w.tick(0.05, false, false, false, true, false, true, false);
+            check(w.pos.blockX() < bx + 5 && w.pos.blockX() >= bx + 3, "стіна зупиняє рух на " + base + ": x=" + (w.pos.blockX() - bx));
+            // присід не дає впасти з краю (підлога лише при x <= bx)
+            PlayerEntity e = new PlayerEntity((x, y, z) -> y <= 0 && x <= bx, Pos.ofBlock(bx, 1 + PlayerEntity.EYE + 0.01, bx));
+            for (int i = 0; i < 5; i++) e.tick(0.05, false, false, false, false, false, false, false);
+            for (int i = 0; i < 100; i++) e.tick(0.05, false, false, false, true, false, false, true);
+            check(e.onGround() && e.pos.blockX() <= bx + 1, "присід не дає впасти з краю на " + base + ": x=" + (e.pos.blockX() - bx));
+            // біг через межу чанків: позиція нормалізується, чанк змінюється плавно
+            PlayerEntity r = new PlayerEntity(floor, Pos.ofBlock(bx, 1 + PlayerEntity.EYE + 0.01, bx));
+            long c0 = r.pos.cx;
+            for (int i = 0; i < 200; i++) r.tick(0.05, true, false, false, false, false, true, false);
+            check(r.pos.x >= 0 && r.pos.x < 16 && r.pos.z >= 0 && r.pos.z < 16, "локальні координати в межах чанка на " + base);
+            double moved = Math.hypot(r.pos.relX(Math.floorDiv(bx, 16L)) - Pos.ofBlock(bx, 0, bx).relX(Math.floorDiv(bx, 16L)), r.pos.relZ(Math.floorDiv(bx, 16L)) - Pos.ofBlock(bx, 0, bx).relZ(Math.floorDiv(bx, 16L)));
+            check(moved > 20 && moved < 120, "біг за 10 с пройшов розумну відстань на " + base + ": " + moved);
+            check(new PlayerEntity(floor, Pos.ofBlock(bx, 1 + PlayerEntity.EYE, bx)).overlapsBlock(bx, 1, bx), "не замурувати себе блоком на " + base);
+        }
+    }
+
+    static void pos() {
+        Pos p = new Pos(0, 0, -0.5, 10, 16.25);
+        check(p.cx == -1 && p.cz == 1 && Math.abs(p.x - 15.5) < 1e-12 && Math.abs(p.z - 0.25) < 1e-12, "normalize переносить у сусідні чанки: " + p);
+        Pos q = Pos.ofBlock(-1, 5, -17);
+        check(q.cx == -1 && q.cz == -2 && q.blockX() == -1 && q.blockZ() == -17, "ofBlock/blockX для від'ємних: " + q);
+        for (long b : new long[]{Long.MAX_VALUE / 2, Long.MIN_VALUE / 2, 1_000_000_000_000_000_000L, -1_000_000_000_000_000_000L}) {
+            Pos z = Pos.ofBlock(b, 70, b);
+            double fx = Math.floorMod(b, 16L) + 0.5;
+            check(z.blockX() == b && z.blockZ() == b && z.x == fx && z.z == fx, "Pos точний на " + b + ": " + z);
+            z.add(0.25, 0, -0.25);
+            check(z.blockX() == b && z.blockZ() == b && Math.abs(z.x - (fx + 0.25)) < 1e-12 && Math.abs(z.z - (fx - 0.25)) < 1e-12, "малий зсув на " + b + " не втрачається (у float/double від повної координати було б 0): " + z);
+        }
+        check(Pos.ofBlock(100, 0, 100).relX(0) == 100.5 && Pos.ofBlock(-1, 0, 0).relX(0) == -0.5, "relX");
+    }
+
+    static void noise() {
+        Noise n = new Noise(1234);
+        long[] bases = {0, 1_000, 1_000_000, 1_000_000_000L, 1_000_000_000_000L, 1_000_000_000_000_000L, 1_000_000_000_000_000_000L, -1_000_000_000_000_000_000L, Long.MAX_VALUE / 4};
+        for (long b : bases) {
+            double prev = n.fractal2(b, b, 96, 4), maxStep = 0, min = 9, max = -9;
+            for (int i = 1; i <= 400; i++) {
+                double v = n.fractal2(b + i, b - i, 96, 4);
+                maxStep = Math.max(maxStep, Math.abs(v - prev)); prev = v; min = Math.min(min, v); max = Math.max(max, v);
+                check(v > -1.5 && v < 1.5 && !Double.isNaN(v), "значення в діапазоні на " + b);
+            }
+            check(maxStep < 0.08, "шум плавний (немає стрибків від втрати точності) на " + b + ": крок " + maxStep);
+            check(max - min > 0.05 || b == 0, "шум не плаский на " + b + ": " + (max - min));
+        }
+        // однаковий результат при повторі, інше зерно - інший
+        check(n.fractal2(123456789012345L, -987654321098765L, 96, 4) == n.fractal2(123456789012345L, -987654321098765L, 96, 4), "детермінований");
+        check(n.fractal2(5000, 7000, 96, 4) != new Noise(1235).fractal2(5000, 7000, 96, 4), "інше зерно - інше значення");
+        // РЕГРЕСІЯ: старий шум повторювався кожні 256*період блоків. Тут не має бути жодного точного збігу зі зсувом на 24576/12288/98304
+        for (long shift : new long[]{24_576, 12_288, 98_304, 65_536, 256 * 24}) {
+            int same = 0;
+            for (int i = 0; i < 300; i++) { long x = i * 37L + 11, z = i * 53L - 400; if (Math.abs(n.fractal2(x, z, 96, 4) - n.fractal2(x + shift, z, 96, 4)) < 1e-12) same++; }
+            check(same == 0, "шум не повторюється зі зсувом " + shift + ": збігів " + same);
+        }
+        // 3D шум теж плавний і точний далеко
+        for (long b : new long[]{0, 1_000_000_000_000_000_000L}) {
+            double prev = n.sample3(0, b, 64, b, 16), maxStep = 0;
+            for (int i = 1; i <= 200; i++) { double v = n.sample3(0, b + i, 64 + i / 4, b, 16); maxStep = Math.max(maxStep, Math.abs(v - prev)); prev = v; }
+            check(maxStep < 0.2, "3D шум плавний на " + b + ": " + maxStep);
+        }
+        // від'ємні й додатні координати поруч нуля не мають шва
+        double a = n.sample2(0, -1, -1, 96), c = n.sample2(0, 0, 0, 96);
+        check(Math.abs(a - c) < 0.1, "нема шва на нулі: " + a + " / " + c);
+    }
+
+    /** Світ на гігантських координатах: генерація, зміни, збереження й повторне завантаження, регіони. */
+    static void farWorld(File root) throws Exception {
+        for (long bx : new long[]{1_000_000_000_000L, 1_000_000_000_000_000_000L, -1_000_000_000_000_000_000L}) {
+            Game g = new Game(new File(root, "saves-far"), null);
+            String name = "Far" + (bx > 0 ? "P" : "N") + Math.abs(bx);
+            g.createWorld(name, 99, WorldInfo.Type.NORMAL);
+            World w = g.openWorld(name);
+            long cx = Math.floorDiv(bx, 16L);
+            for (int i = 0; i < 600; i++) { w.update(cx, cx, 1); boolean all = true; for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) if (w.chunk(cx + dx, cx + dz) == null) all = false; if (all) break; Thread.sleep(10); }
+            check(w.chunk(cx, cx) != null, "чанк на " + bx + " згенеровано");
+            int top = w.surfaceY(bx, bx);
+            check(w.getBlock(bx, top, bx).name().equals("voxelin:grass") && w.getBlock(bx, 0, bx).name().equals("voxelin:bedrock"), "рельєф на " + bx + ": висота " + top);
+            check(top > 10 && top < 240, "розумна висота на " + bx + ": " + top);
+            Source p = Sources.player("T");
+            check(w.setBlock(p, bx + 3, 200, bx + 5, g.blocks.byName("voxelin:glass")), "setBlock на " + bx);
+            List<String> out = g.commands.execute(p, w, new long[]{bx, 150, bx}, "/fill ~ ~ ~ ~4 ~2 ~4 stone");
+            check(out.get(0).startsWith("Заповнено 75 з 75"), "/fill на " + bx + ": " + out);
+            check(w.getBlock(bx + 4, 152, bx + 4).name().equals("voxelin:stone"), "fill поставив блок на " + bx);
+            out = g.commands.execute(p, w, new long[]{bx, 150, bx}, "/fill " + bx + " 0 " + bx + " " + (bx + 600) + " 255 " + (bx + 600) + " stone");
+            check(out.get(0).contains("Забагато"), "ліміт /fill діє й на " + bx + ": " + out.get(0));
+            out = g.commands.execute(p, w, new long[]{bx, 150, bx}, "/fill " + Long.MIN_VALUE + " 0 " + Long.MIN_VALUE + " " + Long.MAX_VALUE + " 255 " + Long.MAX_VALUE + " stone");
+            check(out.get(0).contains("Забагато"), "проміжок більший за long не переповнюється: " + out.get(0));
+            out = g.commands.execute(p, w, new long[]{bx, 150, bx}, "/setblock " + (bx + 1) + " 160 " + (bx + 1) + " dirt");
+            check(out.get(0).startsWith("Поставлено"), "setblock з великими числами: " + out);
+            w.info.setPlayer(new Pos(cx, cx, 3.5, 120, 7.25), 33, -12);
+            w.close();
+            // повторне відкриття: зміни й позиція збереглись
+            World w2 = g.openWorld(name);
+            check(w2.info.hasPlayer && w2.info.playerCx == cx && w2.info.playerCz == cx && w2.info.playerX == 3.5 && w2.info.playerY == 120 && w2.info.playerZ == 7.25, "позиція гравця на " + bx + " збережена точно");
+            for (int i = 0; i < 600 && w2.chunk(cx, cx) == null; i++) { w2.update(cx, cx, 0); Thread.sleep(10); }
+            check(w2.getBlock(bx + 3, 200, bx + 5).name().equals("voxelin:glass") && w2.getBlock(bx + 4, 152, bx + 4).name().equals("voxelin:stone"), "зміни на " + bx + " збереглись у регіоні");
+            w2.close();
+            String[] files = new File(root, "saves-far/" + name + "/region").list();
+            check(files != null && files.length >= 1 && Arrays.stream(files).anyMatch(f -> f.startsWith("r.") && f.endsWith(".vxr")), "регіонні файли з long-іменами: " + Arrays.toString(files));
+        }
+        // математичний край long: чанки за ним не створюються й не переповнюються
+        check(World.inRange(0, 0) && World.inRange(World.MAX_CHUNK, -World.MAX_CHUNK) && !World.inRange(World.MAX_CHUNK + 1, 0) && !World.inRange(0, -World.MAX_CHUNK - 1), "край діапазону long");
+        check(World.MAX_CHUNK * 16 > 4_000_000_000_000_000_000L, "край світу > 4 квінтильйонів блоків: " + World.MAX_CHUNK * 16);
+        // старий формат світу відхиляється з поясненням, файли не чіпаються
+        File oldDir = new File(root, "saves-far/OldFmt"); oldDir.mkdirs();
+        try (Writer wr = new FileWriter(new File(oldDir, "voxelin.world"))) { wr.write("format=1\nname=OldFmt\nseed=1\ntype=NORMAL\ncreated=0\npalette=voxelin:air\n"); }
+        boolean threw = false; String msg = "";
+        try { WorldInfo.load(oldDir); } catch (IOException e) { threw = true; msg = e.getMessage(); }
+        check(threw && msg.contains("формат") && new File(oldDir, "voxelin.world").exists(), "світ формату 1 відхилено з поясненням, файл на місці: " + msg);
     }
 
     static void mods(File root) throws Exception {
         File modsDir = new File(root, "mods");
         modsDir.mkdirs();
         String api = System.getProperty("java.class.path");
-        jar(modsDir, "good.jar", "good", "GoodMod", "1",
+        jar(modsDir, "good.jar", "good", "GoodMod", "2",
                 "public class GoodMod implements voxelin.api.VoxelinMod { public void init(voxelin.api.ModContext c) {"
                 + " c.registries().block(\"ruby\", new voxelin.api.BlockSettings().color(0xFF0000).light(7));"
                 + " c.commands().register(\"hello\", \"\", 0, k -> k.reply(\"hi \" + k.source().name())); } }", api);
-        jar(modsDir, "broken.jar", "broken", "BrokenMod", "1",
+        jar(modsDir, "broken.jar", "broken", "BrokenMod", "2",
                 "public class BrokenMod implements voxelin.api.VoxelinMod { public void init(voxelin.api.ModContext c) { throw new RuntimeException(\"зламано\"); } }", api);
         jar(modsDir, "future.jar", "future", "FutureMod", "999",
                 "public class FutureMod implements voxelin.api.VoxelinMod { public void init(voxelin.api.ModContext c) {} }", api);
-        jar(modsDir, "thief.jar", "thief", "ThiefMod", "1",
+        jar(modsDir, "thief.jar", "thief", "ThiefMod", "2",
                 "public class ThiefMod implements voxelin.api.VoxelinMod { public void init(voxelin.api.ModContext c) { c.registries().block(\"voxelin:diamond\", new voxelin.api.BlockSettings()); } }", api);
+        jar(modsDir, "old.jar", "oldapi", "OldMod", "1",
+                "public class OldMod implements voxelin.api.VoxelinMod { public void init(voxelin.api.ModContext c) {} }", api);
         Files.write(new File(modsDir, "notamod.jar").toPath(), new byte[]{1, 2, 3});
         Game g = new Game(new File(root, "saves5"), modsDir);
         Map<String, ModLoader.Status> st = new HashMap<>();
@@ -247,6 +367,7 @@ public class VoxelinCoreTest {
         check(st.get("good") == ModLoader.Status.OK && g.blocks.byName("good:ruby") != null && g.blocks.byName("good:ruby").light == 7, "добрий мод додав блок");
         check(st.get("broken") == ModLoader.Status.FAILED, "мод із винятком позначено, гра стартувала");
         check(st.get("future") == ModLoader.Status.INCOMPATIBLE, "мод з новішим API не вантажиться");
+        check(st.get("oldapi") == ModLoader.Status.INCOMPATIBLE && g.blocks.byName("oldapi:x") == null, "мод зі старим API v1 (координати int) відхилено");
         check(st.get("thief") == ModLoader.Status.FAILED && g.blocks.byName("voxelin:diamond") == null, "мод не може реєструвати чужі назви");
         check(st.get("notamod.jar") == ModLoader.Status.FAILED, "битий jar не валить гру");
         World w = newWorld(g, "M", 1);
@@ -288,22 +409,6 @@ public class VoxelinCoreTest {
         check(!pa.placeBlock(1, top + 3, 1, "voxelin:no_such_block"), "невідомий блок - false");
         check(!pa.placeBlock(5000, 10, 5000, "voxelin:stone"), "поза завантаженими чанками - false");
         check(pa.command("/help", null).size() == 1, "команда через PlayerActions");
-        w.close();
-    }
-
-    static void border(File root) throws Exception {
-        Game g = new Game(new File(root, "saves7"), null);
-        World w = newWorld(g, "Border", 11);
-        int edge = (World.BORDER >> 4) - 1; // останній чанк усередині межі
-        check(World.inBorder(edge, 0) && !World.inBorder(edge + 1, 0) && World.inBorder(-(World.BORDER >> 4), 0) && !World.inBorder(-(World.BORDER >> 4) - 1, 0), "межа в чанках симетрична");
-        for (int i = 0; i < 400 && w.chunk(edge, 0) == null; i++) { w.update(edge, 0, 2); Thread.sleep(10); }
-        for (int i = 0; i < 60; i++) { w.update(edge, 0, 2); Thread.sleep(5); } // дати шанс (помилково) створитися чанкам за межею
-        check(w.chunk(edge, 0) != null && w.chunk(edge + 1, 0) == null && w.chunk(edge + 2, 0) == null, "за межею чанки не створюються");
-        check(w.isSolid(World.BORDER, 70, 0) && w.blockId(World.BORDER, 70, 0) == -1, "за межею - суцільна стіна (незавантажене)");
-        check(!w.setBlock(Sources.player("T"), World.BORDER + 3, 70, 0, g.blocks.byName("voxelin:stone")), "за межею блок поставити не можна");
-        PlayerEntity p = new PlayerEntity(w::isSolid, Units.center(World.BORDER - 4), Units.toWorld(w.surfaceY(World.BORDER - 4, 0) + 1) + PlayerEntity.EYE + 0.02f, Units.center(0));
-        for (int i = 0; i < 200; i++) p.tick(0.05f, false, false, false, true, false, true, false); // біжить на схід
-        check(Units.toBlock(p.x) < World.BORDER, "гравець не може вийти за межу: x=" + Units.toBlock(p.x));
         w.close();
     }
 

@@ -27,23 +27,28 @@ public final class VanillaContent implements VoxelinMod {
         Commands c = ctx.commands();
         c.register("setblock", "<x> <y> <z> <блок>", 2, k -> {
             if (k.args().size() != 4) throw new Commands.CommandException("Потрібно 4 аргументи");
-            int[] o = k.origin();
+            long[] o = k.origin();
             BlockRef b = block(r, k.args().get(3));
-            int x = CommandRegistry.coord(k.args().get(0), o[0]), y = CommandRegistry.coord(k.args().get(1), o[1]), z = CommandRegistry.coord(k.args().get(2), o[2]);
-            k.reply(k.world().setBlock(k.source(), x, y, z, b) ? "Поставлено " + b.name() + " у " + x + " " + y + " " + z : "Не вдалось (поза світом або чанк не завантажено)");
+            long x = CommandRegistry.coord(k.args().get(0), o[0]), y = CommandRegistry.coord(k.args().get(1), o[1]), z = CommandRegistry.coord(k.args().get(2), o[2]);
+            if (y < 0 || y >= k.world().height()) throw new Commands.CommandException("Висота має бути від 0 до " + (k.world().height() - 1));
+            k.reply(k.world().setBlock(k.source(), x, (int) y, z, b) ? "Поставлено " + b.name() + " у " + x + " " + y + " " + z : "Не вдалось (чанк не завантажено або ліміт)");
         });
         c.register("fill", "<x1> <y1> <z1> <x2> <y2> <z2> <блок>", 2, k -> {
             if (k.args().size() != 7) throw new Commands.CommandException("Потрібно 7 аргументів");
-            int[] o = k.origin(), p = new int[6];
+            long[] o = k.origin(), p = new long[6];
             for (int i = 0; i < 6; i++) p[i] = CommandRegistry.coord(k.args().get(i), o[i % 3]);
             BlockRef b = block(r, k.args().get(6));
-            int x0 = Math.min(p[0], p[3]), x1 = Math.max(p[0], p[3]), y0 = Math.max(0, Math.min(p[1], p[4])), y1 = Math.min(k.world().height() - 1, Math.max(p[1], p[4])),
-                    z0 = Math.min(p[2], p[5]), z1 = Math.max(p[2], p[5]);
-            long vol = (long) (x1 - x0 + 1) * Math.max(0, y1 - y0 + 1) * (z1 - z0 + 1);
-            if (vol > MAX_FILL) throw new Commands.CommandException("Забагато блоків: " + vol + " (максимум " + MAX_FILL + ")");
-            int n = 0;
-            for (int x = x0; x <= x1; x++) for (int y = y0; y <= y1; y++) for (int z = z0; z <= z1; z++) if (k.world().setBlock(k.source(), x, y, z, b)) n++;
-            k.reply("Заповнено " + n + " з " + vol + " блоків" + (n < vol ? " (решта - поза завантаженими чанками або ліміт)" : ""));
+            long x0 = Math.min(p[0], p[3]), x1 = Math.max(p[0], p[3]), z0 = Math.min(p[2], p[5]), z1 = Math.max(p[2], p[5]);
+            int y0 = (int) Math.max(0, Math.min(Math.min(p[1], p[4]), k.world().height())), y1 = (int) Math.min(k.world().height() - 1, Math.max(Math.max(p[1], p[4]), -1));
+            // різниця точно в long (double на 10^18 втрачає точність і давав би хибно малий обсяг), у double лише для порівняння з лімітом
+            double spanX, spanZ;
+            try { spanX = (double) Math.subtractExact(x1, x0) + 1; spanZ = (double) Math.subtractExact(z1, z0) + 1; }
+            catch (ArithmeticException e) { throw new Commands.CommandException("Забагато блоків (проміжок більший за діапазон long)"); }
+            double vol = spanX * Math.max(0, y1 - y0 + 1) * spanZ;
+            if (vol > MAX_FILL) throw new Commands.CommandException("Забагато блоків: " + String.format(java.util.Locale.ROOT, "%.0f", vol) + " (максимум " + MAX_FILL + ")");
+            long n = 0;
+            for (long x = x0; x <= x1; x++) for (int y = y0; y <= y1; y++) for (long z = z0; z <= z1; z++) if (k.world().setBlock(k.source(), x, y, z, b)) n++;
+            k.reply("Заповнено " + n + " з " + (long) vol + " блоків" + (n < (long) vol ? " (решта - чанки не завантажені або ліміт)" : ""));
         });
         c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
     }

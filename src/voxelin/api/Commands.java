@@ -10,8 +10,8 @@ public interface Commands {
         Source source();
         WorldAccess world();
         List<String> args();
-        /** Позиція джерела (для ~ у координатах); для консолі - 0,0,0. */
-        int[] origin();
+        /** Позиція джерела {x, y, z} у блоках (для ~ у координатах); для консолі - 0,0,0. */
+        long[] origin();
         void reply(String message);
     }
 

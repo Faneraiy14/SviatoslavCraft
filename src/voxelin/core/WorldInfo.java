@@ -11,7 +11,7 @@ import java.util.*;
  */
 public final class WorldInfo {
     public static final String FILE = "voxelin.world";
-    public static final int FORMAT = 1;
+    public static final int FORMAT = 2;
     public enum Type { NORMAL, FLAT }
 
     public String name;
@@ -20,7 +20,9 @@ public final class WorldInfo {
     public long created;
     /** Останнє місце гравця (світові одиниці, кути); hasPlayer=false - світ ще не відкривали. */
     public boolean hasPlayer;
-    public float playerX, playerY, playerZ, playerYaw, playerPitch;
+    public long playerCx, playerCz;
+    public double playerX, playerY, playerZ;
+    public float playerYaw, playerPitch;
     public final List<String> palette = new ArrayList<>();
 
     public static boolean isValidName(String n) {
@@ -43,6 +45,7 @@ public final class WorldInfo {
         try (Reader r = new InputStreamReader(new FileInputStream(new File(dir, FILE)), StandardCharsets.UTF_8)) { p.load(r); }
         int fmt = Integer.parseInt(p.getProperty("format", "0").trim());
         if (fmt > FORMAT) throw new IOException("світ створено новішою версією гри (формат " + fmt + ")");
+        if (fmt < FORMAT) throw new IOException("світ старого формату " + fmt + " (збірка 0.1.0-dev до безмежного світу) - файли не чіпаю, створи новий світ");
         WorldInfo w = new WorldInfo();
         w.name = p.getProperty("name", dir.getName());
         w.seed = Long.parseLong(p.getProperty("seed", "0").trim());
@@ -50,9 +53,11 @@ public final class WorldInfo {
         w.created = Long.parseLong(p.getProperty("created", "0").trim());
         w.hasPlayer = "true".equals(p.getProperty("hasPlayer"));
         if (w.hasPlayer) try {
-            w.playerX = Float.parseFloat(p.getProperty("px")); w.playerY = Float.parseFloat(p.getProperty("py")); w.playerZ = Float.parseFloat(p.getProperty("pz"));
+            w.playerCx = Long.parseLong(p.getProperty("pcx").trim()); w.playerCz = Long.parseLong(p.getProperty("pcz").trim());
+            w.playerX = Double.parseDouble(p.getProperty("px")); w.playerY = Double.parseDouble(p.getProperty("py")); w.playerZ = Double.parseDouble(p.getProperty("pz"));
             w.playerYaw = Float.parseFloat(p.getProperty("pyaw", "0")); w.playerPitch = Float.parseFloat(p.getProperty("ppitch", "0"));
-            if (Float.isNaN(w.playerX + w.playerY + w.playerZ) || Float.isInfinite(w.playerX + w.playerY + w.playerZ)) w.hasPlayer = false;
+            double sum = w.playerX + w.playerY + w.playerZ;
+            if (Double.isNaN(sum) || Double.isInfinite(sum) || w.playerX < 0 || w.playerX >= 16 || w.playerZ < 0 || w.playerZ >= 16) w.hasPlayer = false;
         } catch (RuntimeException e) { w.hasPlayer = false; }
         for (String s : p.getProperty("palette", "").split(",")) if (!s.trim().isEmpty()) w.palette.add(s.trim());
         if (w.palette.isEmpty() || !w.palette.get(0).equals(BlockRegistry.AIR)) w.palette.add(0, BlockRegistry.AIR);
@@ -70,6 +75,7 @@ public final class WorldInfo {
         p.setProperty("palette", String.join(",", palette));
         if (hasPlayer) {
             p.setProperty("hasPlayer", "true");
+            p.setProperty("pcx", String.valueOf(playerCx)); p.setProperty("pcz", String.valueOf(playerCz));
             p.setProperty("px", String.valueOf(playerX)); p.setProperty("py", String.valueOf(playerY)); p.setProperty("pz", String.valueOf(playerZ));
             p.setProperty("pyaw", String.valueOf(playerYaw)); p.setProperty("ppitch", String.valueOf(playerPitch));
         }
@@ -78,9 +84,11 @@ public final class WorldInfo {
         Files2.replace(tmp, new File(dir, FILE));
     }
 
-    public synchronized void setPlayer(float x, float y, float z, float yaw, float pitch) {
-        playerX = x; playerY = y; playerZ = z; playerYaw = yaw; playerPitch = pitch; hasPlayer = true;
+    public synchronized void setPlayer(Pos p, float yaw, float pitch) {
+        playerCx = p.cx; playerCz = p.cz; playerX = p.x; playerY = p.y; playerZ = p.z; playerYaw = yaw; playerPitch = pitch; hasPlayer = true;
     }
+
+    public Pos playerPos() { return new Pos(playerCx, playerCz, playerX, playerY, playerZ); }
 
     /** Номер у палітрі для назви (нова назва дописується). */
     public synchronized int paletteId(String blockName) {

@@ -10,12 +10,12 @@
    ```
    Voxelin-Mod: com.example.MyMod
    Voxelin-Mod-Id: mymod
-   Voxelin-Api: 1
+   Voxelin-Api: 2
    ```
    `Voxelin-Mod-Id` - малі латинські літери, цифри, `_` (до 32). Це префікс усіх блоків мода: `mymod:ruby`.
 4. Приклад - `examples/hello-mod` (`bash build.sh` -> `hello-mod.jar`).
 
-## Що доступно (API версії 1)
+## Що доступно (API версії 2)
 - **Блоки** (`ctx.registries().block(назва, BlockSettings)`): колір, текстури граней, суцільність, прозорість, напівпрозорість, рідина, світло, твердість. Блоки - це дані, не код.
 - **Події** (`ctx.events().on(Клас, слухач)`): `TickEvent` (20/с), `BlockChangeEvent` (можна `cancel()`), `ChunkGeneratedEvent` (дописати руду/структури в новий чанк - викликається з фонового потоку), `WorldOpenEvent`.
 - **Команди** (`ctx.commands().register(назва, використання, права, обробник)`).

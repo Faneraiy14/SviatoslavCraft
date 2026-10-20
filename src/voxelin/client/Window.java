@@ -16,7 +16,7 @@ public final class Window {
     private int width, height, fbWidth, fbHeight;
     private String glVersion = "?", glRenderer = "?";
 
-    public void create(String title, int w, int h, int msaa, boolean vsync) {
+    public void create(String title, int w, int h, int msaa, boolean vsync, boolean takeFocus) {
         width = w; height = h;
         GLFWErrorCallback.createPrint(System.err).set();
         if (!glfwInit()) throw new IllegalStateException("GLFW не ініціалізовано");
@@ -24,6 +24,9 @@ public final class Window {
         glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
         glfwWindowHint(GLFW_SAMPLES, Math.max(0, msaa));
+        // dev-запуски (бенчмарк, знімки) не відбирають фокус у того, хто працює за комп'ютером
+        glfwWindowHint(GLFW_FOCUSED, takeFocus ? GLFW_TRUE : GLFW_FALSE);
+        glfwWindowHint(GLFW_FOCUS_ON_SHOW, takeFocus ? GLFW_TRUE : GLFW_FALSE);
         handle = glfwCreateWindow(w, h, title, NULL, NULL);
         if (handle == NULL) throw new RuntimeException("Не вдалося створити вікно");
         glfwMakeContextCurrent(handle);

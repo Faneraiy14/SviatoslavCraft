@@ -3,12 +3,12 @@ package voxelin.core;
 /** Стовпчик 16 x HEIGHT x 16 із секцій 16^3; порожня секція - null (нуль пам'яті). */
 public final class Chunk {
     public static final int SIZE = 16, HEIGHT = 256, SECTIONS = HEIGHT / Section.SIZE;
-    public final int cx, cz;
+    public final long cx, cz;
     final Section[] sections = new Section[SECTIONS];
     /** Змінено після завантаження/генерації - треба зберегти. */
     volatile boolean modified;
 
-    public Chunk(int cx, int cz) { this.cx = cx; this.cz = cz; }
+    public Chunk(long cx, long cz) { this.cx = cx; this.cz = cz; }
 
     public int get(int x, int y, int z) {
         if (y < 0 || y >= HEIGHT) return 0;
@@ -31,5 +31,5 @@ public final class Chunk {
 
     public int nonAirCount() { int n = 0; for (Section s : sections) if (s != null) n += s.nonAirCount(); return n; }
 
-    public static long key(int cx, int cz) { return ((long) cx << 32) ^ (cz & 0xFFFFFFFFL); }
+    public ChunkPos pos() { return new ChunkPos(cx, cz); }
 }

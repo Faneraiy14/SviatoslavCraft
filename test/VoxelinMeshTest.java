@@ -1,5 +1,5 @@
 import voxelin.client.render.ChunkMesher;
-import voxelin.client.render.SectionKey;
+import voxelin.client.render.SectionPos;
 
 /** Жадібний мешинг без OpenGL: кількість граней на відомих фігурах. */
 public class VoxelinMeshTest {
@@ -70,11 +70,12 @@ public class VoxelinMeshTest {
             check(r.solid[i] >= 0 && r.solid[i] <= 16 && r.solid[i + 1] >= 0 && r.solid[i + 1] <= 16 && r.solid[i + 2] >= 0 && r.solid[i + 2] <= 16, "вершина в межах секції");
             check(r.solid[i + 4] >= 0 && r.solid[i + 4] <= 5, "номер грані");
         }
-        // ключі секцій: від'ємні координати чанків (регресія - з них зникав увесь світ ліворуч від початку)
-        int[] cs = {0, 1, -1, 5, -5, 1000, -1000, 8_388_607, -8_388_608};
-        for (int cx : cs) for (int cz : cs) for (int sy = 0; sy < 16; sy += 5) {
-            long k = SectionKey.of(cx, sy, cz);
-            check(SectionKey.cx(k) == cx && SectionKey.cz(k) == cz && SectionKey.sy(k) == sy, "ключ секції " + cx + "," + sy + "," + cz);
+        // ключі секцій: від'ємні й гігантські координати чанків (регресія - з них зникав світ ліворуч від початку)
+        long[] cs = {0, 1, -1, 5, -5, 1000, -1000, 8_388_607, -8_388_608, 1L << 40, -(1L << 40), Long.MAX_VALUE >> 5, -(Long.MAX_VALUE >> 5)};
+        java.util.Set<SectionPos> set = new java.util.HashSet<>();
+        for (long cx : cs) for (long cz : cs) for (int sy = 0; sy < 16; sy += 5) {
+            SectionPos k = new SectionPos(cx, sy, cz);
+            check(k.cx() == cx && k.cz() == cz && k.sy() == sy && set.add(k) && set.contains(new SectionPos(cx, sy, cz)), "ключ секції " + cx + "," + sy + "," + cz);
         }
         System.out.println("VoxelinMeshTest: " + n + " перевірок OK");
     }

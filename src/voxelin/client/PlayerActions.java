@@ -8,9 +8,9 @@ import java.util.List;
  */
 public interface PlayerActions {
     /** Зламати блок; false - не можна (незламний, подія скасувала, чанк не завантажено). */
-    boolean breakBlock(int x, int y, int z);
+    boolean breakBlock(long x, int y, long z);
     /** Поставити блок за назвою з вибраного слота. */
-    boolean placeBlock(int x, int y, int z, String block);
+    boolean placeBlock(long x, int y, long z, String block);
     /** Виконати команду; відповіді для показу в чаті. */
-    List<String> command(String line, int[] origin);
+    List<String> command(String line, long[] origin);
 }

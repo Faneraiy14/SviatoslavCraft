@@ -51,17 +51,18 @@ public final class WorldRenderer implements World.Listener {
             """;
 
     private static final class SectionMesh {
-        final int cx, sy, cz;
+        final long cx, cz;
+        final int sy;
         int vaoS, vboS, quadsS, vaoT, vboT, quadsT;
-        SectionMesh(int cx, int sy, int cz) { this.cx = cx; this.sy = sy; this.cz = cz; }
+        SectionMesh(long cx, int sy, long cz) { this.cx = cx; this.sy = sy; this.cz = cz; }
     }
 
-    private record Result(long key, ChunkMesher.Mesh mesh, long nanos) {}
+    private record Result(SectionPos key, ChunkMesher.Mesh mesh, long nanos) {}
 
     private final World world;
     private final ChunkMesher.Props props;
-    private final Map<Long, SectionMesh> meshes = new HashMap<>();
-    private final Set<Long> dirty = new HashSet<>(), urgent = new LinkedHashSet<>(), inFlight = new HashSet<>();
+    private final Map<SectionPos, SectionMesh> meshes = new HashMap<>();
+    private final Set<SectionPos> dirty = new HashSet<>(), urgent = new LinkedHashSet<>(), inFlight = new HashSet<>();
     private final ConcurrentLinkedQueue<Result> results = new ConcurrentLinkedQueue<>();
     private final ExecutorService pool;
     private final int poolSize;
@@ -86,7 +87,8 @@ public final class WorldRenderer implements World.Listener {
         int[] color = new int[all.length];
         for (BlockType t : all) { opaque[t.id] = t.opaque; trans[t.id] = t.translucent; air[t.id] = t.isAir(); color[t.id] = t.color; }
         props = new ChunkMesher.Props(opaque, trans, air, color);
-        poolSize = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+        // потоків мешингу не більше половини ядер: решта - головному потоку (малювання) і робочому столу; -Dvoxelin.meshThreads=N перевизначає
+        poolSize = Integer.getInteger("voxelin.meshThreads", Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
         pool = Executors.newFixedThreadPool(poolSize, r -> { Thread t = new Thread(r, "voxelin-mesh"); t.setDaemon(true); t.setPriority(Thread.NORM_PRIORITY - 1); return t; });
         shader = new Shader(VS, FS, "aPos", "aColor", "aFace");
         uProjView = shader.uniform("uProjView"); uOffset = shader.uniform("uOffset"); uScale = shader.uniform("uScale"); uCam = shader.uniform("uCam");
@@ -97,48 +99,42 @@ public final class WorldRenderer implements World.Listener {
         for (Chunk c : world.loadedChunks()) chunkLoaded(c);
     }
 
-    // ------------------------------------------------------------------ ключі секцій
-
-    static long key(int cx, int sy, int cz) { return SectionKey.of(cx, sy, cz); }
-    static int kcx(long k) { return SectionKey.cx(k); }
-    static int kcz(long k) { return SectionKey.cz(k); }
-    static int ksy(long k) { return SectionKey.sy(k); }
-
     // ------------------------------------------------------------------ події світу (головний потік)
 
     @Override public void chunkLoaded(Chunk c) {
-        for (int sy = 0; sy < Chunk.SECTIONS; sy++) if (c.section(sy) != null) dirty.add(key(c.cx, sy, c.cz));
-        int[][] nb = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-        for (int[] d : nb) {
+        for (int sy = 0; sy < Chunk.SECTIONS; sy++) if (c.section(sy) != null) dirty.add(new SectionPos(c.cx, sy, c.cz));
+        long[][] nb = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (long[] d : nb) {
             Chunk n = world.chunk(c.cx + d[0], c.cz + d[1]);
             if (n == null) continue;
-            for (int sy = 0; sy < Chunk.SECTIONS; sy++) if (n.section(sy) != null) dirty.add(key(n.cx, sy, n.cz));
+            for (int sy = 0; sy < Chunk.SECTIONS; sy++) if (n.section(sy) != null) dirty.add(new SectionPos(n.cx, sy, n.cz));
         }
     }
 
     @Override public void chunkUnloaded(Chunk c) {
         for (int sy = 0; sy < Chunk.SECTIONS; sy++) {
-            long k = key(c.cx, sy, c.cz);
+            SectionPos k = new SectionPos(c.cx, sy, c.cz);
             dirty.remove(k); urgent.remove(k);
             SectionMesh m = meshes.remove(k);
             if (m != null) free(m);
         }
     }
 
-    @Override public void blockChanged(int x, int y, int z) {
-        int cx = x >> 4, cz = z >> 4, sy = y >> 4, lx = x & 15, ly = y & 15, lz = z & 15;
-        urgent.add(key(cx, sy, cz));
-        if (lx == 0) urgent.add(key(cx - 1, sy, cz));
-        if (lx == 15) urgent.add(key(cx + 1, sy, cz));
-        if (lz == 0) urgent.add(key(cx, sy, cz - 1));
-        if (lz == 15) urgent.add(key(cx, sy, cz + 1));
-        if (ly == 0 && sy > 0) urgent.add(key(cx, sy - 1, cz));
-        if (ly == 15 && sy < Chunk.SECTIONS - 1) urgent.add(key(cx, sy + 1, cz));
+    @Override public void blockChanged(long x, int y, long z) {
+        long cx = x >> 4, cz = z >> 4;
+        int sy = y >> 4, lx = (int) (x & 15), ly = y & 15, lz = (int) (z & 15);
+        urgent.add(new SectionPos(cx, sy, cz));
+        if (lx == 0) urgent.add(new SectionPos(cx - 1, sy, cz));
+        if (lx == 15) urgent.add(new SectionPos(cx + 1, sy, cz));
+        if (lz == 0) urgent.add(new SectionPos(cx, sy, cz - 1));
+        if (lz == 15) urgent.add(new SectionPos(cx, sy, cz + 1));
+        if (ly == 0 && sy > 0) urgent.add(new SectionPos(cx, sy - 1, cz));
+        if (ly == 15 && sy < Chunk.SECTIONS - 1) urgent.add(new SectionPos(cx, sy + 1, cz));
     }
 
     // ------------------------------------------------------------------ мешинг
 
-    private ChunkMesher.Mesh meshNow(int cx, int sy, int cz) {
+    private ChunkMesher.Mesh meshNow(long cx, int sy, long cz) {
         short[] p = padded.get();
         Chunk[] around = new Chunk[9];
         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) around[(dx + 1) + (dz + 1) * 3] = world.chunk(cx + dx, cz + dz);
@@ -159,53 +155,57 @@ public final class WorldRenderer implements World.Listener {
         return mesher.get().build(p, props);
     }
 
+    /** Квадрат відстані між чанками; дуже далекі вважаються нескінченно далекими (без переповнення long). */
+    private static long d2(long dx, long dz) {
+        if (Math.abs(dx) > 1_000_000 || Math.abs(dz) > 1_000_000) return Long.MAX_VALUE;
+        return dx * dx + dz * dz;
+    }
+
     /** Раз на кадр: термінові секції - одразу, решта - у фон за відстанню; вивантаження готових мешів на GPU з лімітом. */
-    public void update(float camX, float camZ) {
-        int ccx = Units.toBlock(camX) >> 4, ccz = Units.toBlock(camZ) >> 4;
+    public void update(Camera cam) {
+        final long ccx = cam.pos.cx, ccz = cam.pos.cz;
         int n = 0;
-        for (Iterator<Long> it = urgent.iterator(); it.hasNext() && n < 12; n++) {
-            long k = it.next(); it.remove(); dirty.remove(k);
-            if (world.chunk(kcx(k), kcz(k)) == null) continue;
+        for (Iterator<SectionPos> it = urgent.iterator(); it.hasNext() && n < 12; n++) {
+            SectionPos k = it.next(); it.remove(); dirty.remove(k);
+            if (world.chunk(k.cx(), k.cz()) == null) continue;
             long t0 = System.nanoTime();
-            ChunkMesher.Mesh m = meshNow(kcx(k), ksy(k), kcz(k));
+            ChunkMesher.Mesh m = meshNow(k.cx(), k.sy(), k.cz());
             meshNanos += System.nanoTime() - t0; meshCount++;
             upload(k, m);
         }
         if (!dirty.isEmpty() && inFlight.size() < poolSize * 3) {
-            List<Long> cand = new ArrayList<>();
-            int rd2 = (renderDistance + 1) * (renderDistance + 1);
-            for (Iterator<Long> it = dirty.iterator(); it.hasNext(); ) {
-                long k = it.next();
-                int dx = kcx(k) - ccx, dz = kcz(k) - ccz;
-                if (dx * dx + dz * dz > rd2 || world.chunk(kcx(k), kcz(k)) == null) { it.remove(); continue; } // далеко або вже вивантажено
+            List<SectionPos> cand = new ArrayList<>();
+            long rd2 = (long) (renderDistance + 1) * (renderDistance + 1);
+            for (Iterator<SectionPos> it = dirty.iterator(); it.hasNext(); ) {
+                SectionPos k = it.next();
+                if (d2(k.cx() - ccx, k.cz() - ccz) > rd2 || world.chunk(k.cx(), k.cz()) == null) { it.remove(); continue; } // далеко або вже вивантажено
                 if (!inFlight.contains(k)) cand.add(k);
             }
-            cand.sort(Comparator.comparingInt(k -> { int dx = kcx(k) - ccx, dz = kcz(k) - ccz; return dx * dx + dz * dz; }));
-            for (long k : cand) {
+            cand.sort(Comparator.comparingLong(k -> d2(k.cx() - ccx, k.cz() - ccz)));
+            for (SectionPos k : cand) {
                 if (inFlight.size() >= poolSize * 3) break;
                 dirty.remove(k); inFlight.add(k);
-                final int cx = kcx(k), sy = ksy(k), cz = kcz(k);
                 pool.execute(() -> {
                     long t0 = System.nanoTime();
                     ChunkMesher.Mesh m = null;
-                    try { m = meshNow(cx, sy, cz); } catch (Throwable t) { System.out.println("[Voxelin] ⚠️ мешинг " + cx + "," + sy + "," + cz + ": " + t); }
+                    try { m = meshNow(k.cx(), k.sy(), k.cz()); } catch (Throwable t) { System.out.println("[Voxelin] ⚠️ мешинг " + k + ": " + t); }
                     results.add(new Result(k, m, System.nanoTime() - t0));
                 });
             }
         }
-        long deadline = System.nanoTime() + 3_000_000; // не більше ~3 мс на кадр
+        long deadline = System.nanoTime() + 1_500_000; // завантаження мешів на GPU: ~1-2 секції за кадр, без «сплесків»
         for (Result r; System.nanoTime() < deadline && (r = results.poll()) != null; ) {
             inFlight.remove(r.key);
             meshNanos += r.nanos; meshCount++;
-            if (r.mesh == null || world.chunk(kcx(r.key), kcz(r.key)) == null) continue;
+            if (r.mesh == null || world.chunk(r.key.cx(), r.key.cz()) == null) continue;
             upload(r.key, r.mesh);
         }
     }
 
-    private void upload(long k, ChunkMesher.Mesh m) {
+    private void upload(SectionPos k, ChunkMesher.Mesh m) {
         SectionMesh s = meshes.get(k);
         if (m.isEmpty()) { if (s != null) { meshes.remove(k); free(s); } return; }
-        if (s == null) meshes.put(k, s = new SectionMesh(kcx(k), ksy(k), kcz(k)));
+        if (s == null) meshes.put(k, s = new SectionMesh(k.cx(), k.sy(), k.cz()));
         ensureIndices(Math.max(m.solidQuads, m.translucentQuads));
         int[] r = fill(s.vaoS, s.vboS, m.solid, m.solidQuads); s.vaoS = r[0]; s.vboS = r[1]; s.quadsS = m.solidQuads;
         r = fill(s.vaoT, s.vboT, m.translucent, m.translucentQuads); s.vaoT = r[0]; s.vboT = r[1]; s.quadsT = m.translucentQuads;
@@ -258,15 +258,16 @@ public final class WorldRenderer implements World.Listener {
     // ------------------------------------------------------------------ малювання
 
     public void render(Camera cam) {
-        float far = renderDistance * 16 * Units.BLOCK_SIZE;
+        final float S = Units.BLOCK_SIZE;
+        float far = renderDistance * 16 * S;
         float[][] planes = cam.projView.frustumPlanes();
-        float s16 = 16 * Units.BLOCK_SIZE;
+        float s16 = 16 * S;
         List<SectionMesh> vis = new ArrayList<>(), trans = new ArrayList<>();
-        int ccx = Units.toBlock(cam.rx) >> 4, ccz = Units.toBlock(cam.rz) >> 4;
+        final long rcx = cam.eye.cx, rcz = cam.eye.cz; // начало малювання - чанк камери: усі числа малі
         for (SectionMesh m : meshes.values()) {
-            int dx = m.cx - ccx, dz = m.cz - ccz;
-            if (dx * dx + dz * dz > renderDistance * renderDistance) continue;
-            float x0 = m.cx * s16, y0 = m.sy * s16, z0 = m.cz * s16;
+            long dx = m.cx - rcx, dz = m.cz - rcz;
+            if (d2(dx, dz) > (long) renderDistance * renderDistance) continue;
+            float x0 = dx * s16, y0 = m.sy * s16, z0 = dz * s16;
             if (!Mat4.boxVisible(planes, x0, y0, z0, x0 + s16, y0 + s16, z0 + s16)) continue;
             if (m.quadsS > 0) vis.add(m);
             if (m.quadsT > 0) trans.add(m);
@@ -276,13 +277,13 @@ public final class WorldRenderer implements World.Listener {
         glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK);
         glUseProgram(shader.id);
         glUniformMatrix4fv(uProjView, false, cam.projView.m);
-        glUniform1f(uScale, Units.BLOCK_SIZE);
-        glUniform3f(uCam, cam.rx, cam.ry, cam.rz);
+        glUniform1f(uScale, S);
+        glUniform3f(uCam, (float) (cam.eye.x * S), (float) (cam.eye.y * S), (float) (cam.eye.z * S));
         glUniform3f(uFogColor, fogColor[0], fogColor[1], fogColor[2]);
         glUniform1f(uFogStart, far * 0.65f); glUniform1f(uFogEnd, far * 0.98f);
         glUniform1f(uOutline, outlines ? 1f : 0f);
         for (SectionMesh m : vis) {
-            glUniform3f(uOffset, m.cx * 16, m.sy * 16, m.cz * 16);
+            glUniform3f(uOffset, (m.cx - rcx) * 16, m.sy * 16, (m.cz - rcz) * 16);
             glBindVertexArray(m.vaoS);
             glDrawElements(GL_TRIANGLES, m.quadsS * 6, GL_UNSIGNED_INT, 0);
             quads += m.quadsS;
@@ -291,7 +292,7 @@ public final class WorldRenderer implements World.Listener {
             trans.sort(Comparator.comparingDouble(m -> -dist2(m, cam)));
             glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(false); glDisable(GL_CULL_FACE);
             for (SectionMesh m : trans) {
-                glUniform3f(uOffset, m.cx * 16, m.sy * 16, m.cz * 16);
+                glUniform3f(uOffset, (m.cx - rcx) * 16, m.sy * 16, (m.cz - rcz) * 16);
                 glBindVertexArray(m.vaoT);
                 glDrawElements(GL_TRIANGLES, m.quadsT * 6, GL_UNSIGNED_INT, 0);
                 quads += m.quadsT;
@@ -304,7 +305,8 @@ public final class WorldRenderer implements World.Listener {
     }
 
     private static double dist2(SectionMesh m, Camera c) {
-        double s = 16 * Units.BLOCK_SIZE, x = (m.cx + 0.5) * s - c.rx, y = (m.sy + 0.5) * s - c.ry, z = (m.cz + 0.5) * s - c.rz;
+        double s = 16 * Units.BLOCK_SIZE;
+        double x = (m.cx - c.eye.cx + 0.5) * s - c.eye.x * Units.BLOCK_SIZE, y = (m.sy + 0.5) * s - c.eye.y * Units.BLOCK_SIZE, z = (m.cz - c.eye.cz + 0.5) * s - c.eye.z * Units.BLOCK_SIZE;
         return x * x + y * y + z * z;
     }
 

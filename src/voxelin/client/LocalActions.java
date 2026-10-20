@@ -13,18 +13,18 @@ public final class LocalActions implements PlayerActions {
 
     public LocalActions(World world, CommandRegistry commands, Source player) { this.world = world; this.commands = commands; this.player = player; }
 
-    @Override public boolean breakBlock(int x, int y, int z) {
+    @Override public boolean breakBlock(long x, int y, long z) {
         int id = world.blockId(x, y, z);
         if (id <= 0 || world.blocks.get(id).hardness < 0) return false;
         return world.setBlock(player, x, y, z, world.blocks.air());
     }
 
-    @Override public boolean placeBlock(int x, int y, int z, String block) {
+    @Override public boolean placeBlock(long x, int y, long z, String block) {
         BlockType t = world.blocks.byName(block);
         int cur = world.blockId(x, y, z);
         if (t == null || cur < 0 || (cur != 0 && !world.blocks.get(cur).liquid)) return false;
         return world.setBlock(player, x, y, z, t);
     }
 
-    @Override public List<String> command(String line, int[] origin) { return commands.execute(player, world, origin, line); }
+    @Override public List<String> command(String line, long[] origin) { return commands.execute(player, world, origin, line); }
 }

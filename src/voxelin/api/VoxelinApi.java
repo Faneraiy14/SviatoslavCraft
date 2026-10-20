@@ -6,5 +6,7 @@ package voxelin.api;
  */
 public final class VoxelinApi {
     private VoxelinApi() {}
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
+    /** Найстаріша версія API, яку гра ще вміє виконувати. v1 (координати X/Z типу int) несумісна з безмежним світом (long). */
+    public static final int MIN_COMPATIBLE = 2;
 }

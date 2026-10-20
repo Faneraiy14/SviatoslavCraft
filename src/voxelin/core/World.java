@@ -18,18 +18,15 @@ public final class World implements WorldAccess {
     public interface Listener {
         void chunkLoaded(Chunk c);
         void chunkUnloaded(Chunk c);
-        void blockChanged(int x, int y, int z);
+        void blockChanged(long x, int y, long z);
     }
 
     /**
-     * Технічна межа світу (не ігрова): блоки від -BORDER до BORDER-1 по X і Z. За нею чанки не створюються - суцільна невидима
-     * стіна (незавантажене вважається суцільним), поставити там блок не можна. 100 тис. - межа, до якої float-позиції ще точні;
-     * після переходу позицій на double її можна майже зняти (див. docs/DESIGN.md).
+     * Захист від переповнення long, а НЕ ігрова межа: чанки існують для |cx|,|cz| <= MAX_CHUNK (~2.9e17 чанків = ~4.6e18 блоків від початку).
+     * Це математичний край усіх координат long; на швидкості 10 блоків/с до нього йти ~15 мільярдів років (див. docs/DESIGN.md).
      */
-    public static final int BORDER = 100_000;
-    public static boolean inBorder(int chunkX, int chunkZ) {
-        return chunkX >= -(BORDER >> 4) && chunkX < (BORDER >> 4) && chunkZ >= -(BORDER >> 4) && chunkZ < (BORDER >> 4);
-    }
+    public static final long MAX_CHUNK = Long.MAX_VALUE >> 5;
+    public static boolean inRange(long cx, long cz) { return cx >= -MAX_CHUNK && cx <= MAX_CHUNK && cz >= -MAX_CHUNK && cz <= MAX_CHUNK; }
 
     public final File dir;
     public final WorldInfo info;
@@ -38,11 +35,11 @@ public final class World implements WorldAccess {
     private final Generator generator;
     private final RegionStorage storage;
     private final int[] rt2p, p2rt;
-    private final ConcurrentHashMap<Long, Chunk> chunks = new ConcurrentHashMap<>();
-    private final Set<Long> pending = ConcurrentHashMap.newKeySet();
+    private final ConcurrentHashMap<ChunkPos, Chunk> chunks = new ConcurrentHashMap<>();
+    private final Set<ChunkPos> pending = ConcurrentHashMap.newKeySet();
     private final ConcurrentLinkedQueue<Chunk> ready = new ConcurrentLinkedQueue<>();
     /** Знімки чанків, чергованих на запис: повторне завантаження бере звідси, а не зі ще не оновленого файлу. */
-    private final ConcurrentHashMap<Long, Chunk> saving = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ChunkPos, Chunk> saving = new ConcurrentHashMap<>();
     private final ExecutorService genPool, io;
     private final Map<Source, int[]> budgets = new IdentityHashMap<>();
     private Listener listener;
@@ -62,7 +59,8 @@ public final class World implements WorldAccess {
             p2rt[p] = t != null ? t.id : blocks.unknown().id;
         }
         info.save(dir); // палітра могла дописатись новими блоками
-        int threads = Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 2));
+        // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
+        int threads = Integer.getInteger("voxelin.genThreads", Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)));
         genPool = Executors.newFixedThreadPool(threads, daemon("voxelin-gen"));
         io = Executors.newSingleThreadExecutor(daemon("voxelin-io"));
     }
@@ -75,45 +73,45 @@ public final class World implements WorldAccess {
 
     // ------------------------------------------------------------------ читання
 
-    public Chunk chunk(int cx, int cz) { return chunks.get(Chunk.key(cx, cz)); }
+    public Chunk chunk(long cx, long cz) { return chunks.get(new ChunkPos(cx, cz)); }
     public Collection<Chunk> loadedChunks() { return chunks.values(); }
 
     /** id блока; незавантажений чанк -> -1. Безпечно з будь-якого потоку. */
-    public int blockId(int x, int y, int z) {
+    public int blockId(long x, int y, long z) {
         if (y < 0 || y >= Chunk.HEIGHT) return 0;
-        Chunk c = chunks.get(Chunk.key(x >> 4, z >> 4));
-        return c == null ? -1 : c.get(x & 15, y, z & 15);
+        Chunk c = chunks.get(new ChunkPos(x >> 4, z >> 4));
+        return c == null ? -1 : c.get((int) (x & 15), y, (int) (z & 15));
     }
 
     /** Чи є тут суцільний блок (незавантажений чанк вважається суцільним - гравець не провалиться крізь ще не готовий світ). */
-    public boolean isSolid(int x, int y, int z) {
+    public boolean isSolid(long x, int y, long z) {
         int id = blockId(x, y, z);
         return id < 0 || blocks.get(id).solid;
     }
 
     @Override public int height() { return Chunk.HEIGHT; }
-    @Override public BlockRef getBlock(int x, int y, int z) { int id = blockId(x, y, z); return id < 0 ? null : blocks.get(id); }
+    @Override public BlockRef getBlock(long x, int y, long z) { int id = blockId(x, y, z); return id < 0 ? null : blocks.get(id); }
     @Override public long seed() { return info.seed; }
     @Override public String name() { return info.name; }
 
     // ------------------------------------------------------------------ зміни
 
-    @Override public boolean setBlock(Source src, int x, int y, int z, BlockRef ref) {
+    @Override public boolean setBlock(Source src, long x, int y, long z, BlockRef ref) {
         if (closed || y < 0 || y >= Chunk.HEIGHT || ref == null) return false;
-        Chunk c = chunks.get(Chunk.key(x >> 4, z >> 4));
+        Chunk c = chunks.get(new ChunkPos(x >> 4, z >> 4));
         if (c == null) return false;
         BlockType nb = blocks.get(ref.id());
         if (nb != ref && blocks.byName(ref.name()) != nb) return false; // чужий BlockRef
         int[] b = budgets.computeIfAbsent(src, k -> new int[1]);
         if (b[0] >= src.blockBudgetPerTick()) return false;
-        int old = c.get(x & 15, y, z & 15);
+        int old = c.get((int) (x & 15), y, (int) (z & 15));
         if (old == nb.id) return true;
         if (events.has(BlockChangeEvent.class)) {
             BlockChangeEvent e = events.post(new BlockChangeEvent(this, src, x, y, z, blocks.get(old), nb));
             if (e.isCancelled()) return false;
         }
         b[0]++;
-        c.set(x & 15, y, z & 15, nb.id);
+        c.set((int) (x & 15), y, (int) (z & 15), nb.id);
         if (listener != null) listener.blockChanged(x, y, z);
         return true;
     }
@@ -121,23 +119,23 @@ public final class World implements WorldAccess {
     // ------------------------------------------------------------------ життєвий цикл (головний потік)
 
     /** Довантажити чанки навколо (cx,cz) у радіусі, вивантажити дальші. Готові з фону потрапляють у світ саме тут. */
-    public void update(int centerCx, int centerCz, int radius) {
+    public void update(long centerCx, long centerCz, int radius) {
         for (Chunk c; (c = ready.poll()) != null; ) {
-            pending.remove(Chunk.key(c.cx, c.cz));
+            pending.remove(c.pos());
             if (closed) continue;
-            chunks.put(Chunk.key(c.cx, c.cz), c);
+            chunks.put(c.pos(), c);
             if (listener != null) listener.chunkLoaded(c);
         }
         // замовлення від найближчих до дальніх, не більше 2 черг на потік
         if (pending.size() < 16) {
             List<long[]> want = new ArrayList<>();
             for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
-                if (dx * dx + dz * dz > radius * radius + radius || !inBorder(centerCx + dx, centerCz + dz)) continue;
-                long k = Chunk.key(centerCx + dx, centerCz + dz);
+                if (dx * dx + dz * dz > radius * radius + radius || !inRange(centerCx + dx, centerCz + dz)) continue;
+                ChunkPos k = new ChunkPos(centerCx + dx, centerCz + dz);
                 if (!chunks.containsKey(k) && !pending.contains(k)) want.add(new long[]{dx * dx + dz * dz, centerCx + dx, centerCz + dz});
             }
             want.sort(Comparator.comparingLong(a -> a[0]));
-            for (long[] w : want) { if (pending.size() >= 16) break; request((int) w[1], (int) w[2]); }
+            for (long[] w : want) { if (pending.size() >= 16) break; request(w[1], w[2]); }
         }
         int keep = radius + 2;
         for (Iterator<Chunk> it = chunks.values().iterator(); it.hasNext(); ) {
@@ -149,8 +147,8 @@ public final class World implements WorldAccess {
         }
     }
 
-    private void request(int cx, int cz) {
-        long k = Chunk.key(cx, cz);
+    private void request(long cx, long cz) {
+        ChunkPos k = new ChunkPos(cx, cz);
         if (!pending.add(k)) return;
         genPool.execute(() -> {
             try {
@@ -190,7 +188,7 @@ public final class World implements WorldAccess {
     private void saveAsync(Chunk c) {
         c.modified = false;
         Chunk copy = snapshot(c); // копія на головному потоці - фон не бачить напівзмінених масивів
-        long k = Chunk.key(c.cx, c.cz);
+        ChunkPos k = c.pos();
         saving.put(k, copy);
         io.execute(() -> { storage.save(copy, rt2p); saving.remove(k, copy); });
     }
@@ -226,14 +224,14 @@ public final class World implements WorldAccess {
         chunks.clear();
     }
 
-    public int surfaceY(int x, int z) { return generator.surfaceY(x, z); }
+    public int surfaceY(long x, long z) { return generator.surfaceY(x, z); }
 
     /** Доступ до чанка під час генерації для модів (ChunkGeneratedEvent). */
     private final class GenAccess implements ChunkData {
         final Chunk c;
         GenAccess(Chunk c) { this.c = c; }
-        public int chunkX() { return c.cx; }
-        public int chunkZ() { return c.cz; }
+        public long chunkX() { return c.cx; }
+        public long chunkZ() { return c.cz; }
         public int height() { return Chunk.HEIGHT; }
         public BlockRef get(int x, int y, int z) { return blocks.get(c.get(x & 15, y, z & 15)); }
         public void set(int x, int y, int z, BlockRef b) { if (x >= 0 && x < 16 && z >= 0 && z < 16 && b != null) c.set(x, y, z, blocks.get(b.id()).id); }

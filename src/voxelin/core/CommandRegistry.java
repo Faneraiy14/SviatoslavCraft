@@ -29,7 +29,7 @@ public final class CommandRegistry {
     public Collection<Entry> all() { return Collections.unmodifiableCollection(map.values()); }
 
     /** Виконати. Повертає повідомлення для чату/консолі (помилка теж повідомлення, а не виняток). */
-    public List<String> execute(Source src, WorldAccess world, int[] origin, String line) {
+    public List<String> execute(Source src, WorldAccess world, long[] origin, String line) {
         List<String> out = new ArrayList<>();
         String s = line.trim();
         if (s.startsWith("/")) s = s.substring(1);
@@ -43,7 +43,7 @@ public final class CommandRegistry {
             public Source source() { return src; }
             public WorldAccess world() { return world; }
             public List<String> args() { return args; }
-            public int[] origin() { return origin == null ? new int[3] : origin.clone(); }
+            public long[] origin() { return origin == null ? new long[3] : origin.clone(); }
             public void reply(String m) { out.add(m); }
         };
         try { e.handler.run(ctx); }
@@ -52,11 +52,11 @@ public final class CommandRegistry {
         return out;
     }
 
-    /** Координата з підтримкою ~ (відносно origin). */
-    public static int coord(String a, int origin) throws Commands.CommandException {
+    /** Координата з підтримкою ~ (відносно origin). Приймає цілі long (також у вигляді 1e12 не підтримується - лише цифри). */
+    public static long coord(String a, long origin) throws Commands.CommandException {
         try {
-            if (a.startsWith("~")) return origin + (a.length() == 1 ? 0 : Integer.parseInt(a.substring(1)));
-            return Integer.parseInt(a);
-        } catch (NumberFormatException e) { throw new Commands.CommandException("Не число: " + a); }
+            if (a.startsWith("~")) return Math.addExact(origin, a.length() == 1 ? 0 : Long.parseLong(a.substring(1)));
+            return Long.parseLong(a);
+        } catch (NumberFormatException | ArithmeticException e) { throw new Commands.CommandException("Не число (або надто велике): " + a); }
     }
 }

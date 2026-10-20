@@ -6,5 +6,5 @@ import voxelin.core.Chunk;
 public interface Generator {
     void generate(Chunk chunk);
     /** Висота поверхні в точці (для пошуку місця появи гравця). */
-    int surfaceY(int x, int z);
+    int surfaceY(long x, long z);
 }

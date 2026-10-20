@@ -69,8 +69,10 @@ public final class ModLoader {
         } catch (Exception e) {
             return add(new ModInfo(id, jar.getName(), Status.FAILED, "не вдалось прочитати jar: " + e));
         }
-        if (api < 1 || api > VoxelinApi.VERSION)
-            return add(new ModInfo(id, jar.getName(), Status.INCOMPATIBLE, "потрібен API " + api + ", гра надає " + VoxelinApi.VERSION + " - онови гру або мод"));
+        if (api < VoxelinApi.MIN_COMPATIBLE)
+            return add(new ModInfo(id, jar.getName(), Status.INCOMPATIBLE, "мод зібрано під застарілий API " + api + " (гра підтримує " + VoxelinApi.MIN_COMPATIBLE + ".." + VoxelinApi.VERSION + ", координати стали long) - онови мод"));
+        if (api > VoxelinApi.VERSION)
+            return add(new ModInfo(id, jar.getName(), Status.INCOMPATIBLE, "потрібен API " + api + ", гра надає " + VoxelinApi.VERSION + " - онови гру"));
         try {
             URLClassLoader cl = new URLClassLoader(new URL[]{jar.toURI().toURL()}, ModLoader.class.getClassLoader());
             Object o = Class.forName(cls, true, cl).getDeclaredConstructor().newInstance();

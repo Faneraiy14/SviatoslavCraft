@@ -28,11 +28,12 @@ final class PlayScreen {
     final Inventory inv = new Inventory();
     private final PlayerActions actions;
     private final Deque<Line> chat = new ArrayDeque<>();
-    private float spawnX, spawnY, spawnZ;
+    private final Pos spawn;
     private boolean invOpen, chatOpen, debug, hud = true, grabbed;
     private Raycast.Hit hit;
     private long ticks;
     private final BenchRun bench;
+    long updNs, renNs, guiNs;
     private int quietFrames;
     private boolean cmdsDone, shotDone;
 
@@ -41,34 +42,34 @@ final class PlayScreen {
         rend = new WorldRenderer(world);
         rend.renderDistance = v.opts.renderDistance;
         actions = new LocalActions(world, v.game.commands, Sources.player("Player"));
-        player = new PlayerEntity(world::isSolid, 0, 0, 0);
-        findSpawn(0, 0);
+        spawn = findSpawn(0, 0);
+        player = new PlayerEntity(world::isSolid, spawn);
         WorldInfo i = world.info;
         if (i.hasPlayer) {
-            player.teleport(i.playerX, i.playerY, i.playerZ); player.yaw = i.playerYaw; player.pitch = i.playerPitch;
-            if (world.isSolid(Units.toBlock(i.playerX), Units.toBlock(i.playerY - PlayerEntity.EYE + 0.05f), Units.toBlock(i.playerZ))
-                    || world.isSolid(Units.toBlock(i.playerX), Units.toBlock(i.playerY), Units.toBlock(i.playerZ))) findSpawn(Units.toBlock(i.playerX), Units.toBlock(i.playerZ));
-        } else player.teleport(spawnX, spawnY, spawnZ);
+            player.teleport(i.playerPos()); player.yaw = i.playerYaw; player.pitch = i.playerPitch;
+            Pos p = player.pos;
+            long fx = p.blockX(), fz = p.blockZ();
+            int feet = (int) Math.floor(p.y - PlayerEntity.EYE + 0.05);
+            if (world.isSolid(fx, feet, fz) || world.isSolid(fx, p.blockY(), fz)) player.teleport(findSpawn(fx, fz)); // світ змінився - не лишати гравця в блоці
+        }
         for (String s : VanillaContent.STARTER) inv.add(s, 64);
-        if (v.opts.tp != null) {
-            float[] t = v.opts.tp; // X, Z, yaw, pitch, висота над землею (блоки)
-            int bx = Math.round(t[0]), bz = Math.round(t[1]);
-            findSpawn(bx, bz);
-            player.teleport(spawnX, spawnY + Units.toWorld(Math.round(t[4])), spawnZ);
-            player.yaw = t[2]; player.pitch = t[3];
+        if (v.opts.hasTp) { // X, Z (long, блоки), кути, висота над землею
+            Pos sp = findSpawn(v.opts.tpX, v.opts.tpZ);
+            sp.add(0, v.opts.tpH, 0);
+            player.teleport(sp);
+            player.yaw = v.opts.tpYaw; player.pitch = v.opts.tpPitch;
         }
         bench = v.opts.benchSeconds > 0 ? new BenchRun(v.opts.benchSeconds) : null;
         debug = v.opts.debug;
-        grab(true);
+        grab(!v.opts.quiet()); // автоперевірки не захоплюють справжній курсор користувача
         say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера.");
     }
 
-    /** Знайти місце появи над землею в колонці (bx,bz): перший вільний прохід на 2 блоки вгору від поверхні. */
-    private void findSpawn(int bx, int bz) {
+    /** Місце появи над землею в колонці (bx,bz): перший вільний прохід на 2 блоки вгору від поверхні. */
+    private Pos findSpawn(long bx, long bz) {
         int y = Math.max(1, world.surfaceY(bx, bz) + 1);
         while (y < Chunk.HEIGHT - 3 && (world.isSolid(bx, y, bz) || world.isSolid(bx, y + 1, bz))) y++;
-        spawnX = Units.center(bx); spawnZ = Units.center(bz);
-        spawnY = Units.toWorld(y) + PlayerEntity.EYE + 0.02f;
+        return Pos.ofBlock(bx, y + PlayerEntity.EYE + 0.02, bz);
     }
 
     private void grab(boolean g) { grabbed = g; v.window.setMouseGrabbed(g); v.input.resetMouse(); }
@@ -81,11 +82,11 @@ final class PlayScreen {
         ticks++;
         Input in = v.input;
         boolean active = grabbed && !chatOpen && !invOpen;
-        if (bench != null && bench.active()) bench.move(player, world);
-        else if (!v.opts.freeze) player.tick((float) Voxelin.TICK, active && in.down(GLFW_KEY_W), active && in.down(GLFW_KEY_S), active && in.down(GLFW_KEY_A), active && in.down(GLFW_KEY_D),
+        if (bench != null && bench.active()) bench.move(player);
+        else if (!v.opts.freeze) player.tick(Voxelin.TICK, active && in.down(GLFW_KEY_W), active && in.down(GLFW_KEY_S), active && in.down(GLFW_KEY_A), active && in.down(GLFW_KEY_D),
                 active && in.down(GLFW_KEY_SPACE), active && (in.down(GLFW_KEY_LEFT_CONTROL) || in.down(GLFW_KEY_RIGHT_CONTROL)), active && in.down(GLFW_KEY_LEFT_SHIFT));
-        if (player.y < -20 * Units.BLOCK_SIZE) { player.teleport(spawnX, spawnY, spawnZ); say("Ти впав за межі світу - повернено на спавн."); }
-        world.update(Units.toBlock(player.x) >> 4, Units.toBlock(player.z) >> 4, rend.renderDistance + 1);
+        if (player.pos.y < -20) { player.teleport(spawn); say("Ти впав за межі світу - повернено на спавн."); }
+        world.update(player.pos.cx, player.pos.cz, rend.renderDistance + 1);
         world.tick();
     }
 
@@ -114,19 +115,23 @@ final class PlayScreen {
         } else in.consumeScroll();
         in.resetMouse();
 
-        // камера з інтерполяцією між тіками
-        float ex = lerp(player.prevX, player.x, alpha), ez = lerp(player.prevZ, player.z, alpha),
-                ey = lerp(player.prevY + player.prevEyeOffset, player.y + player.eyeOffset, alpha);
+        // камера з інтерполяцією між тіками (усе відносно чанка гравця - малі числа)
+        Pos pp = player.pos;
+        cam.pos.set(pp);
+        cam.pos.x = lerp(player.prev.relX(pp.cx), pp.x, alpha);
+        cam.pos.z = lerp(player.prev.relZ(pp.cz), pp.z, alpha);
+        cam.pos.y = lerp(player.prev.y + player.prevEyeOffset, pp.y + player.eyeOffset, alpha);
+        cam.pos.normalize();
         float yaw = player.yaw, pitch = player.pitch;
-        cam.x = ex; cam.y = ey; cam.z = ez; cam.yaw = yaw; cam.pitch = pitch;
+        cam.yaw = yaw; cam.pitch = pitch;
         if (cam.mode != Camera.Mode.FIRST) {
             boolean back = cam.mode == Camera.Mode.THIRD_BACK;
-            float d = Raycast.distance(ex, ey, ez, back ? yaw + 180f : yaw, back ? -pitch : pitch, Camera.THIRD_MAX, this::solidAt);
-            cam.thirdDistance = Math.max(0.3f, d - 0.3f);
+            double d = Raycast.distance(cam.pos, back ? yaw + 180f : yaw, back ? -pitch : pitch, Camera.THIRD_MAX, this::solidAt);
+            cam.thirdDistance = Math.max(0.2, d - 0.2);
         }
         cam.update(v.window.fbWidth(), v.window.fbHeight(), (rend.renderDistance + 1) * 16 * Units.BLOCK_SIZE);
 
-        hit = play || bench != null ? Raycast.cast(ex, ey, ez, yaw, pitch, Raycast.MAX_REACH, this::solidAt) : null;
+        hit = play || bench != null ? Raycast.cast(cam.pos, yaw, pitch, Raycast.MAX_REACH, this::solidAt) : null;
         if (play && hit != null) {
             if (in.clicked(GLFW_MOUSE_BUTTON_LEFT)) {
                 int id = world.blockId(hit.x(), hit.y(), hit.z());
@@ -142,20 +147,25 @@ final class PlayScreen {
         glViewport(0, 0, v.window.fbWidth(), v.window.fbHeight());
         glClearColor(rend.fogColor[0], rend.fogColor[1], rend.fogColor[2], 1f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        rend.update(cam.x, cam.z);
+        long t0 = System.nanoTime();
+        rend.update(cam);
+        long t1 = System.nanoTime();
         rend.render(cam);
         overlay3d();
+        long t2 = System.nanoTime();
+        updNs = t1 - t0; renNs = t2 - t1;
 
         // інтерфейс
         v.gui.begin();
         if (hud) hud(v.gui);
         v.gui.end();
+        guiNs = System.nanoTime() - t2;
         devHooks();
         return true;
     }
 
-    private boolean solidAt(int x, int y, int z) { int id = world.blockId(x, y, z); return id > 0 && world.blocks.get(id).solid; }
-    private static float lerp(float a, float b, float t) { return a + (b - a) * t; }
+    private boolean solidAt(long x, int y, long z) { int id = world.blockId(x, y, z); return id > 0 && world.blocks.get(id).solid; }
+    private static double lerp(double a, double b, double t) { return a + (b - a) * t; }
 
     // ------------------------------------------------------------------ контур цілі й тіло гравця (фіксований конвеєр поверх шейдерного світу)
 
@@ -164,8 +174,10 @@ final class PlayScreen {
         glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadMatrixf(cam.proj.m);
         glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadMatrixf(cam.view.m);
         glEnable(GL_DEPTH_TEST);
+        final long rcx = cam.eye.cx * 16, rcz = cam.eye.cz * 16; // начало малювання - чанк камери
+        final float s = Units.BLOCK_SIZE;
         if (hit != null) {
-            float s = Units.BLOCK_SIZE, e = 0.012f * s, x0 = hit.x() * s - e, y0 = hit.y() * s - e, z0 = hit.z() * s - e, x1 = (hit.x() + 1) * s + e, y1 = (hit.y() + 1) * s + e, z1 = (hit.z() + 1) * s + e;
+            float e = 0.012f, x0 = (hit.x() - rcx - e) * s, y0 = (hit.y() - e) * s, z0 = (hit.z() - rcz - e) * s, x1 = (hit.x() - rcx + 1 + e) * s, y1 = (hit.y() + 1 + e) * s, z1 = (hit.z() - rcz + 1 + e) * s;
             glColor4f(1f, 1f, 1f, 1f); glLineWidth(2f);
             glBegin(GL_LINES);
             float[][] c = {{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}, {x0, y1, z0}, {x1, y1, z0}, {x1, y1, z1}, {x0, y1, z1}};
@@ -174,8 +186,8 @@ final class PlayScreen {
             glEnd();
         }
         if (cam.mode != Camera.Mode.FIRST) { // заглушка тіла: коробка розміром із хітбокс
-            float hw = PlayerEntity.WIDTH / 2f, cy = player.bodyCenterY(), hh = PlayerEntity.HEIGHT / 2f;
-            float px = lerp(player.prevX, player.x, 1f), pz = player.z;
+            float hw = (float) (PlayerEntity.WIDTH / 2 * s), hh = (float) (PlayerEntity.HEIGHT / 2 * s);
+            float px = (float) (player.pos.relX(cam.eye.cx) * s), cy = (float) (player.bodyCenterY() * s), pz = (float) (player.pos.relZ(cam.eye.cz) * s);
             glDisable(GL_CULL_FACE);
             glBegin(GL_QUADS);
             float[][] shade = {{0.85f, 0.7f, 0.55f}, {0.7f, 0.58f, 0.45f}, {0.78f, 0.64f, 0.5f}};
@@ -205,11 +217,14 @@ final class PlayScreen {
         closeChat();
         if (line.isEmpty()) return;
         if (line.startsWith("/")) {
-            int[] o = {Units.toBlock(player.x), Units.toBlock(player.y - PlayerEntity.EYE + 0.05f), Units.toBlock(player.z)};
             say("> " + line);
+            long[] o = origin();
             for (String r : actions.command(line, o)) say(r);
         } else say("<Гравець> " + line);
     }
+
+    /** Блок під ногами гравця {x, y, z} - для ~ у командах. */
+    private long[] origin() { Pos p = player.pos; return new long[]{p.blockX(), (long) Math.floor(p.y - PlayerEntity.EYE + 0.05), p.blockZ()}; }
 
     // ------------------------------------------------------------------ HUD
 
@@ -287,11 +302,11 @@ final class PlayScreen {
     }
 
     private void debugText() {
-        float s = Units.BLOCK_SIZE;
+        Pos p = player.pos;
         String[] lines = {
                 "Voxelin " + Voxelin.VERSION,
-                String.format(Locale.ROOT, "XYZ: %.1f %.1f %.1f  (блоки)", player.x / s, (player.y - PlayerEntity.EYE) / s, player.z / s),
-                String.format(Locale.ROOT, "Кут: %.0f / %.0f   FPS: %d", player.yaw, player.pitch, v.fps),
+                "XYZ: " + p.fmtX() + " " + String.format(Locale.ROOT, "%.1f", p.y - PlayerEntity.EYE) + " " + p.fmtZ() + "  (блоки)",
+                String.format(Locale.ROOT, "Кут: %.0f / %.0f   FPS: %d   чанк: %d %d", player.yaw, player.pitch, v.fps, p.cx, p.cz),
                 "Чанків: " + world.loadedChunks().size() + "  мешів: " + rend.meshCountLoaded() + "  у черзі: " + rend.pending(),
                 "Видно секцій: " + rend.visibleSections + "  граней: " + rend.drawnQuads,
                 String.format(Locale.ROOT, "Мешинг: %.2f мс/секція   Генерація: %.2f мс/чанк", rend.meshCount == 0 ? 0 : rend.meshNanos / 1e6 / rend.meshCount, world.genCount == 0 ? 0 : world.genNanos / 1e6 / world.genCount),
@@ -312,7 +327,7 @@ final class PlayScreen {
         if (!cmdsDone && quietFrames > 20 && !v.opts.cmds.isEmpty()) {
             cmdsDone = true; quietFrames = 0;
             long t0 = System.nanoTime();
-            for (String c : v.opts.cmds) { int[] o = {Units.toBlock(player.x), Units.toBlock(player.y - PlayerEntity.EYE), Units.toBlock(player.z)}; for (String r : actions.command(c, o)) { say(r); System.out.println("[cmd] " + c + " -> " + r); } }
+            for (String c : v.opts.cmds) { for (String r : actions.command(c, origin())) { say(r); System.out.println("[cmd] " + c + " -> " + r); } }
             System.out.println("[cmd] виконано за " + (System.nanoTime() - t0) / 1_000_000 + " мс");
         }
         boolean cmdsReady = v.opts.cmds.isEmpty() || cmdsDone;
@@ -326,8 +341,7 @@ final class PlayScreen {
 
     /** Зберегти позицію й закрити (виклик при виході зі світу чи гри). */
     void close() {
-        float x = player.x, y = player.y, z = player.z;
-        world.info.setPlayer(x, y, z, player.yaw, player.pitch);
+        world.info.setPlayer(player.pos, player.yaw, player.pitch);
         rend.close();
         world.close();
         grab(false);

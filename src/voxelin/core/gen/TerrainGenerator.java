@@ -17,7 +17,7 @@ public final class TerrainGenerator implements Generator {
 
     public TerrainGenerator(long seed, WorldInfo.Type type, BlockRegistry reg) {
         this.seed = seed; this.type = type;
-        height = new Noise(seed); detail = new Noise(seed * 31 + 7);
+        height = new Noise(seed); detail = new Noise(seed ^ 0x7A3F9C11D5E2B648L);
         grass = id(reg, "voxelin:grass"); dirt = id(reg, "voxelin:dirt"); stone = id(reg, "voxelin:stone");
         bedrock = id(reg, "voxelin:bedrock"); log = id(reg, "voxelin:oak_log"); leaves = id(reg, "voxelin:oak_leaves");
     }
@@ -27,14 +27,14 @@ public final class TerrainGenerator implements Generator {
         return r.byName(n).id;
     }
 
-    @Override public int surfaceY(int x, int z) {
+    @Override public int surfaceY(long x, long z) {
         if (type == WorldInfo.Type.FLAT) return BASE;
-        double h = height.fractal(x / 96.0, z / 96.0, 4) * 18 + detail.fractal(x / 24.0, z / 24.0, 2) * 3;
+        double h = height.fractal2(x, z, 96, 4) * 18 + detail.fractal2(x, z, 24, 2) * 3;
         return Math.max(4, Math.min(Chunk.HEIGHT - 20, BASE + (int) Math.round(h)));
     }
 
     @Override public void generate(Chunk c) {
-        int bx = c.cx * 16, bz = c.cz * 16;
+        long bx = c.cx * 16, bz = c.cz * 16;
         for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
             int top = surfaceY(bx + x, bz + z);
             c.set(x, 0, z, bedrock);
@@ -57,7 +57,7 @@ public final class TerrainGenerator implements Generator {
         }
     }
 
-    private long hash(int x, int z) {
+    private long hash(long x, long z) {
         long h = seed ^ (x * 0x9E3779B97F4A7C15L) ^ (z * 0xC2B2AE3D27D4EB4FL);
         h ^= h >>> 33; h *= 0xFF51AFD7ED558CCDL; h ^= h >>> 33; h *= 0xC4CEB9FE1A85EC53L; h ^= h >>> 33;
         return h;

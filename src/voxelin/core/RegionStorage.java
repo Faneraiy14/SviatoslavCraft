@@ -17,16 +17,16 @@ public final class RegionStorage {
     static final int CHUNK_FORMAT = 1;
 
     private final File dir;
-    private final Map<Long, Map<Integer, byte[]>> regions = new HashMap<>();
-    private final Set<Long> dirty = new HashSet<>();
+    private record RegionPos(long rx, long rz) {}
+    private final Map<RegionPos, Map<Integer, byte[]>> regions = new HashMap<>();
+    private final Set<RegionPos> dirty = new HashSet<>();
 
     public RegionStorage(File worldDir) { this.dir = new File(worldDir, "region"); }
 
-    private static long rkey(int rx, int rz) { return ((long) rx << 32) ^ (rz & 0xFFFFFFFFL); }
-    private File file(int rx, int rz) { return new File(dir, "r." + rx + "." + rz + ".vxr"); }
+    private File file(long rx, long rz) { return new File(dir, "r." + rx + "." + rz + ".vxr"); }
 
-    private Map<Integer, byte[]> region(int rx, int rz) {
-        long k = rkey(rx, rz);
+    private Map<Integer, byte[]> region(long rx, long rz) {
+        RegionPos k = new RegionPos(rx, rz);
         Map<Integer, byte[]> m = regions.get(k);
         if (m != null) return m;
         m = new HashMap<>();
@@ -57,8 +57,8 @@ public final class RegionStorage {
     }
 
     /** Прочитати чанк (номери палітри перекладаються в id цього запуску через p2rt). null - чанка на диску нема або він битий. */
-    public synchronized Chunk load(int cx, int cz, int[] p2rt) {
-        byte[] data = region(cx >> 5, cz >> 5).get((cx & 31) | ((cz & 31) << 5));
+    public synchronized Chunk load(long cx, long cz, int[] p2rt) {
+        byte[] data = region(cx >> 5, cz >> 5).get((int) ((cx & 31) | ((cz & 31) << 5)));
         if (data == null) return null;
         try { return decode(cx, cz, data, p2rt); }
         catch (IOException e) { System.out.println("[Voxelin] ⚠️ чанк " + cx + "," + cz + " пошкоджено: " + e.getMessage() + " - генерую заново"); return null; }
@@ -68,25 +68,24 @@ public final class RegionStorage {
     public void save(Chunk c, int[] rt2p) {
         byte[] data = encode(c, rt2p);
         synchronized (this) {
-            region(c.cx >> 5, c.cz >> 5).put((c.cx & 31) | ((c.cz & 31) << 5), data);
-            dirty.add(rkey(c.cx >> 5, c.cz >> 5));
+            region(c.cx >> 5, c.cz >> 5).put((int) ((c.cx & 31) | ((c.cz & 31) << 5)), data);
+            dirty.add(new RegionPos(c.cx >> 5, c.cz >> 5));
         }
     }
 
     /** Записати змінені регіони на диск атомарно. */
     public void flush() throws IOException {
-        List<long[]> todo = new ArrayList<>();
+        List<RegionPos> todo = new ArrayList<>();
         List<Map<Integer, byte[]>> maps = new ArrayList<>();
         synchronized (this) {
-            for (long k : dirty) { todo.add(new long[]{k}); maps.add(new HashMap<>(regions.get(k))); }
+            for (RegionPos k : dirty) { todo.add(k); maps.add(new HashMap<>(regions.get(k))); }
             dirty.clear();
         }
         if (todo.isEmpty()) return;
         if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("не вдалось створити " + dir);
         for (int i = 0; i < todo.size(); i++) {
-            long k = todo.get(i)[0];
-            int rx = (int) (k >> 32), rz = (int) k;
-            File f = file(rx, rz), tmp = new File(dir, f.getName() + ".tmp");
+            RegionPos k = todo.get(i);
+            File f = file(k.rx(), k.rz()), tmp = new File(dir, f.getName() + ".tmp");
             try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tmp)))) {
                 out.writeInt(MAGIC); out.writeInt(FORMAT); out.writeInt(maps.get(i).size());
                 for (Map.Entry<Integer, byte[]> e : maps.get(i).entrySet()) {
@@ -115,7 +114,7 @@ public final class RegionStorage {
         } catch (IOException e) { throw new UncheckedIOException(e); }
     }
 
-    static Chunk decode(int cx, int cz, byte[] data, int[] p2rt) throws IOException {
+    static Chunk decode(long cx, long cz, byte[] data, int[] p2rt) throws IOException {
         try (DataInputStream in = new DataInputStream(new InflaterInputStream(new ByteArrayInputStream(data)))) {
             int fmt = in.readUnsignedByte();
             if (fmt != CHUNK_FORMAT) throw new IOException("невідомий формат чанка " + fmt);

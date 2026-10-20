@@ -17,7 +17,7 @@ import static org.lwjgl.opengl.GL11.*;
  * Параметри (для запуску й перевірок): --saves ТЕКА --mods ТЕКА --render-distance N --msaa N --no-vsync --size ШxВ
  *   --autoworld НАЗВА[:flat] [--seed N]   одразу зайти у світ (створити, якщо нема)
  *   --menu worlds|create|rename            показати екран меню (з --screenshot)
- *   --tp X,Z,YAW,PITCH,ВИСОТА             поставити гравця (блоки) · --cmd "/fill ...;/setblock ..."   команди після завантаження
+ *   --tp X,Z,YAW,PITCH,ВИСОТА (X,Z - цілі до ±9e18, можна 1e15)             поставити гравця (блоки) · --cmd "/fill ...;/setblock ..."   команди після завантаження
  *   --debug  --freeze                     показати F3 одразу / без фізики гравця (для знімків) · --screenshot файл.png   знімок і вихід · --bench СЕКУНД [--bench-out файл.json]   тест швидкодії і вихід
  */
 public final class Voxelin {
@@ -32,8 +32,12 @@ public final class Voxelin {
         String autoWorld, screenshot, benchOut = "bench-result.json";
         boolean autoFlat, debug, freeze;
         String menuScreen;
+        /** Автоматичні перевірки (бенчмарк, знімок, заморожений гравець, показ меню): не захоплювати курсор, не відбирати фокус, не слухати мишу. */
+        boolean quiet() { return benchSeconds > 0 || screenshot != null || freeze || menuScreen != null; }
         double benchSeconds;
-        float[] tp;
+        boolean hasTp;
+        long tpX, tpZ;
+        float tpYaw, tpPitch, tpH;
         final List<String> cmds = new ArrayList<>();
 
         static Options parse(String[] a) {
@@ -53,7 +57,12 @@ public final class Voxelin {
                         case "--size" -> { String[] s = a[++i].split("x"); o.width = Math.max(320, Integer.parseInt(s[0])); o.height = Math.max(240, Integer.parseInt(s[1])); }
                         case "--seed" -> o.seed = Long.parseLong(a[++i]);
                         case "--autoworld" -> { String s = a[++i]; o.autoFlat = s.endsWith(":flat"); o.autoWorld = o.autoFlat ? s.substring(0, s.length() - 5) : s; }
-                        case "--tp" -> { String[] s = a[++i].split(","); o.tp = new float[5]; for (int j = 0; j < 5; j++) o.tp[j] = j < s.length ? Float.parseFloat(s[j]) : 0; }
+                        case "--tp" -> { // X,Z (цілі, можна 1e15), YAW, PITCH, ВИСОТА над землею
+                            String[] s = a[++i].split(",");
+                            o.tpX = new java.math.BigDecimal(s[0].trim()).longValueExact(); o.tpZ = new java.math.BigDecimal(s[1].trim()).longValueExact();
+                            o.tpYaw = s.length > 2 ? Float.parseFloat(s[2]) : 0; o.tpPitch = s.length > 3 ? Float.parseFloat(s[3]) : 0; o.tpH = s.length > 4 ? Float.parseFloat(s[4]) : 0;
+                            o.hasTp = true;
+                        }
                         case "--cmd" -> { for (String c : a[++i].split(";")) if (!c.trim().isEmpty()) o.cmds.add(c.trim()); }
                         case "--screenshot" -> o.screenshot = a[++i];
                         case "--bench" -> o.benchSeconds = Double.parseDouble(a[++i]);
@@ -79,11 +88,13 @@ public final class Voxelin {
     private PlayScreen play;
     private World loading;
     private long loadingSince;
-    private int loadCx, loadCz;
+    private long loadCx, loadCz;
     private String loadError;
     long frames;
     int fps;
     double frameDt;
+    /** Час фаз кадру (нс) - для розбору мікрозависань у --bench. */
+    long tickNs, swapNs;
 
     private Voxelin(Options opts) {
         this.opts = opts;
@@ -109,7 +120,7 @@ public final class Voxelin {
 
     private void run() {
         window = new Window();
-        window.create("Voxelin", opts.width, opts.height, opts.msaa, opts.vsync);
+        window.create("Voxelin", opts.width, opts.height, opts.msaa, opts.vsync, !opts.quiet());
         input = new Input(window);
         gui = new Gui(window, input);
         menus = new Menus(this);
@@ -123,13 +134,18 @@ public final class Voxelin {
             frameDt = (now - last) / 1e9;
             last = now;
             acc = Math.min(0.25, acc + frameDt);
+            tickNs = 0;
             if (state == State.PLAYING) {
                 int steps = 0;
+                long t0 = System.nanoTime();
                 while (acc >= TICK && steps < 5) { play.tick(); acc -= TICK; steps++; }
                 if (steps == 5) acc = 0;
+                tickNs = System.nanoTime() - t0;
             } else acc = 0;
             frame((float) (acc / TICK));
+            long sw0 = System.nanoTime();
             window.swapBuffers();
+            swapNs = System.nanoTime() - sw0;
             frames++; frameCount++;
             if (now - fpsAt >= 1_000_000_000L) { fps = frameCount; frameCount = 0; fpsAt = now; }
         }
@@ -172,9 +188,9 @@ public final class Voxelin {
             return;
         }
         WorldInfo i = loading.info;
-        loadCx = i.hasPlayer ? Units.toBlock(i.playerX) >> 4 : 0;
-        loadCz = i.hasPlayer ? Units.toBlock(i.playerZ) >> 4 : 0;
-        if (opts.tp != null) { loadCx = Math.round(opts.tp[0]) >> 4; loadCz = Math.round(opts.tp[1]) >> 4; }
+        loadCx = i.hasPlayer ? i.playerCx : 0;
+        loadCz = i.hasPlayer ? i.playerCz : 0;
+        if (opts.hasTp) { loadCx = Math.floorDiv(opts.tpX, 16L); loadCz = Math.floorDiv(opts.tpZ, 16L); }
         loadingSince = System.currentTimeMillis();
         loadError = null;
         state = State.LOADING;
@@ -186,7 +202,7 @@ public final class Voxelin {
         loading.update(loadCx, loadCz, r + 1);
         int have = 0, need = 0;
         for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) {
-            if (dx * dx + dz * dz > r * r + r || !World.inBorder(loadCx + dx, loadCz + dz)) continue; // за межею світу чанків не буде
+            if (dx * dx + dz * dz > r * r + r || !World.inRange(loadCx + dx, loadCz + dz)) continue; // поза математичним краєм long чанків нема
             need++;
             if (loading.chunk(loadCx + dx, loadCz + dz) != null) have++;
         }

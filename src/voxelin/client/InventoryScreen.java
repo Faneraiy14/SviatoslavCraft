@@ -15,7 +15,8 @@ import static org.lwjgl.glfw.GLFW.*;
  */
 final class InventoryScreen {
     private static final float SIZE = 62, GAP = 8;
-    private final PlayerMenu menu;
+    private final CraftMenu menu;
+    private final String title;
     private final Inventory inv;
     private final World world;
     private final IconAtlas icons;
@@ -23,8 +24,8 @@ final class InventoryScreen {
     private int lastSlot = -1;
     private long lastClick;
 
-    InventoryScreen(PlayerMenu menu, Inventory inv, World world, IconAtlas icons, Consumer<Inventory.Stack> dropper) {
-        this.menu = menu; this.inv = inv; this.world = world; this.icons = icons; this.dropper = dropper;
+    InventoryScreen(String title, CraftMenu menu, Inventory inv, World world, IconAtlas icons, Consumer<Inventory.Stack> dropper) {
+        this.title = title; this.menu = menu; this.inv = inv; this.world = world; this.icons = icons; this.dropper = dropper;
     }
 
     /** Іконка, смужка міцності й кількість у слоті розміром size з лівим верхнім кутом (x,y) - спільне для хотбару й інвентарю. */
@@ -54,19 +55,35 @@ final class InventoryScreen {
     static String titleOf(World w, String item) { ItemType t = w.itemTypes.get(item); return t != null ? t.title : ItemType.prettify(item); }
 
     void draw(Gui g, Input in) {
-        float total = 9 * (SIZE + GAP) - GAP, x0 = (Gui.W - total) / 2f, y0 = 150;
-        float px = x0 - 24, py = y0 - 60, pw = total + 48, ph = 4 * (SIZE + GAP) + 110;
+        int n = menu.n;
+        float total = 9 * (SIZE + GAP) - GAP, x0 = (Gui.W - total) / 2f;
+        float gridH = n * (SIZE + GAP), craftTop = 58, sy = craftTop + gridH + 26; // відносно верху вікна
+        float pw = total + 48, ph = sy + 4 * (SIZE + GAP) + 14 + 24, px = x0 - 24, py = Math.max(8, (Gui.H - ph) / 2f);
+        float gx = x0 + 3 * (SIZE + GAP), gy = py + craftTop, rx = gx + n * (SIZE + GAP) + 80, ry = gy + (gridH - GAP - SIZE) / 2f;
         Gui.rect(0, 0, Gui.W, Gui.H, 0, 0, 0, 0.5f);
         Gui.rect(px, py, pw, ph, 0.5f, 0.5f, 0.52f, 0.97f);
         Gui.frame(px, py, pw, ph, 3, 0.15f, 0.15f, 0.15f);
-        Gui.text("ІНВЕНТАР", x0 - 8, y0 - 44, 3.2f, 0.15f, 0.15f, 0.15f);
+        Gui.text(title, x0 - 8, py + 16, 3.2f, 0.15f, 0.15f, 0.15f);
         if (g.button("СОРТУВАТИ", px + pw - 180, py + 10, 160, 38)) inv.sortMain();
         boolean shift = in.down(GLFW_KEY_LEFT_SHIFT) || in.down(GLFW_KEY_RIGHT_SHIFT);
         boolean left = g.click, right = in.clicked(GLFW_MOUSE_BUTTON_RIGHT);
         int hovered = -1;
+        // сітка крафту, стрілка й результат
+        for (int k = 0; k < n * n; k++) {
+            float x = gx + (k % n) * (SIZE + GAP), y = gy + (k / n) * (SIZE + GAP);
+            boolean hov = g.over(x, y, SIZE, SIZE);
+            if (hov) hovered = CraftMenu.GRID + k;
+            slotBox(x, y, SIZE, false, hov);
+            drawStack(menu.gridStack(k), x, y, SIZE);
+        }
+        Gui.text("=>", gx + n * (SIZE + GAP) + 18, ry + 22, 3.2f, 0.15f, 0.15f, 0.15f);
+        boolean hovR = g.over(rx, ry, SIZE, SIZE);
+        if (hovR) hovered = CraftMenu.RESULT;
+        slotBox(rx, ry, SIZE, false, hovR);
+        drawStack(menu.result(), rx, ry, SIZE);
         for (int row = 0; row < 4; row++) for (int col = 0; col < 9; col++) {
             int idx = row < 3 ? 9 + row * 9 + col : col; // три рядки сховища, нижче - хотбар
-            float x = x0 + col * (SIZE + GAP), y = y0 + row * (SIZE + GAP) + (row == 3 ? 14 : 0);
+            float x = x0 + col * (SIZE + GAP), y = py + sy + row * (SIZE + GAP) + (row == 3 ? 14 : 0);
             boolean hov = g.over(x, y, SIZE, SIZE);
             if (hov) hovered = idx;
             slotBox(x, y, SIZE, idx == inv.selected(), hov);
@@ -109,6 +126,8 @@ final class InventoryScreen {
     void close() {
         Inventory.Stack left = menu.closeCursor(inv);
         if (left != null) dropper.accept(left);
+        for (Inventory.Stack st : menu.drainExtra()) { int rest = inv.add(st.item, st.count, st.damage); if (rest > 0) dropper.accept(new Inventory.Stack(st.item, rest, st.damage)); }
+        menu.refresh();
         lastSlot = -1;
     }
 }

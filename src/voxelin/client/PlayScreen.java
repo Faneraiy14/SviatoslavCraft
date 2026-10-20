@@ -33,7 +33,7 @@ final class PlayScreen {
     private final Deque<Line> chat = new ArrayDeque<>();
     private static final float[] UNDER_FOG = {0.07f, 0.2f, 0.45f};
     private final Pos spawn;
-    private InventoryScreen invScreen;
+    private InventoryScreen invScreen, benchScreen, activeScreen;
     private IconAtlas icons;
     private boolean invOpen, chatOpen, debug, hud = true, grabbed;
     private Raycast.Hit hit;
@@ -61,7 +61,10 @@ final class PlayScreen {
         vt = world.vitals(playerSrc);
         inv = world.inventory(playerSrc);
         icons = new IconAtlas(v.textures, world);
-        invScreen = new InventoryScreen(new PlayerMenu(world.itemTypes, inv), inv, world, icons, st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
+        java.util.function.Consumer<Inventory.Stack> dropper = st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); };
+        invScreen = new InventoryScreen("ІНВЕНТАР", new CraftMenu(world.itemTypes, v.game.recipes, inv, 2), inv, world, icons, dropper);
+        benchScreen = new InventoryScreen("ВЕРСТАК", new CraftMenu(world.itemTypes, v.game.recipes, inv, 3), inv, world, icons, dropper);
+        activeScreen = invScreen;
         prevHealth = vt.health();
         long[] land = world.findLand(0, 0); // не з'являтись у морі
         spawn = findSpawn(land[0], land[1]);
@@ -85,6 +88,7 @@ final class PlayScreen {
         debug = v.opts.debug;
         grab(!v.opts.quiet()); // автоперевірки не захоплюють справжній курсор користувача
         if ("inventory".equals(v.opts.open)) invOpen = true;
+        if ("workbench".equals(v.opts.open)) { activeScreen = benchScreen; invOpen = true; }
         say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера.");
     }
 
@@ -144,7 +148,7 @@ final class PlayScreen {
         if (in.pressed(GLFW_KEY_F1)) hud = !hud;
         if (in.pressed(GLFW_KEY_F5)) cam.cycle();
         if (!chatOpen && !vt.dead()) {
-            if (in.pressed(GLFW_KEY_E)) { if (invOpen) closeInventory(); else { invOpen = true; grab(false); } }
+            if (in.pressed(GLFW_KEY_E)) { if (invOpen) closeInventory(); else { activeScreen = invScreen; invOpen = true; grab(false); } }
             if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); }
         }
         if (chatOpen) { in.updateText(); if (in.pressed(GLFW_KEY_ENTER)) sendChat(); } // не залежить від F1 (HUD)
@@ -242,6 +246,12 @@ final class PlayScreen {
 
     /** Права кнопка: з'їсти їжу (якщо голодний) або поставити блок з руки. */
     private void useItem() {
+        boolean sneak = v.input.down(GLFW_KEY_LEFT_SHIFT) || v.input.down(GLFW_KEY_RIGHT_SHIFT);
+        BlockType target = world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
+        if (target.interact != null && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
+            if ("workbench".equals(target.interact)) { activeScreen = benchScreen; invOpen = true; grab(false); }
+            return;
+        }
         Inventory.Stack st = inv.selectedStack();
         ItemType t = st == null ? null : world.itemTypes.get(st.item);
         if (t == null) return;
@@ -389,7 +399,7 @@ final class PlayScreen {
 
     private void openChat(String initial) { chatOpen = true; v.input.beginText(initial, true); grab(false); }
 
-    private void closeInventory() { invScreen.close(); invOpen = false; grab(true); }
+    private void closeInventory() { activeScreen.close(); invOpen = false; grab(true); }
 
     private void closeChat() { chatOpen = false; v.input.endText(); grab(!invOpen); }
 
@@ -436,7 +446,7 @@ final class PlayScreen {
             Gui.rect(8, Gui.H - 112, 1264, 30, 0, 0, 0, 0.7f);
             Gui.text("> " + in.text() + ((now / 500) % 2 == 0 ? "_" : ""), 14, Gui.H - 107, 2.4f, 1, 1, 0.8f);
         }
-        if (invOpen) invScreen.draw(g, v.input);
+        if (invOpen) activeScreen.draw(g, v.input);
         if (hurtFlash > 0) Gui.rect(0, 0, Gui.W, Gui.H, 0.8f, 0.05f, 0.05f, (float) (0.35 * hurtFlash));
         if (System.currentTimeMillis() - bannerAt < 4000 && bannerDay > 1) {
             float a = (float) Math.min(1, (4000 - (System.currentTimeMillis() - bannerAt)) / 1000.0);
@@ -550,7 +560,7 @@ final class PlayScreen {
 
     /** Зберегти позицію й закрити (виклик при виході зі світу чи гри). */
     void close() {
-        if (invOpen) invScreen.close();
+        if (invOpen) activeScreen.close();
         if (vt.dead()) player.teleport(spawn); // збереження в момент смерті: гравець з'явиться на спавні
         world.info.setPlayer(player.pos, player.yaw, player.pitch);
         rend.close();

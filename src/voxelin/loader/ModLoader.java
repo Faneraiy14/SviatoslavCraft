@@ -26,13 +26,14 @@ public final class ModLoader {
 
     private final BlockRegistry blocks;
     private final ItemRegistry items;
+    private final RecipeRegistry recipes;
     private final EventBus events;
     private final CommandRegistry commands;
     private final Map<String, int[][]> textures;
     private final List<ModInfo> mods = new ArrayList<>();
 
-    public ModLoader(BlockRegistry blocks, ItemRegistry items, EventBus events, CommandRegistry commands, Map<String, int[][]> textures) {
-        this.blocks = blocks; this.items = items; this.events = events; this.commands = commands; this.textures = textures;
+    public ModLoader(BlockRegistry blocks, ItemRegistry items, RecipeRegistry recipes, EventBus events, CommandRegistry commands, Map<String, int[][]> textures) {
+        this.blocks = blocks; this.items = items; this.recipes = recipes; this.events = events; this.commands = commands; this.textures = textures;
     }
 
     public List<ModInfo> mods() { return Collections.unmodifiableList(mods); }
@@ -103,6 +104,15 @@ public final class ModLoader {
             public ItemRef item(String name, ItemSettings s) {
                 if (name.contains(":") && !name.startsWith(modId + ":")) throw new IllegalArgumentException("мод «" + modId + "» може реєструвати лише " + modId + ":... (а не " + name + ")");
                 return items.register(name.contains(":") ? name : modId + ":" + name, s.qualified(modId));
+            }
+            public void recipe(String id, RecipeSettings s) {
+                if (id.contains(":") && !id.startsWith(modId + ":")) throw new IllegalArgumentException("мод «" + modId + "» може реєструвати лише " + modId + ":... (а не " + id + ")");
+                recipes.add(id.contains(":") ? id : modId + ":" + id, s.qualified(modId));
+            }
+            public void tag(String tag, String... names) {
+                String[] q = new String[names.length];
+                for (int i = 0; i < names.length; i++) q[i] = names[i].contains(":") ? names[i] : modId + ":" + names[i];
+                items.tag(tag, q);
             }
             public ItemRef findItem(String full) { return items.get(full); }
             public BlockRef findBlock(String full) { return blocks.byName(full); }

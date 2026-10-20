@@ -7,6 +7,7 @@ import java.util.*;
 /** Реєстр предметів (за назвою). Закривається разом із реєстром блоків. */
 public final class ItemRegistry {
     private final Map<String, ItemType> byName = new LinkedHashMap<>();
+    private final Map<String, Set<String>> tags = new HashMap<>();
     private boolean frozen;
 
     public synchronized ItemType register(String fullName, ItemSettings s) {
@@ -17,6 +18,16 @@ public final class ItemRegistry {
         byName.put(fullName, t);
         return t;
     }
+
+    public synchronized void tag(String tag, String... names) {
+        if (frozen) throw new IllegalStateException("реєстр предметів уже закритий (мітка " + tag + ")");
+        if (!tag.matches("[a-z0-9_]+")) throw new IllegalArgumentException("погана назва мітки: " + tag);
+        tags.computeIfAbsent(tag, k -> new LinkedHashSet<>()).addAll(Arrays.asList(names));
+    }
+
+    public boolean inTag(String tag, String item) { Set<String> s = tags.get(tag); return s != null && s.contains(item); }
+    public Set<String> tagMembers(String tag) { Set<String> s = tags.get(tag); return s == null ? Set.of() : Collections.unmodifiableSet(s); }
+    public boolean hasTag(String tag) { return tags.containsKey(tag); }
 
     public void freeze() { frozen = true; }
     public boolean isFrozen() { return frozen; }

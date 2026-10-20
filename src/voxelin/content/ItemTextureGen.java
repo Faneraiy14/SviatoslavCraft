@@ -157,4 +157,31 @@ public final class ItemTextureGen {
         px(a, 10, 6, HANDLE);
         return outlined(a);
     }
+
+    // ------------------------------------------------------------------ верстак (текстури блока)
+
+    private static int dark(int c, int d) { return 0xFF000000 | (shadeRgb(c & 0xFFFFFF, d)); }
+
+    /** Верх верстака: дошки з темною рамкою й сіткою 3x3 посередині. */
+    public static int[] workbenchTop() {
+        int[] a = TextureGen.oakPlanks().clone();
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            boolean border = x < 2 || y < 2 || x > 13 || y > 13;
+            boolean grid = x >= 3 && x <= 12 && y >= 3 && y <= 12 && ((x - 3) % 3 == 0 || (y - 3) % 3 == 0);
+            if (border) a[x + y * N] = dark(a[x + y * N], -55);
+            else if (grid) a[x + y * N] = dark(a[x + y * N], -38);
+        }
+        return a;
+    }
+
+    /** Бік верстака: дошки з рамкою й силуетами пили та молотка. */
+    public static int[] workbenchSide() {
+        int[] a = TextureGen.oakPlanks().clone();
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) if (x < 1 || x > 14 || y < 1 || y > 14 || y == 8) a[x + y * N] = dark(a[x + y * N], -45);
+        for (int x = 3; x <= 6; x++) a[x + 4 * N] = 0xFF8E8E8E; // пила
+        for (int y = 5; y <= 6; y++) a[3 + y * N] = 0xFF5A3A1A;
+        for (int x = 9; x <= 12; x++) a[x + 3 * N] = 0xFF6B6B6B; // молоток
+        for (int y = 3; y <= 6; y++) a[11 + y * N] = 0xFF5A3A1A;
+        return a;
+    }
 }

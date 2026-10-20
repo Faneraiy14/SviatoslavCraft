@@ -181,7 +181,7 @@ public class Menu {
     }
 
     /** Усе, що лежить у додаткових слотах (не інвентар) - для повернення гравцю при закритті (сітка крафту). */
-    public List<Inventory.Stack> drainExtra() {
+    public java.util.List<Inventory.Stack> drainExtra() {
         List<Inventory.Stack> out = new ArrayList<>();
         for (int i = Inventory.SIZE; i < slots.size(); i++) {
             Slot s = slots.get(i);

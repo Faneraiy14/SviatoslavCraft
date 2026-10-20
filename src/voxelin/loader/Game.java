@@ -15,11 +15,12 @@ import java.util.*;
 public final class Game {
     public final BlockRegistry blocks = new BlockRegistry();
     public final ItemRegistry items = new ItemRegistry();
+    public final RecipeRegistry recipes = new RecipeRegistry();
     public final EventBus events = new EventBus();
     public final CommandRegistry commands = new CommandRegistry();
     /** Текстури з реєстру (назва -> {пікселі 16x16}); етап «Новий світ» збирає з них атлас. */
     public final Map<String, int[][]> textures = new LinkedHashMap<>();
-    public final ModLoader mods = new ModLoader(blocks, items, events, commands, textures);
+    public final ModLoader mods = new ModLoader(blocks, items, recipes, events, commands, textures);
     public final File savesDir;
 
     public Game(File savesDir, File modsDir) {
@@ -29,6 +30,7 @@ public final class Game {
         if (modsDir != null && modsDir.isDirectory()) mods.loadDir(modsDir);
         blocks.freeze();
         items.freeze();
+        recipes.freeze(items);
     }
 
     public File worldDir(String name) {

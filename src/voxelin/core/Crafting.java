@@ -1,0 +1,76 @@
+package voxelin.core;
+
+import java.util.*;
+
+/**
+ * Співставлення сітки крафту з рецептами (чисті функції). Форма шукається де завгодно в сітці (порожні краї обрізаються) і, якщо дозволено,
+ * у дзеркальному відбитті; безформні - в будь-якому порядку. Кожен крафт витрачає по одному предмету з кожної зайнятої клітинки.
+ * Окремо: ремонт - два однакових зношених інструменти дають один зі сумою міцності +10%.
+ */
+public final class Crafting {
+    private Crafting() {}
+
+    public static boolean ingredientMatches(ItemRegistry items, String ing, String item) {
+        return ing.startsWith("#") ? items.inTag(ing.substring(1), item) : ing.equals(item);
+    }
+
+    /** Результат крафту для сітки n x n (grid - n*n стеків, null - порожньо), або null. */
+    public static Inventory.Stack match(RecipeRegistry recipes, ItemRegistry items, Inventory.Stack[] grid, int n) {
+        List<RecipeRegistry.Recipe> all = matchAll(recipes, items, grid, n);
+        if (!all.isEmpty()) return new Inventory.Stack(all.get(0).result, all.get(0).count);
+        return repair(items, grid);
+    }
+
+    /** Усі рецепти, що підходять до сітки (для перевірки на неоднозначність). */
+    public static List<RecipeRegistry.Recipe> matchAll(RecipeRegistry recipes, ItemRegistry items, Inventory.Stack[] grid, int n) {
+        List<RecipeRegistry.Recipe> out = new ArrayList<>();
+        int minX = n, minY = n, maxX = -1, maxY = -1, filled = 0;
+        for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) if (grid[x + y * n] != null) { filled++; minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+        if (filled == 0) return out;
+        int gw = maxX - minX + 1, gh = maxY - minY + 1;
+        String[] cells = new String[gw * gh];
+        for (int y = 0; y < gh; y++) for (int x = 0; x < gw; x++) { Inventory.Stack s = grid[(minX + x) + (minY + y) * n]; cells[x + y * gw] = s == null ? null : s.item; }
+        for (RecipeRegistry.Recipe r : recipes.all()) {
+            if (r.shaped) {
+                if (r.w != gw || r.h != gh) continue;
+                if (fits(items, r, cells, false) || (r.mirror && fits(items, r, cells, true))) out.add(r);
+            } else if (r.ingredients.size() == filled) {
+                List<String> have = new ArrayList<>();
+                for (String c : cells) if (c != null) have.add(c);
+                if (assign(items, r.ingredients, have, 0, new boolean[have.size()])) out.add(r);
+            }
+        }
+        return out;
+    }
+
+    private static boolean fits(ItemRegistry items, RecipeRegistry.Recipe r, String[] cells, boolean mirror) {
+        for (int y = 0; y < r.h; y++) for (int x = 0; x < r.w; x++) {
+            String ing = r.cells[(mirror ? r.w - 1 - x : x) + y * r.w], have = cells[x + y * r.w];
+            if ((ing == null) != (have == null)) return false;
+            if (ing != null && !ingredientMatches(items, ing, have)) return false;
+        }
+        return true;
+    }
+
+    private static boolean assign(ItemRegistry items, List<String> ing, List<String> have, int i, boolean[] used) {
+        if (i == ing.size()) return true;
+        for (int j = 0; j < have.size(); j++) {
+            if (used[j] || !ingredientMatches(items, ing.get(i), have.get(j))) continue;
+            used[j] = true;
+            if (assign(items, ing, have, i + 1, used)) return true;
+            used[j] = false;
+        }
+        return false;
+    }
+
+    /** Ремонт: рівно два однакових інструменти (хоч один зношений) -> один зі сумою залишку міцності +10% (не більше повної). */
+    static Inventory.Stack repair(ItemRegistry items, Inventory.Stack[] grid) {
+        Inventory.Stack a = null, b = null;
+        for (Inventory.Stack s : grid) { if (s == null) continue; if (a == null) a = s; else if (b == null) b = s; else return null; }
+        if (a == null || b == null || !a.item.equals(b.item) || a.count != 1 || b.count != 1) return null;
+        ItemType t = items.get(a.item);
+        if (t == null || t.durability <= 0 || (a.damage == 0 && b.damage == 0)) return null;
+        int remain = (t.durability - a.damage) + (t.durability - b.damage) + t.durability / 10;
+        return new Inventory.Stack(a.item, 1, Math.max(0, t.durability - Math.min(t.durability, remain)));
+    }
+}

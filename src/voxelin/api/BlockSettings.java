@@ -14,7 +14,7 @@ public final class BlockSettings {
     ToolKind tool = ToolKind.NONE;
     int minTier;
     boolean noItem, noDrops;
-    String title;
+    String title, interact;
     java.util.List<Drop> drops;
 
     /** Один запис дропу: предмет, скільки (min..max) і шанс 0..1. */
@@ -41,6 +41,8 @@ public final class BlockSettings {
     public BlockSettings absorb(int a) { absorb = Math.max(0, Math.min(15, a)); return this; }
     /** Назва для людей (напр. «Камінь»). Без неї - з назви блока. */
     public BlockSettings title(String t) { title = t; return this; }
+    /** Права кнопка по блоку відкриває вікно цього виду («workbench», «furnace»); присід - ставити блок. */
+    public BlockSettings interact(String kind) { interact = kind; return this; }
     /** Яким інструментом ламати швидше. */
     public BlockSettings tool(ToolKind k) { tool = k == null ? ToolKind.NONE : k; return this; }
     /** Мінімальний рівень інструмента, щоб блок взагалі дав дроп (0 - дає завжди; руки не вистачає, якщо > 0). */
@@ -58,7 +60,7 @@ public final class BlockSettings {
     /** Копія, де назви текстур без простору імен ("stone") отримують префікс мода ("voxelin:stone"). Викликає завантажувач. */
     public BlockSettings qualified(String modId) {
         BlockSettings b = new BlockSettings();
-        b.color = color; b.solid = solid; b.opaque = opaque; b.liquid = liquid; b.translucent = translucent; b.light = light; b.hardness = hardness; b.absorb = absorb; b.title = title; b.tool = tool; b.minTier = minTier; b.noItem = noItem; b.noDrops = noDrops;
+        b.color = color; b.solid = solid; b.opaque = opaque; b.liquid = liquid; b.translucent = translucent; b.light = light; b.hardness = hardness; b.absorb = absorb; b.title = title; b.interact = interact; b.tool = tool; b.minTier = minTier; b.noItem = noItem; b.noDrops = noDrops;
         if (drops != null) { b.drops = new java.util.ArrayList<>(); for (Drop d : drops) b.drops.add(new Drop(d.item.indexOf(':') >= 0 ? d.item : modId + ":" + d.item, d.min, d.max, d.chance)); }
         b.texTop = q(texTop, modId); b.texSide = q(texSide, modId); b.texBottom = q(texBottom, modId);
         return b;
@@ -78,6 +80,7 @@ public final class BlockSettings {
     /** -1 - не задано (рахується типове). */
     public int absorbValue() { return absorb; }
     public float hardnessValue() { return hardness; }
+    public String interactKind() { return interact; }
     public String titleText() { return title; }
     public ToolKind toolKind() { return tool; }
     public int minTierValue() { return minTier; }

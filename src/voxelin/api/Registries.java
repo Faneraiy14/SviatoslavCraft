@@ -7,6 +7,10 @@ public interface Registries {
     /** Зареєструвати предмет (не блок). name без двокрапки отримує префікс мода. Предмети-блоки створюються автоматично разом із блоками. */
     ItemRef item(String name, ItemSettings settings);
     ItemRef findItem(String fullName);
+    /** Рецепт крафту (id без двокрапки отримує префікс мода). */
+    void recipe(String id, RecipeSettings settings);
+    /** Додати предмети до мітки ("planks", "logs"): у рецептах пишеться "#planks". Мітки спільні для всіх модів. */
+    void tag(String tag, String... items);
     /** Знайти блок за повною назвою ("voxelin:stone") або null. */
     BlockRef findBlock(String fullName);
     /**

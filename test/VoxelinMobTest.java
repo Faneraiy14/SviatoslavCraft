@@ -267,10 +267,20 @@ public class VoxelinMobTest {
         check(hostile > 0 && hostile <= MobSpawner.HOSTILE_CAP, "уночі з'явились вороги в межах ліміту: " + hostile);
         for (Mob m : w.mobs()) {
             double d = Math.hypot(m.pos.relX(0) - p.pos.x, m.pos.relZ(0) - p.pos.z);
-            if (!m.type.passive()) check(d >= 20, "ворог не поруч із гравцем: " + d);
             check(!w.isSolid(m.pos.blockX(), m.pos.blockY(), m.pos.blockZ()) && !w.isSolid(m.pos.blockX(), m.pos.blockY() + 1, m.pos.blockZ()), "істота не в блоці");
         }
         check(passive == 0, "уночі мирні не з'являються (початкові - за ліміту дня): " + passive);
+        // у момент появи ворог далеко від гравця (потім може підійти)
+        w.killAll(null);
+        Random sr = new Random(77);
+        int spawned = 0;
+        for (int i = 0; i < 300; i++) {
+            int before = w.mobs().size();
+            w.spawner().attempt(w, p, sr, true);
+            if (w.mobs().size() > before) { Mob nm = w.mobs().get(w.mobs().size() - 1); spawned++; check(Math.hypot(nm.pos.relX(0) - p.pos.x, nm.pos.relZ(0) - p.pos.z) >= 23, "ворог з'являється не ближче 24 блоків"); }
+            if (w.mobs().size() >= MobSpawner.HOSTILE_CAP) break;
+        }
+        check(spawned > 0, "спроби спавну дали ворогів: " + spawned);
         w.killAll(null);
         day(w);
         for (int i = 0; i < 20 * 90; i++) { w.setTime((long) (w.dayTicks() * 0.1)); w.tick(); }

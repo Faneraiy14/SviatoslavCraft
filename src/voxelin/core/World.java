@@ -142,7 +142,7 @@ public final class World implements WorldAccess {
         Inventory inv = inventories.get(s);
         if (inv == null) {
             inv = new Inventory(itemTypes);
-            if (mainInventory == null && info.hasInv) inv.decode(info.inv, info.invSelected);
+            if (mainInventory == null && info.hasInv) { inv.decode(info.inv, info.invSelected); inv.decodeArmor(info.armor); }
             inventories.put(s, inv);
             if (mainInventory == null) mainInventory = inv;
         }
@@ -616,6 +616,8 @@ public final class World implements WorldAccess {
         if (mainInventory != null) {
             String[] enc = mainInventory.encode();
             System.arraycopy(enc, 0, info.inv, 0, enc.length);
+            String[] arm = mainInventory.encodeArmor();
+            System.arraycopy(arm, 0, info.armor, 0, 4);
             info.invSelected = mainInventory.selected(); info.hasInv = true;
         }
         saveItems();

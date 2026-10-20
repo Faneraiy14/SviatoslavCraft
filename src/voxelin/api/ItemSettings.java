@@ -11,6 +11,8 @@ public final class ItemSettings {
     int food, color = 0xB0B0B0;
     String texture, placesBlock, title;
     float attack = 1f;
+    ArmorSlot armorSlot;
+    int armorPoints, armorTier;
 
     /** Скільки в стопці (1..64). Інструменти й усе з міцністю - завжди 1. */
     public ItemSettings maxStack(int n) { maxStack = Math.max(1, Math.min(64, n)); return this; }
@@ -22,6 +24,8 @@ public final class ItemSettings {
     public ItemSettings food(int points) { food = Math.max(0, Math.min(20, points)); return this; }
     /** Шкода предмета в руці (рука - 1). */
     public ItemSettings attack(float dmg) { attack = Float.isNaN(dmg) ? 1f : Math.max(0f, Math.min(1000f, dmg)); return this; }
+    /** Броня: слот, очки захисту (сума 20 на повний комплект = -80% шкоди) і рівень матеріалу (алмаз 4 - потрібен для входу в Енд). */
+    public ItemSettings armor(ArmorSlot slot, int points, int tier) { armorSlot = slot; armorPoints = Math.max(0, Math.min(20, points)); armorTier = Math.max(0, tier); if (slot != null) maxStack = 1; return this; }
     public ItemSettings color(int rgb) { color = rgb & 0xFFFFFF; return this; }
     /** Назва текстури з реєстру текстур (іконка); без неї - колір. */
     public ItemSettings texture(String name) { texture = name; return this; }
@@ -33,7 +37,7 @@ public final class ItemSettings {
 
     public ItemSettings qualified(String modId) {
         ItemSettings s = new ItemSettings();
-        s.title = title; s.attack = attack; s.maxStack = maxStack; s.durability = durability; s.tier = tier; s.speed = speed; s.tool = tool; s.food = food; s.color = color;
+        s.title = title; s.attack = attack; s.armorSlot = armorSlot; s.armorPoints = armorPoints; s.armorTier = armorTier; s.maxStack = maxStack; s.durability = durability; s.tier = tier; s.speed = speed; s.tool = tool; s.food = food; s.color = color;
         s.texture = texture == null || texture.indexOf(':') >= 0 ? texture : modId + ":" + texture;
         s.placesBlock = placesBlock == null || placesBlock.indexOf(':') >= 0 ? placesBlock : modId + ":" + placesBlock;
         return s;
@@ -46,6 +50,9 @@ public final class ItemSettings {
     public ToolKind toolKind() { return tool; }
     public int foodValue() { return food; }
     public int colorValue() { return color; }
+    public ArmorSlot armorSlotValue() { return armorSlot; }
+    public int armorPointsValue() { return armorPoints; }
+    public int armorTierValue() { return armorTier; }
     public float attackValue() { return attack; }
     public String titleText() { return title; }
     public String textureName() { return texture; }

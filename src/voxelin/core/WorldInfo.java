@@ -36,6 +36,7 @@ public final class WorldInfo {
     public boolean hasInv;
     public final String[] inv = new String[Inventory.SIZE];
     public int invSelected;
+    public final String[] armor = new String[4];
     public final List<String> palette = new ArrayList<>();
 
     public static boolean isValidName(String n) {
@@ -78,6 +79,7 @@ public final class WorldInfo {
         try { w.mode = Mode.valueOf(p.getProperty("mode", "CREATIVE").trim()); } catch (IllegalArgumentException e) { w.mode = Mode.CREATIVE; }
         w.hasInv = "true".equals(p.getProperty("hasInv"));
         for (int i = 0; i < Inventory.SIZE; i++) w.inv[i] = p.getProperty("inv." + i);
+        for (int i = 0; i < 4; i++) w.armor[i] = p.getProperty("armor." + i);
         try { w.invSelected = Math.max(0, Math.min(Inventory.HOTBAR - 1, Integer.parseInt(p.getProperty("invSelected", "0").trim()))); } catch (NumberFormatException e) { w.invSelected = 0; }
         w.hasVitals = "true".equals(p.getProperty("hasVitals"));
         if (w.hasVitals) try {
@@ -100,6 +102,7 @@ public final class WorldInfo {
         p.setProperty("palette", String.join(",", palette));
         p.setProperty("mode", mode.name());
         if (hasInv) { p.setProperty("hasInv", "true"); p.setProperty("invSelected", String.valueOf(invSelected)); for (int i = 0; i < Inventory.SIZE; i++) if (inv[i] != null) p.setProperty("inv." + i, inv[i]); }
+        if (hasInv) for (int i = 0; i < 4; i++) if (armor[i] != null) p.setProperty("armor." + i, armor[i]);
         p.setProperty("time", String.valueOf(time));
         p.setProperty("dayMinutes", String.valueOf(dayMinutes));
         if (hasVitals) { p.setProperty("hasVitals", "true"); p.setProperty("health", String.valueOf(health)); p.setProperty("hunger", String.valueOf(hunger)); p.setProperty("saturation", String.valueOf(saturation)); }

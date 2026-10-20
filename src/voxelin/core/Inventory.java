@@ -18,6 +18,8 @@ public final class Inventory implements ItemHolder {
     }
 
     private final Stack[] slots = new Stack[SIZE];
+    /** Надягнута броня: 0 шолом, 1 нагрудник, 2 поножі, 3 черевики. */
+    private final Stack[] armor = new Stack[4];
     private final ItemRegistry items;
     private int selected;
 
@@ -28,6 +30,49 @@ public final class Inventory implements ItemHolder {
 
     public Stack get(int i) { return i >= 0 && i < SIZE ? slots[i] : null; }
     public void set(int i, Stack s) { if (i >= 0 && i < SIZE) slots[i] = s == null || s.count <= 0 ? null : s; }
+    public Stack armor(int slot) { return slot >= 0 && slot < 4 ? armor[slot] : null; }
+    public void setArmor(int slot, Stack s) { if (slot >= 0 && slot < 4) armor[slot] = s == null || s.count <= 0 ? null : s; }
+
+    /** Сума очок захисту надягнутої броні. */
+    public int armorPoints(ItemRegistry reg) {
+        int p = 0;
+        for (Stack s : armor) { if (s == null) continue; ItemType t = reg == null ? null : reg.get(s.item); if (t != null && t.armorSlot != null) p += t.armorPoints; }
+        return p;
+    }
+
+    /** Чи повний комплект броні рівня не нижче tier у всіх 4 слотах (правило входу в Енд: tier 4). */
+    public boolean fullArmor(ItemRegistry reg, int tier) {
+        for (int i = 0; i < 4; i++) {
+            Stack s = armor[i]; ItemType t = s == null || reg == null ? null : reg.get(s.item);
+            if (t == null || t.armorSlot == null || t.armorSlot.ordinal() != i || t.armorTier < tier) return false;
+        }
+        return true;
+    }
+
+    /** Надіти броню з вибраного слота руки: якщо слот броні зайнятий - міняються місцями. true - надягнуто. */
+    public boolean equipSelected(ItemRegistry reg) {
+        Stack st = slots[selected];
+        ItemType t = st == null || reg == null ? null : reg.get(st.item);
+        if (t == null || t.armorSlot == null) return false;
+        int k = t.armorSlot.ordinal();
+        Stack old = armor[k];
+        armor[k] = st;
+        slots[selected] = old;
+        return true;
+    }
+
+    /** Знос броні від удару: випадковий надягнутий шматок втрачає max(1, шкода/4) міцності; 0 - предмет зникає. */
+    public void wearArmor(ItemRegistry reg, double damage, java.util.Random rng) {
+        java.util.List<Integer> worn = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) if (armor[i] != null) worn.add(i);
+        if (worn.isEmpty()) return;
+        int k = worn.get(rng.nextInt(worn.size()));
+        ItemType t = reg == null ? null : reg.get(armor[k].item);
+        if (t == null || t.durability <= 0) return;
+        armor[k].damage += Math.max(1, (int) (damage / 4));
+        if (armor[k].damage >= t.durability) armor[k] = null;
+    }
+
     public int selected() { return selected; }
     public void select(int i) { if (i >= 0 && i < HOTBAR) selected = i; }
     public void scroll(int d) { selected = Math.floorMod(selected + d, HOTBAR); }
@@ -54,7 +99,7 @@ public final class Inventory implements ItemHolder {
 
     @Override public int give(String item, int count) { return count <= 0 ? 0 : add(item, count, 0); }
 
-    @Override public void clear() { Arrays.fill(slots, null); }
+    @Override public void clear() { Arrays.fill(slots, null); Arrays.fill(armor, null); }
 
     /** Забрати один предмет із вибраного слота. */
     public void takeSelected() {
@@ -74,6 +119,7 @@ public final class Inventory implements ItemHolder {
     public List<Stack> drain() {
         List<Stack> out = new ArrayList<>();
         for (int i = 0; i < SIZE; i++) if (slots[i] != null) { out.add(slots[i]); slots[i] = null; }
+        for (int i = 0; i < 4; i++) if (armor[i] != null) { out.add(armor[i]); armor[i] = null; }
         return out;
     }
 
@@ -94,7 +140,7 @@ public final class Inventory implements ItemHolder {
         for (int i = 0; i < out.size(); i++) slots[HOTBAR + i] = out.get(i);
     }
 
-    public boolean isEmpty() { for (Stack s : slots) if (s != null) return false; return true; }
+    public boolean isEmpty() { for (Stack s : slots) if (s != null) return false; for (Stack s : armor) if (s != null) return false; return true; }
 
     // ------------------------------------------------------------------ збереження
 
@@ -103,6 +149,29 @@ public final class Inventory implements ItemHolder {
         String[] r = new String[SIZE];
         for (int i = 0; i < SIZE; i++) if (slots[i] != null) r[i] = slots[i].item + "|" + slots[i].count + "|" + slots[i].damage;
         return r;
+    }
+
+    /** Броня як рядки «назва|кількість|зношеність» (null - порожньо). */
+    public String[] encodeArmor() {
+        String[] r = new String[4];
+        for (int i = 0; i < 4; i++) if (armor[i] != null) r[i] = armor[i].item + "|" + armor[i].count + "|" + armor[i].damage;
+        return r;
+    }
+
+    /** Прочитати броню; биті записи й предмети не для цього слота ігноруються. */
+    public void decodeArmor(String[] lines) {
+        Arrays.fill(armor, null);
+        for (int i = 0; i < 4 && lines != null && i < lines.length; i++) {
+            if (lines[i] == null) continue;
+            String[] p = lines[i].split("\\|");
+            if (p.length != 3 || !p[0].matches("[a-z0-9_]+:[a-z0-9_/]+")) continue;
+            try {
+                int d = Integer.parseInt(p[2].trim());
+                ItemType t = items == null ? null : items.get(p[0]);
+                if (d < 0 || Integer.parseInt(p[1].trim()) != 1 || t == null || t.armorSlot == null || t.armorSlot.ordinal() != i) continue;
+                armor[i] = new Stack(p[0], 1, d);
+            } catch (NumberFormatException e) { /* бита клітинка */ }
+        }
     }
 
     /** Прочитати збережене; биті записи (невідомий формат, кількість поза 1..максимум) ігноруються. Невідомі предмети (мод зник) лишаються як є. */

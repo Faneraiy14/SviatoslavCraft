@@ -33,6 +33,11 @@ public final class Inventory implements ItemHolder {
     public Stack armor(int slot) { return slot >= 0 && slot < 4 ? armor[slot] : null; }
     public void setArmor(int slot, Stack s) { if (slot >= 0 && slot < 4) armor[slot] = s == null || s.count <= 0 ? null : s; }
 
+    public static final double ARMOR_PER_POINT = 0.04, ARMOR_CAP = 0.8;
+
+    /** Шкода після броні: кожне очко - 4% менше, не більше 80%. */
+    public static double reduce(double damage, int points) { return damage * (1.0 - Math.min(ARMOR_CAP, Math.max(0, points) * ARMOR_PER_POINT)); }
+
     /** Сума очок захисту надягнутої броні. */
     public int armorPoints(ItemRegistry reg) {
         int p = 0;

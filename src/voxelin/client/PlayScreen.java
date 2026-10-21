@@ -77,7 +77,7 @@ final class PlayScreen {
             public void notify(String message) { say(message); }
             public void hurt(double damage, double kx, double kz) {
                 int pts = inv.armorPoints(world.itemTypes);
-                double reduced = damage * (1.0 - Math.min(0.8, pts * 0.04)); // кожне очко броні - 4% менше шкоди, не більше 80%
+                double reduced = Inventory.reduce(damage, pts);
                 double before = vt.health();
                 vt.hurt(reduced, false);
                 if (vt.health() < before && !world.creative()) inv.wearArmor(world.itemTypes, damage, new java.util.Random());

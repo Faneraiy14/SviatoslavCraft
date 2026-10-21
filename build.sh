@@ -19,3 +19,9 @@ if [ "$1" = "test" ]; then
         ( mkdir -p "$T/run-$t" && cd "$T/run-$t" && java -cp "$OUT:$PWD/../classes:$OLDPWD/lib/*" "$t" "$OUT" )
     done
 fi
+if [ "$1" = "balance" ]; then
+    T="$(mktemp -d "${TMPDIR:-/tmp}/voxelin-balance.XXXXXX")"
+    javac -encoding UTF-8 -cp "out:lib/*" -d "$T/classes" test/VoxelinBalanceReport.java
+    OUT="$PWD/out"; REPORT="$PWD/docs/BALANCE.md"
+    ( cd "$T" && java -cp "$OUT:$T/classes:$OLDPWD/lib/*" VoxelinBalanceReport "$REPORT" )
+fi

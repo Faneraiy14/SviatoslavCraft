@@ -168,6 +168,7 @@ final class PlayScreen {
         ticks++;
         Input in = v.input;
         boolean active = grabbed && !chatOpen && !invOpen && !vt.dead();
+        player.wings = inv.canGlide(world.itemTypes);
         if (bench != null && bench.active()) bench.move(player);
         else if (!v.opts.freeze) player.tick(Voxelin.TICK, active && in.down(GLFW_KEY_W), active && in.down(GLFW_KEY_S), active && in.down(GLFW_KEY_A), active && in.down(GLFW_KEY_D),
                 active && in.down(GLFW_KEY_SPACE), active && (in.down(GLFW_KEY_LEFT_CONTROL) || in.down(GLFW_KEY_RIGHT_CONTROL)), active && in.down(GLFW_KEY_LEFT_SHIFT));
@@ -176,6 +177,9 @@ final class PlayScreen {
             if (sprinting) vt.exhaust(0.1 * Math.hypot(player.pos.relX(player.prev.cx) - player.prev.x, player.pos.relZ(player.prev.cz) - player.prev.z));
             if (player.jumped) vt.exhaust(sprinting ? 0.2 : 0.05);
             vt.land(player.takeLanded());
+            double imp = player.takeImpact();
+            if (imp > 0) vt.hurt(imp, false);
+            if (player.gliding && world.tickCount() % 20 == 0 && !world.creative()) inv.wearWings(world.itemTypes);
             vt.tick(player.headInWater);
         }
         if (trade != null) trade.mob.talkTicks = 6; // житель слухає

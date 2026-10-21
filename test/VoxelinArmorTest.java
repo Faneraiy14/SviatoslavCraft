@@ -1,5 +1,6 @@
 import voxelin.api.*;
 import voxelin.core.*;
+import voxelin.core.entity.PlayerEntity;
 import voxelin.loader.*;
 
 import java.io.File;
@@ -18,7 +19,7 @@ public class VoxelinArmorTest {
 
     public static void main(String[] a) throws Exception {
         g = new Game(new File("nope"), null);
-        items(); equip(); protection(); menu(); persistence();
+        items(); equip(); protection(); menu(); persistence(); wings();
         System.out.println("VoxelinArmorTest: " + n + " перевірок OK");
     }
 
@@ -168,5 +169,70 @@ public class VoxelinArmorTest {
         Inventory ri = w2.inventory(Sources.player("P"));
         check(ri.armor(1) != null && ri.armor(1).damage == 9 && ri.armor(3) != null, "броня зберігається у світі");
         w2.close();
+    }
+
+    /** Гравець над рівною землею (y < 1 - тверде); wall - стіна x >= wallX. */
+    static PlayerEntity flyer(double y, long wallX) {
+        PlayerEntity p = new PlayerEntity((x, yy, z) -> yy < 1 || x >= wallX, Pos.ofBlock(0, y, 0));
+        p.yaw = 90; // дивимось у +x
+        return p;
+    }
+
+    static void start(PlayerEntity p) {
+        p.tick(0.05, false, false, false, false, false, false, false);
+        p.tick(0.05, false, false, false, false, true, false, false);
+    }
+
+    static void wings() {
+        ItemType w = g.items.get(Inventory.WINGS);
+        check(w != null && w.armorSlot == voxelin.api.ArmorSlot.CHEST && w.armorPoints == 0 && w.durability == 432, "крила: слот нагрудника, без захисту, міцність 432");
+        Inventory inv = new Inventory(g.items);
+        check(!inv.canGlide(g.items), "без крил не планує");
+        inv.setArmor(1, new Inventory.Stack(Inventory.WINGS, 1));
+        check(inv.canGlide(g.items) && !inv.fullArmor(g.items, 4), "у крилах планує, але це не повна алмазна броня (Енд не відчинить)");
+        for (int k = 0; k < 1000; k++) inv.wearWings(g.items);
+        check(inv.armor(1) != null && inv.armor(1).damage == 431 && !inv.canGlide(g.items), "зношені крила не ламаються, але не несуть");
+        for (int k = 0; k < 50; k++) inv.wearArmor(g.items, 20, new Random(k));
+        check(inv.armor(1) != null, "удари теж не ламають крил");
+
+        PlayerEntity none = flyer(200, Long.MAX_VALUE);
+        start(none);
+        check(!none.gliding, "без крил стрибок у повітрі нічого не робить");
+        PlayerEntity onGround = flyer(1 + PlayerEntity.EYE + 0.01, Long.MAX_VALUE);
+        onGround.wings = true;
+        for (int k = 0; k < 5; k++) onGround.tick(0.05, false, false, false, false, true, false, false);
+        check(!onGround.gliding, "із землі крила не розкриваються");
+
+        PlayerEntity p = flyer(240, Long.MAX_VALUE);
+        p.wings = true;
+        start(p);
+        check(p.gliding, "стрибок у падінні розкриває крила");
+        p.pitch = 25; // розгін (як у Minecraft: з місця крила спершу треба «набрати» швидкість)
+        for (int t = 0; t < 150; t++) p.tick(0.05, false, false, false, false, false, false, false);
+        p.pitch = 0;
+        double y0 = p.pos.y, x0 = p.pos.relX(0);
+        for (int t = 0; t < 100; t++) p.tick(0.05, false, false, false, false, false, false, false);
+        double drop = y0 - p.pos.y, dist = p.pos.relX(0) - x0;
+        check(p.gliding && dist > 4 * drop && dist > 50, "планування: далеко вперед, мало вниз: " + Math.round(dist) + " / " + Math.round(drop));
+        p.pitch = 60;
+        double v1 = 0;
+        for (int t = 0; t < 60; t++) { double before = p.pos.blockX(); p.tick(0.05, false, false, false, false, false, false, false); v1 = p.pos.blockX() - before; }
+        p.pitch = 0;
+        check(v1 > 1.0, "пікірування розганяє: " + v1 + " блоків/тік");
+        for (int t = 0; t < 5000 && p.gliding; t++) p.tick(0.05, false, false, false, false, false, false, false);
+        check(!p.gliding && p.onGround(), "на землі крила складаються");
+        check(p.takeLanded() < 4, "плавне приземлення без шкоди від падіння");
+
+        PlayerEntity c2 = flyer(120, 300);
+        c2.wings = true; start(c2); c2.pitch = 45;
+        double imp = 0;
+        for (int t = 0; t < 2000 && c2.gliding; t++) { c2.tick(0.05, false, false, false, false, false, false, false); imp += c2.takeImpact(); if (t == 40) c2.pitch = 0; }
+        check(imp > 0, "удар об стіну на швидкості - шкода: " + imp);
+
+        PlayerEntity off = flyer(200, Long.MAX_VALUE);
+        off.wings = true; start(off);
+        off.wings = false;
+        off.tick(0.05, false, false, false, false, false, false, false);
+        check(!off.gliding, "зняв крила - падаєш");
     }
 }

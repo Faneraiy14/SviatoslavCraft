@@ -109,9 +109,9 @@ public class VoxelinStoryTest {
         check(w.spawnRitualBossesIfNeeded() == 0, "вбитий не відроджується");
         w.hurtMob(b, 10_000, 0, 0, b.pos);
         check(w.info.ritualKills == 3 && w.info.ritualStage == 2 && w.info.records.contains("voxelin:ritual_done"), "Ритуал звершено");
-        boolean heart = false;
-        for (voxelin.core.entity.ItemEntity e : w.itemEntities()) if (e.item.equals("voxelin:seam_heart")) heart = true;
-        check(heart, "Серце Шву випало");
+        boolean heart = false, wings = false;
+        for (voxelin.core.entity.ItemEntity e : w.itemEntities()) { if (e.item.equals("voxelin:seam_heart")) heart = true; if (e.item.equals(Inventory.WINGS)) wings = true; }
+        check(heart && wings, "Серце Шву й Крила Шву випали");
         check(Keeper.dialog(w, inv).text().contains("звершено"), "Сторож дякує");
         // лютий б'є сильніше
         w.close();

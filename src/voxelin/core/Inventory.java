@@ -81,7 +81,22 @@ public final class Inventory implements ItemHolder {
         ItemType t = reg == null ? null : reg.get(armor[k].item);
         if (t == null || t.durability <= 0) return;
         armor[k].damage += Math.max(1, (int) (damage / 4));
+        if (armor[k].item.equals(WINGS)) { armor[k].damage = Math.min(armor[k].damage, t.durability - 1); return; } // крила не ламаються - лише перестають нести
         if (armor[k].damage >= t.durability) armor[k] = null;
+    }
+
+    /** Крила Шву (нагорода Ритуалу): надягаються замість нагрудника; планують, поки не зношені до останньої одиниці. */
+    public static final String WINGS = "voxelin:seam_wings";
+
+    public boolean canGlide(ItemRegistry reg) {
+        Stack s = armor[1]; ItemType t = s == null || reg == null ? null : reg.get(s.item);
+        return t != null && s.item.equals(WINGS) && (t.durability <= 0 || s.damage < t.durability - 1);
+    }
+
+    /** Зношення крил польотом (1 за секунду). */
+    public void wearWings(ItemRegistry reg) {
+        Stack s = armor[1]; ItemType t = s == null || reg == null ? null : reg.get(s.item);
+        if (t != null && s.item.equals(WINGS) && t.durability > 0) s.damage = Math.min(t.durability - 1, s.damage + 1);
     }
 
     public int selected() { return selected; }

@@ -64,6 +64,7 @@ public final class VanillaContent implements VoxelinMod {
         tex("seam_core", ItemTextureGen.seamCore()); tex("seam_growth", ItemTextureGen.seamGrowth()); tex("seam_scar", ItemTextureGen.seamScar());
         tex("threshold_stone", ItemTextureGen.thresholdStone()); tex("seam_thread", ItemTextureGen.seamThread()); tex("seam_rift", ItemTextureGen.rift());
         tex("threshold_bloom", ItemTextureGen.thresholdBloom()); tex("threshold_key", ItemTextureGen.thresholdKey());
+        tex("seam_wings", ItemTextureGen.wings());
         tex("seam_anchor", ItemTextureGen.anchor()); tex("seam_heart", ItemTextureGen.heart());
         tex("seam_cure", ItemTextureGen.flask(0x50E0B0)); tex("seam_fire", ItemTextureGen.flask(0xFF6A20));
         tex("end_stone", ItemTextureGen.endStone()); tex("obsidian", ItemTextureGen.obsidian()); tex("end_frame_side", ItemTextureGen.frameSide());
@@ -193,6 +194,7 @@ public final class VanillaContent implements VoxelinMod {
         r.recipe("threshold_key", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "liminite_shard", "liminite_shard", "end_eye").result("threshold_key", 1));
         r.item("seam_anchor", new ItemSettings().color(0x7A4AD0).texture("seam_anchor").title("Якір Шву"));
         r.recipe("seam_anchor", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "obsidian", "diamond").result("seam_anchor", 1));
+        r.item("seam_wings", new ItemSettings().armor(ArmorSlot.CHEST, 0, 0).durability(432).color(0xA890D8).texture("seam_wings").title("Крила Шву"));
         r.item("seam_heart", new ItemSettings().color(0xF0C0FF).texture("seam_heart").maxStack(1).title("Серце Шву"));
         r.item("seam_cure", new ItemSettings().color(0x50E0B0).texture("seam_cure").title("Зілля Шву"));
         r.item("seam_fire", new ItemSettings().color(0xFF6A20).texture("seam_fire").title("Вогонь Шву"));

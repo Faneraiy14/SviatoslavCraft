@@ -499,4 +499,20 @@ public final class ItemTextureGen {
         px(a, 11, 13, 0xFFC8C8D8); px(a, 12, 12, 0xFFC8C8D8); px(a, 13, 15, 0xFFC8C8D8);
         return outlined(a);
     }
+
+    /** Крила Шву: два розкриті крила з пір'ям (ліве й дзеркальне праве). */
+    public static int[] wings() {
+        int[] a = new int[256];
+        for (int k = 0; k < 5; k++) { // пір'їни зверху вниз, коротшають донизу
+            int y0 = 3 + k * 2, len = 6 - k;
+            for (int i = 0; i <= len; i++) {
+                int y = y0 + i / 3, c = i == len ? 0xFFE0D0FF : (k < 2 ? 0xFFA890D8 : 0xFF7A68A8);
+                if (y > 14) continue;
+                px(a, 6 - i, y, c); px(a, 9 + i, y, c);
+                if (y + 1 <= 14) { px(a, 6 - i, y + 1, 0xFF6A5898); px(a, 9 + i, y + 1, 0xFF6A5898); }
+            }
+        }
+        for (int y = 3; y <= 9; y++) { px(a, 7, y, 0xFF4A3A70); px(a, 8, y, 0xFF4A3A70); }
+        return outlined(a);
+    }
 }

@@ -29,6 +29,10 @@ public final class PlayerEntity {
     /** Стрибнув у цьому тіку (для виснаження). */
     public boolean jumped;
     private double fall, landedFall;
+    /** Крила надягнуті й придатні (клієнт виставляє щотіку); gliding - зараз планує. */
+    public boolean wings, gliding;
+    private boolean prevJump;
+    private double impact;
 
     public PlayerEntity(Solid world, Pos at) { this(world, (x, y, z) -> false, at); }
     public PlayerEntity(Solid world, Liquid liquid, Pos at) { this.world = world; this.liquid = liquid; teleport(at); }
@@ -37,6 +41,9 @@ public final class PlayerEntity {
 
     /** Висота падіння (блоків), накопичена до приземлення в цьому тіку; читання скидає. Падіння у воду не рахується. */
     public double takeLanded() { double f = landedFall; landedFall = 0; return f; }
+
+    /** Шкода від удару об стіну під час планування (накопичена); читання скидає. */
+    public double takeImpact() { double f = impact; impact = 0; return f; }
 
     /** Поштовх (відкидання від удару), блоків/с. */
     public void knock(double kx, double ky, double kz) { vx += kx; vz += kz; vy = Math.max(vy, ky); if (ky > 0) onGround = false; }
@@ -56,6 +63,11 @@ public final class PlayerEntity {
         long bx = pos.blockX(), bz = pos.blockZ();
         inWater = liquid.at(bx, (int) Math.floor(pos.y - EYE + 0.6), bz);   // вода на рівні пояса
         headInWater = liquid.at(bx, (int) Math.floor(pos.y), bz);            // вода на рівні очей
+        boolean jumpEdge = jump && !prevJump;
+        prevJump = jump;
+        if (gliding && (onGround || inWater || !wings)) gliding = false;
+        else if (!gliding && wings && jumpEdge && !onGround && !inWater && vy < 0) gliding = true; // стрибок у повітрі під час падіння розкриває крила
+        if (gliding) { glide(dt); return; }
         double tvx = 0, tvz = 0;
         if (dx != 0 || dz != 0) {
             double len = Math.sqrt(dx * dx + dz * dz), s = (crouch ? SPEED * CROUCH : (sprint && fwd ? SPEED * SPRINT : SPEED)) * (inWater ? 0.55 : 1.0);
@@ -81,6 +93,34 @@ public final class PlayerEntity {
         else if (onGround) { if (fall > 0) landedFall = fall; fall = 0; }
         else if (down > 0) fall += down;
         else fall = Math.max(0, fall + down);
+    }
+
+    /**
+     * Планування (за формулою крил Minecraft, у блоках за тік): дивишся вниз - розганяєшся, вгору - набираєш висоту коштом швидкості,
+     * горизонтально - повільно знижуєшся. Удар об стіну на швидкості - шкода (втрата швидкості x10 - 3).
+     */
+    private void glide(double dt) {
+        jumped = false;
+        eyeOffset += (0.0 - eyeOffset) * Math.min(1.0, 10.0 * dt);
+        double tx = vx * dt, ty = vy * dt, tz = vz * dt;
+        double yr = Math.toRadians(yaw), pr = Math.toRadians(pitch), cp = Math.cos(pr);
+        double lx = Math.sin(yr) * cp, lz = -Math.cos(yr) * cp, hlook = Math.abs(cp), hvel = Math.sqrt(tx * tx + tz * tz), sq = cp * cp;
+        ty += -0.08 + sq * 0.06;
+        if (ty < 0 && hlook > 1e-6) { double y = ty * -0.1 * sq; ty += y; tx += lx * y / hlook; tz += lz * y / hlook; }
+        if (pr < 0 && hlook > 1e-6) { double d = hvel * -Math.sin(pr) * 0.04; ty += d * 3.2; tx -= lx * d / hlook; tz -= lz * d / hlook; }
+        if (hlook > 1e-6) { tx += (lx / hlook * hvel - tx) * 0.1; tz += (lz / hlook * hvel - tz) * 0.1; }
+        tx *= 0.99; ty *= 0.98; tz *= 0.99;
+        vx = tx / dt; vy = ty / dt; vz = tz / dt;
+        double before = Math.sqrt(tx * tx + tz * tz);
+        moveY(vy * dt);
+        moveH(vx * dt, vz * dt, false);
+        pos.normalize();
+        double after = Math.sqrt(vx * vx + vz * vz) * dt, loss = before - after;
+        if (loss * 10 - 3 > 0) impact += loss * 10 - 3;
+        double down = prev.y - pos.y;
+        if (onGround) { if (fall > 0) landedFall = fall; fall = 0; gliding = false; }
+        else if (down > 0) fall += down; else fall = Math.max(0, fall + down);
+        if (ty > -0.5) fall = Math.min(fall, 1); // плавне планування не накопичує висоту падіння
     }
 
     private void moveY(double d) {

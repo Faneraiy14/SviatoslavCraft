@@ -304,6 +304,7 @@ public final class World implements WorldAccess {
                 unlockRecord("voxelin:ritual_done");
                 Pos at = dead.home != null ? new Pos(dead.home.cx, dead.home.cz, dead.home.x, dead.home.y + 2, dead.home.z) : dead.pos.copy();
                 spawnItem(at, "voxelin:seam_heart", 1, 0, true);
+                spawnItem(at, Inventory.WINGS, 1, 0, true); // крила - нагорода Ритуалу
                 if (target != null) target.notify("Ритуал звершено. Шов запечатано.");
             }
             return;

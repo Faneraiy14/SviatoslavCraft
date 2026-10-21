@@ -30,13 +30,14 @@ public final class ModLoader {
     private final MobRegistry mobTypes;
     private final LootRegistry loot;
     private final StructureRegistry structures;
+    private final RecordRegistry records;
     private final EventBus events;
     private final CommandRegistry commands;
     private final Map<String, int[][]> textures;
     private final List<ModInfo> mods = new ArrayList<>();
 
-    public ModLoader(BlockRegistry blocks, ItemRegistry items, RecipeRegistry recipes, MobRegistry mobTypes, LootRegistry loot, StructureRegistry structures, EventBus events, CommandRegistry commands, Map<String, int[][]> textures) {
-        this.blocks = blocks; this.items = items; this.recipes = recipes; this.mobTypes = mobTypes; this.loot = loot; this.structures = structures; this.events = events; this.commands = commands; this.textures = textures;
+    public ModLoader(BlockRegistry blocks, ItemRegistry items, RecipeRegistry recipes, MobRegistry mobTypes, LootRegistry loot, StructureRegistry structures, RecordRegistry records, EventBus events, CommandRegistry commands, Map<String, int[][]> textures) {
+        this.blocks = blocks; this.items = items; this.recipes = recipes; this.mobTypes = mobTypes; this.loot = loot; this.structures = structures; this.records = records; this.events = events; this.commands = commands; this.textures = textures;
     }
 
     public List<ModInfo> mods() { return Collections.unmodifiableList(mods); }
@@ -124,6 +125,10 @@ public final class ModLoader {
             public void structure(String name, String text) {
                 if (name.contains(":") && !name.startsWith(modId + ":")) throw new IllegalArgumentException("мод «" + modId + "» може реєструвати лише " + modId + ":... (а не " + name + ")");
                 structures.add(name.contains(":") ? name : modId + ":" + name, text);
+            }
+            public void record(String id, String title, String text) {
+                if (id.contains(":") && !id.startsWith(modId + ":")) throw new IllegalArgumentException("мод «" + modId + "» може реєструвати лише " + modId + ":... (а не " + id + ")");
+                records.add(id.contains(":") ? id : modId + ":" + id, title, text);
             }
             public void fuel(String item, float seconds) { recipes.fuel(item.contains(":") ? item : modId + ":" + item, seconds); }
             public void tag(String tag, String... names) {

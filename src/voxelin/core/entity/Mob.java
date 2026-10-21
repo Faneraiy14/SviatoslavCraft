@@ -43,7 +43,7 @@ public final class Mob {
 
     /** Шкода від удару; true - удар прийнято (не в невразливості). kx,kz - напрям поштовху від нападника. */
     public boolean damage(double amount, double kx, double kz, Pos from) {
-        if (dying || invuln > 0 || !(amount > 0)) return false;
+        if (dying || invuln > 0 || !(amount > 0) || type.invulnerable) return false;
         health -= Math.min(amount, 1e6);
         invuln = INVULN; hurtTicks = 10;
         double len = Math.hypot(kx, kz);

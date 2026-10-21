@@ -10,6 +10,8 @@ public interface PlayerTarget {
     boolean creative();
     /** Перенести гравця в точку (команда /tp): ноги на блоці (x,y,z). */
     default void teleport(long x, int y, long z) {}
+    /** Повідомлення гравцеві (новий запис журналу тощо). */
+    default void notify(String message) {}
     /** Удар: шкода й поштовх (kx,kz - напрям від нападника, нормований). */
     void hurt(double damage, double kx, double kz);
 }

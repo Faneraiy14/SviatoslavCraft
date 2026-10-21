@@ -20,6 +20,8 @@ public interface Registries {
     void loot(String id, LootSettings settings);
     /** Шаблон структури (текст формату .vxs; назва без двокрапки отримує префікс мода). Помилка в тексті - структура пропускається з попередженням. */
     void structure(String name, String text);
+    /** Запис журналу (id без двокрапки отримує префікс мода); text - рядки через \\n. */
+    void record(String id, String title, String text);
     /** Знайти блок за повною назвою ("voxelin:stone") або null. */
     BlockRef findBlock(String fullName);
     /**

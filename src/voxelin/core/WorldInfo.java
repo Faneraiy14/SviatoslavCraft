@@ -14,6 +14,8 @@ public final class WorldInfo {
     public static final int FORMAT = 2;
     public enum Type { NORMAL, FLAT, END }
     public enum Mode { SURVIVAL, CREATIVE }
+    /** Вибір після смерті дракона. */
+    public enum EggChoice { NONE, RITUAL, INFECTION }
 
     public String name;
     public long seed;
@@ -39,6 +41,11 @@ public final class WorldInfo {
     public final String[] armor = new String[4];
     /** Лише для виміру Енд: куди повертати гравця в звичайний світ і чи вбито дракона. */
     public boolean hasReturn, dragonDead;
+    /** Журнал записів (відкриті id) і сюжетний стан, спільні для вимірів світу (переносяться разом із гравцем). */
+    public final java.util.LinkedHashSet<String> records = new java.util.LinkedHashSet<>();
+    public EggChoice eggChoice = EggChoice.NONE;
+    /** Ритуал: 0 не розпочато, 1 боси в Енді, 2 виконано. */
+    public int ritualStage;
     public long returnX, returnZ;
     public int returnY;
     public final List<String> palette = new ArrayList<>();
@@ -86,6 +93,9 @@ public final class WorldInfo {
         for (int i = 0; i < 4; i++) w.armor[i] = p.getProperty("armor." + i);
         try { w.invSelected = Math.max(0, Math.min(Inventory.HOTBAR - 1, Integer.parseInt(p.getProperty("invSelected", "0").trim()))); } catch (NumberFormatException e) { w.invSelected = 0; }
         w.dragonDead = "true".equals(p.getProperty("dragonDead"));
+        for (String r : p.getProperty("records", "").split(",")) if (r.trim().matches("[a-z0-9_]+:[a-z0-9_/]+")) w.records.add(r.trim());
+        try { w.eggChoice = EggChoice.valueOf(p.getProperty("eggChoice", "NONE").trim()); } catch (IllegalArgumentException e) { w.eggChoice = EggChoice.NONE; }
+        try { w.ritualStage = Math.max(0, Math.min(2, Integer.parseInt(p.getProperty("ritualStage", "0").trim()))); } catch (NumberFormatException e) { w.ritualStage = 0; }
         try {
             w.returnX = Long.parseLong(p.getProperty("returnX").trim()); w.returnY = Integer.parseInt(p.getProperty("returnY").trim()); w.returnZ = Long.parseLong(p.getProperty("returnZ").trim());
             w.hasReturn = w.returnY >= 0 && w.returnY < 256;
@@ -113,6 +123,9 @@ public final class WorldInfo {
         if (hasInv) { p.setProperty("hasInv", "true"); p.setProperty("invSelected", String.valueOf(invSelected)); for (int i = 0; i < Inventory.SIZE; i++) if (inv[i] != null) p.setProperty("inv." + i, inv[i]); }
         if (hasInv) for (int i = 0; i < 4; i++) if (armor[i] != null) p.setProperty("armor." + i, armor[i]);
         if (dragonDead) p.setProperty("dragonDead", "true");
+        if (!records.isEmpty()) p.setProperty("records", String.join(",", records));
+        if (eggChoice != EggChoice.NONE) p.setProperty("eggChoice", eggChoice.name());
+        if (ritualStage != 0) p.setProperty("ritualStage", String.valueOf(ritualStage));
         if (hasReturn) { p.setProperty("returnX", String.valueOf(returnX)); p.setProperty("returnY", String.valueOf(returnY)); p.setProperty("returnZ", String.valueOf(returnZ)); }
         p.setProperty("time", String.valueOf(time));
         p.setProperty("dayMinutes", String.valueOf(dayMinutes));
@@ -135,6 +148,10 @@ public final class WorldInfo {
         System.arraycopy(o.armor, 0, armor, 0, armor.length);
         hasVitals = o.hasVitals; health = o.health; hunger = o.hunger; saturation = o.saturation;
         mode = o.mode;
+        records.addAll(o.records);
+        if (o.eggChoice != EggChoice.NONE) eggChoice = o.eggChoice;
+        ritualStage = Math.max(ritualStage, o.ritualStage);
+        if (o.dragonDead && type == Type.END) dragonDead = true;
     }
 
     public synchronized void setPlayer(Pos p, float yaw, float pitch) {

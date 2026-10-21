@@ -36,6 +36,8 @@ final class PlayScreen {
     private final Pos spawn;
     private InventoryScreen invScreen, benchScreen, activeScreen;
     private TradeScreen trade;
+    private JournalScreen journal;
+    private KeeperScreen keeper;
     private IconAtlas icons;
     private boolean invOpen, chatOpen, debug, hud = true, grabbed;
     private Raycast.Hit hit;
@@ -72,6 +74,7 @@ final class PlayScreen {
             public Pos body() { return bodyPos(); }
             public boolean alive() { return !vt.dead(); }
             public boolean creative() { return world.creative(); }
+            public void notify(String message) { say(message); }
             public void hurt(double damage, double kx, double kz) {
                 int pts = inv.armorPoints(world.itemTypes);
                 double reduced = damage * (1.0 - Math.min(0.8, pts * 0.04)); // кожне очко броні - 4% менше шкоди, не більше 80%
@@ -83,7 +86,7 @@ final class PlayScreen {
             public void teleport(long x, int y, long z) { player.teleport(Pos.ofBlock(x, y + PlayerEntity.EYE + 0.02, z)); }
         };
         world.setPlayerTarget(playerTarget);
-        if (world.dimension().equals("end")) world.spawnDragonIfNeeded();
+        if (world.dimension().equals("end")) { world.populateEnd(); world.unlockRecord("voxelin:end_arrival"); }
         icons = new IconAtlas(v.textures, world);
         java.util.function.Consumer<Inventory.Stack> dropper = st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); };
         invScreen = InventoryScreen.craft("ІНВЕНТАР", new CraftMenu(world.itemTypes, v.game.recipes, inv, 2), inv, world, icons, dropper);
@@ -199,6 +202,7 @@ final class PlayScreen {
         if (in.pressed(GLFW_KEY_F5)) cam.cycle();
         if (!chatOpen && !vt.dead()) {
             if (in.pressed(GLFW_KEY_E)) { if (invOpen) closeInventory(); else { activeScreen = invScreen; invOpen = true; grab(false); } }
+            if (in.pressed(GLFW_KEY_J) && !invOpen) { journal = new JournalScreen(world); invOpen = true; grab(false); }
             if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); }
         }
         if (chatOpen) { in.updateText(); if (in.pressed(GLFW_KEY_ENTER)) sendChat(); } // не залежить від F1 (HUD)
@@ -313,6 +317,8 @@ final class PlayScreen {
     private void useItem() {
         boolean sneak = v.input.down(GLFW_KEY_LEFT_SHIFT) || v.input.down(GLFW_KEY_RIGHT_SHIFT);
         if (aimedMob != null && !sneak && aimedMob.type.talkable() && !vt.dead()) { // розмова з жителем
+            if ("keeper".equals(aimedMob.type.dialog)) { keeper = new KeeperScreen(world, inv, this::say); invOpen = true; grab(false); return; }
+            if (aimedMob.type.name.endsWith("villager_elder")) world.unlockRecord("voxelin:elder");
             trade = new TradeScreen(aimedMob, world, inv, icons, new java.util.Random());
             invOpen = true; grab(false);
             return;
@@ -320,7 +326,7 @@ final class PlayScreen {
         BlockType target = hit == null ? null : world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
         if (target != null && "end_frame".equals(target.interact)) { // Око Енду в рамку Шву
             String msg = EndPortal.insertEye(world, playerSrc, hit.x(), hit.y(), hit.z(), inv, world.creative());
-            if (msg != null) say(msg);
+            if (msg != null) { say(msg); if (msg.contains("відчинився")) world.unlockRecord("voxelin:gate"); }
             return;
         }
         if (target != null && target.interact != null && !"portal".equals(target.interact) && !"end_frame_eye".equals(target.interact) && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
@@ -543,7 +549,7 @@ final class PlayScreen {
 
     private void openChat(String initial) { chatOpen = true; v.input.beginText(initial, true); grab(false); }
 
-    private void closeInventory() { if (trade != null) { trade = null; invOpen = false; grab(true); return; } openedBlock = false; activeScreen.close(); invOpen = false; grab(true); }
+    private void closeInventory() { if (trade != null || journal != null || keeper != null) { trade = null; journal = null; keeper = null; invOpen = false; grab(true); return; } openedBlock = false; activeScreen.close(); invOpen = false; grab(true); }
 
     private void closeChat() { chatOpen = false; v.input.endText(); grab(!invOpen); }
 
@@ -605,7 +611,12 @@ final class PlayScreen {
             Gui.rect(8, Gui.H - 112, 1264, 30, 0, 0, 0, 0.7f);
             Gui.text("> " + in.text() + ((now / 500) % 2 == 0 ? "_" : ""), 14, Gui.H - 107, 2.4f, 1, 1, 0.8f);
         }
-        if (invOpen) { if (trade != null) { trade.draw(g); if (trade.close) closeInventory(); } else activeScreen.draw(g, v.input); }
+        if (invOpen) {
+            if (journal != null) { journal.draw(g); if (journal.close) closeInventory(); }
+            else if (keeper != null) { keeper.draw(g); if (keeper.close) closeInventory(); }
+            else if (trade != null) { trade.draw(g); if (trade.close) closeInventory(); }
+            else activeScreen.draw(g, v.input);
+        }
         if (hurtFlash > 0) Gui.rect(0, 0, Gui.W, Gui.H, 0.8f, 0.05f, 0.05f, (float) (0.35 * hurtFlash));
         if (System.currentTimeMillis() - bannerAt < 4000 && bannerDay > 1) {
             float a = (float) Math.min(1, (4000 - (System.currentTimeMillis() - bannerAt)) / 1000.0);

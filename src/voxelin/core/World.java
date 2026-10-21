@@ -40,6 +40,7 @@ public final class World implements WorldAccess {
     public final RecipeRegistry recipes;
     public final MobRegistry mobTypes;
     public final LootRegistry loot;
+    public final RecordRegistry records;
     private final EventBus events;
     private final Generator generator;
     private final RegionStorage storage;
@@ -60,8 +61,8 @@ public final class World implements WorldAccess {
     /** Статистика для F3 і --bench. */
     public volatile long genNanos, genCount;
 
-    public World(File dir, WorldInfo info, BlockRegistry blocks, ItemRegistry itemTypes, RecipeRegistry recipes, MobRegistry mobTypes, LootRegistry loot, EventBus events, Generator generator) throws IOException {
-        this.dir = dir; this.info = info; this.blocks = blocks; this.itemTypes = itemTypes; this.recipes = recipes; this.mobTypes = mobTypes; this.loot = loot; this.events = events; this.generator = generator;
+    public World(File dir, WorldInfo info, BlockRegistry blocks, ItemRegistry itemTypes, RecipeRegistry recipes, MobRegistry mobTypes, LootRegistry loot, RecordRegistry records, EventBus events, Generator generator) throws IOException {
+        this.dir = dir; this.info = info; this.blocks = blocks; this.itemTypes = itemTypes; this.recipes = recipes; this.mobTypes = mobTypes; this.loot = loot; this.records = records; this.events = events; this.generator = generator;
         storage = new RegionStorage(dir);
         light = new LightEngine(blocks, (c, sy) -> { if (listener != null) listener.lightChanged(c, sy); });
         rt2p = new int[blocks.size()];
@@ -243,6 +244,29 @@ public final class World implements WorldAccess {
         return m;
     }
 
+    /** Відкрити запис журналу (повна назва, напр. voxelin:dragon). true - щойно відкрито (гравець бачить повідомлення). */
+    public boolean unlockRecord(String id) {
+        RecordRegistry.Record r = records.get(id);
+        if (r == null || !info.records.add(id)) return false;
+        if (target != null) target.notify("Новий запис у журналі: " + r.title + "  (J)");
+        return true;
+    }
+
+    /** Сторож Шва: у Енді після смерті дракона біля яйця, один (невразливий). true - створено. */
+    public boolean spawnKeeperIfNeeded() {
+        if (info.type != WorldInfo.Type.END || !info.dragonDead) return false;
+        MobType t = mobTypes.get("voxelin:seam_keeper");
+        if (t == null) return false;
+        for (Mob m : mobs) if (m.type == t) return false;
+        Mob k = spawnMob(t, Pos.ofBlock(4, voxelin.core.gen.EndGenerator.TOP + 1, 0));
+        if (k == null) return false;
+        k.keep = true;
+        return true;
+    }
+
+    /** Наповнити Енд при вході: дракон (якщо ще живий) або Сторож (якщо дракона вбито). */
+    public void populateEnd() { if (!spawnDragonIfNeeded()) spawnKeeperIfNeeded(); }
+
     /** Дракон Краю: створити над островом, якщо ще не вбитий і його немає. true - створено. */
     public boolean spawnDragonIfNeeded() {
         if (info.type != WorldInfo.Type.END || info.dragonDead) return false;
@@ -281,7 +305,7 @@ public final class World implements WorldAccess {
     private void dropLoot(Mob m) {
         if (m.lootDropped) return;
         m.lootDropped = true;
-        if (m.type.boss) info.dragonDead = true; // смерть боса записується у світ (не відроджується)
+        if (m.type.boss && m.type.name.equals("voxelin:ender_dragon")) { info.dragonDead = true; unlockRecord("voxelin:dragon"); keeperPending = true; } // смерть дракона записується у світ (не відроджується)
         for (voxelin.api.BlockSettings.Drop d : m.type.drops) {
             if (d.chance < 1f && mobRng.nextFloat() >= d.chance) continue;
             int n = d.min + (d.max > d.min ? mobRng.nextInt(d.max - d.min + 1) : 0);
@@ -289,6 +313,8 @@ public final class World implements WorldAccess {
             if (n > 0) spawnItem(at, d.item, n, 0, true);
         }
     }
+
+    private boolean keeperPending;
 
     private void tickMobs() {
         if (naturalSpawning) spawner.tick(this, target, mobRng, tick);
@@ -303,6 +329,7 @@ public final class World implements WorldAccess {
                 if (naturalSpawning && !m.keep && !m.type.persistent && ((m.type.hostile() && d2 > 80 * 80) || d2 > 128 * 128)) it.remove();
             }
         }
+        if (keeperPending) { keeperPending = false; spawnKeeperIfNeeded(); }
     }
 
     /** Відмітки вже створених мобів зі структур (щоб повторна генерація чанка не відроджувала жителів). */

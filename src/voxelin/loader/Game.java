@@ -19,11 +19,12 @@ public final class Game {
     public final MobRegistry mobTypes = new MobRegistry();
     public final LootRegistry loot = new LootRegistry();
     public final StructureRegistry structures = new StructureRegistry();
+    public final RecordRegistry records = new RecordRegistry();
     public final EventBus events = new EventBus();
     public final CommandRegistry commands = new CommandRegistry();
     /** Текстури з реєстру (назва -> {пікселі 16x16}); етап «Новий світ» збирає з них атлас. */
     public final Map<String, int[][]> textures = new LinkedHashMap<>();
-    public final ModLoader mods = new ModLoader(blocks, items, recipes, mobTypes, loot, structures, events, commands, textures);
+    public final ModLoader mods = new ModLoader(blocks, items, recipes, mobTypes, loot, structures, records, events, commands, textures);
     public final File savesDir;
 
     public Game(File savesDir, File modsDir) {
@@ -38,6 +39,7 @@ public final class Game {
         loot.freeze(items);
         loadStructureFiles(modsDir);
         structures.freeze(blocks);
+        records.freeze();
     }
 
     /** Власні шаблони: структури/*.vxs поруч із текою модів (файл перекриває ванільний шаблон з тією ж назвою). */
@@ -97,6 +99,6 @@ public final class Game {
         voxelin.core.gen.Generator gen = info.type == WorldInfo.Type.END
                 ? new voxelin.core.gen.EndGenerator(info.seed, blocks)
                 : new TerrainGenerator(info.seed, info.type, blocks, structures.templates());
-        return new World(d, info, blocks, items, recipes, mobTypes, loot, events, gen);
+        return new World(d, info, blocks, items, recipes, mobTypes, loot, records, events, gen);
     }
 }

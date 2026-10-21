@@ -12,7 +12,8 @@ import java.util.Random;
 
 /**
  * Зараження (гілка «Зараження» розвилки яйця). Яйце дракона, поставлене у звичайному світі після цього вибору, стає Ядром Шву (незламне),
- * і починається відлік 30 діб: Тиха пора (0-9 день), Активна (10-19), Криза (20+). Розростання - клітинний автомат лише біля гравця:
+ * і починається відлік 30 діб: Тиха пора (0-9 день), Активна (10-19), Криза (20+), після 30-го - прорив (удвічі швидше, зона 128).
+ * Розростання - клітинний автомат у зоні навколо ядра, завжди, поки йде відлік (поки ділянка не завантажена, спроби накопичуються):
  * блок наросту поглинає сусідній суцільний блок; у темряві швидше, на світлі й біля води повільніше. Зупинити: вилікувати (Зілля Шву - наріст
  * стає землею, ядро знову яйцем), спалити (Вогонь Шву - кратер назавжди, яйце втрачено), приручити (8 уламків лімініту - розростання стоїть,
  * наріст лишається). Наріст пам'ятається у infection.dat, тож очищення доходить і до чанків, що завантажаться пізніше.
@@ -20,7 +21,10 @@ import java.util.Random;
 public final class Infection {
     public enum Phase { QUIET, ACTIVE, CRISIS }
 
-    public static final int DAYS = 30, TAME_COST = 8, RADIUS = 64, CAP = 40_000, CRATER = 5;
+    public static final int DAYS = 30, TAME_COST = 8, RADIUS = 64, BREACH_RADIUS = 128, CAP = 100_000, CRATER = 5, BUDGET = 200;
+    /** Скільки спроб може накопичитись, поки ділянка ядра не завантажена (≈ 10 діб кризи). */
+    public static final double OWED_CAP = 400_000;
+    public enum Step { GREW, FAILED, DEFERRED }
     public static final String EGG = "voxelin:dragon_egg", CORE = "voxelin:seam_core", GROWTH = "voxelin:seam_growth",
             CURE = "voxelin:seam_cure", FIRE = "voxelin:seam_fire", SHARD = "voxelin:liminite_shard", SCAR = "voxelin:seam_scar";
     private static final Source SRC = Sources.SYSTEM;
@@ -39,9 +43,15 @@ public final class Infection {
 
     public Phase phase() { long d = day(); return d < 10 ? Phase.QUIET : d < 20 ? Phase.ACTIVE : Phase.CRISIS; }
 
-    /** Через скільки тіків спроба і скільки клітинок за спробу. */
-    static int interval(Phase p) { return p == Phase.QUIET ? 100 : p == Phase.ACTIVE ? 40 : 12; }
-    static int batch(Phase p) { return p == Phase.QUIET ? 1 : p == Phase.ACTIVE ? 2 : 4; }
+    /** Спроб росту за тік: тиха 1/100, активна 2/40, криза 4/12; після 30-го дня (прорив) - удвічі більше. */
+    public double rate() {
+        Phase p = phase();
+        double r = p == Phase.QUIET ? 1 / 100.0 : p == Phase.ACTIVE ? 2 / 40.0 : 4 / 12.0;
+        return day() >= DAYS ? r * 2 : r;
+    }
+
+    /** Радіус зони від ядра: 64, після прориву (30-й день) - 128. */
+    public int radius() { return day() >= DAYS ? BREACH_RADIUS : RADIUS; }
 
     /** Поставлено яйце: чи це початок зараження (лише звичайний світ, вибір «Зараження», ще не почалось). */
     boolean shouldStart(BlockType placed) {
@@ -61,46 +71,53 @@ public final class Infection {
         return i.infState != WorldInfo.InfState.NONE && i.infX == x && i.infY == y && i.infZ == z;
     }
 
-    /** Тік світу. target - гравець (розростання лише біля нього). */
+    /**
+     * Тік світу. Зараження росте ЗАВЖДИ, поки йде відлік (рішення Святослава 21.10): спроби накопичуються щотіку (infOwed), а виконуються,
+     * коли ділянка ядра завантажена - до BUDGET за тік, тож після повернення наріст «доростає» пропущене. Гравець для росту не потрібен.
+     */
     void tick(long tick, PlayerTarget target) {
-        WorldInfo.InfState s = w.info.infState;
-        if (s == WorldInfo.InfState.CURED || s == WorldInfo.InfState.BURNED) { if (!growth.isEmpty() && tick % 20 == 0) purge(); return; }
-        if (s != WorldInfo.InfState.ACTIVE || target == null) return;
-        Phase p = phase();
-        if (tick % interval(p) != 0) return;
-        Pos b = target.body();
-        int n = batch(p) * (day() >= DAYS ? 2 : 1); // після 30-го дня Шов прорвано - росте вдвічі швидше
-        for (int k = 0; k < n; k++) spread(b.blockX(), b.blockZ());
+        WorldInfo i = w.info;
+        if (i.infState == WorldInfo.InfState.CURED || i.infState == WorldInfo.InfState.BURNED) { if (!growth.isEmpty() && tick % 20 == 0) purge(); return; }
+        if (i.infState != WorldInfo.InfState.ACTIVE) return;
+        i.infOwed = Math.min(OWED_CAP, i.infOwed + rate());
+        for (int b = 0; b < BUDGET && i.infOwed >= 1; b++) {
+            if (step() == Step.DEFERRED) break; // ділянка не завантажена - чекаємо, борг лишається
+            i.infOwed -= 1;
+        }
     }
 
-    private boolean near(long x, long z, long px, long pz) { return Math.abs(x - px) <= RADIUS && Math.abs(z - pz) <= RADIUS; }
+    private boolean inZone(long x, long z) { WorldInfo i = w.info; int r = radius(); return Math.abs(x - i.infX) <= r && Math.abs(z - i.infZ) <= r; }
 
-    /** Одна спроба: вибрати клітинку наросту (або ядро) біля гравця й поглинути її сусіда. true - виросло. */
-    public boolean spread(long px, long pz) {
+    /** Одна спроба росту (для тестів і звіту). true - виросло. */
+    public boolean spread() { return step() == Step.GREW; }
+
+    /** Одна спроба: вибрати клітинку наросту (або ядро) й поглинути її сусіда в зоні ядра. DEFERRED - потрібний чанк не завантажено. */
+    public Step step() {
         WorldInfo i = w.info;
-        if (growth.size() >= CAP) return false;
+        if (i.infState != WorldInfo.InfState.ACTIVE || growth.size() >= CAP) return Step.FAILED;
+        BlockType core = w.blocks.byName(CORE), gt = w.blocks.byName(GROWTH);
+        if (core == null || gt == null) return Step.FAILED;
+        int coreId = w.blockId(i.infX, i.infY, i.infZ);
+        if (coreId < 0) return Step.DEFERRED;
         long[] from = null;
-        BlockType gt = w.blocks.byName(GROWTH);
         for (int t = 0; t < 12 && !growth.isEmpty(); t++) {
             int k = rng.nextInt(growth.size()); long[] g = growth.get(k);
-            if (!near(g[0], g[2], px, pz)) continue;
             int id = w.blockId(g[0], (int) g[1], g[2]);
-            if (id >= 0 && (gt == null || id != gt.id)) { growth.set(k, growth.get(growth.size() - 1)); growth.remove(growth.size() - 1); continue; } // наріст зламали - забути
+            if (id < 0) continue; // незавантажено - інша клітинка
+            if (id != gt.id) { growth.set(k, growth.get(growth.size() - 1)); growth.remove(growth.size() - 1); continue; } // наріст зламали - забути
             from = g; break;
         }
-        if ((from == null || rng.nextInt(4) == 0) && near(i.infX, i.infZ, px, pz)) {
-            BlockType core = w.blocks.byName(CORE);
-            if (core != null && w.blockId(i.infX, i.infY, i.infZ) == core.id) from = new long[]{i.infX, i.infY, i.infZ}; // ядро прибрали командою - з нього не росте
-        }
-        if (from == null) return false;
+        if ((from == null || rng.nextInt(4) == 0) && coreId == core.id) from = new long[]{i.infX, i.infY, i.infZ}; // ядро прибрали командою - з нього не росте
+        if (from == null) return growth.isEmpty() ? Step.FAILED : Step.DEFERRED;
         int[] d = DIRS[rng.nextInt(6)];
         long x = from[0] + d[0], z = from[2] + d[2]; int y = (int) from[1] + d[1];
-        if (!consumable(x, y, z)) return false;
-        if (rng.nextDouble() >= chance(x, y, z)) return false;
-        BlockType g = w.blocks.byName(GROWTH);
-        if (g == null || !w.setBlock(SRC, x, y, z, g)) return false;
+        if (!inZone(x, z)) return Step.FAILED;
+        if (w.blockId(x, y, z) < 0) return Step.DEFERRED;
+        if (!consumable(x, y, z)) return Step.FAILED;
+        if (rng.nextDouble() >= chance(x, y, z)) return Step.FAILED;
+        if (!w.setBlock(SRC, x, y, z, gt)) return Step.FAILED;
         growth.add(new long[]{x, y, z});
-        return true;
+        return Step.GREW;
     }
 
     /** Чи може наріст поглинути блок: суцільний, ламкий, не рідина, не обсидіан і не сам Шов. */

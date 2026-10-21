@@ -75,9 +75,10 @@ final class PlayScreen {
             public boolean alive() { return !vt.dead(); }
             public boolean creative() { return world.creative(); }
             public void notify(String message) { say(message); }
-            public void hurt(double damage, double kx, double kz) {
+            public void hurt(double damage, double kx, double kz) { hurt(damage, kx, kz, 0); }
+            public void hurt(double damage, double kx, double kz, double pierce) {
                 int pts = inv.armorPoints(world.itemTypes);
-                double reduced = Inventory.reduce(damage, pts);
+                double reduced = Inventory.reduce(damage, pts, pierce);
                 double before = vt.health();
                 vt.hurt(reduced, false);
                 if (vt.health() < before && !world.creative()) inv.wearArmor(world.itemTypes, damage, new java.util.Random());

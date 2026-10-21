@@ -33,7 +33,7 @@ public final class MobSpawner {
         if (hostile) { if (count(w, pc, true) >= HOSTILE_CAP) return false; }
         else if (count(w, pc, false) >= PASSIVE_CAP || w.skyLevel() < 0.6) return false;
         List<MobType> pool = new ArrayList<>();
-        for (MobType t : w.mobTypes.all()) if (hostile ? (t.hostile() || t.behavior == voxelin.api.MobSettings.Behavior.NEUTRAL_DAY) : (t.passive() && !t.persistent)) pool.add(t);
+        for (MobType t : w.mobTypes.all()) if (!t.persistent && !t.boss && (hostile ? (t.hostile() || t.behavior == voxelin.api.MobSettings.Behavior.NEUTRAL_DAY) : t.passive())) pool.add(t); // боси й постійні (дракон, Ткач, жителі) природно не з'являються
         if (pool.isEmpty()) return false;
         MobType type = pool.get(rng.nextInt(pool.size()));
         double ang = rng.nextDouble() * Math.PI * 2, dist = hostile ? 24 + rng.nextDouble() * 36 : 16 + rng.nextDouble() * 32;

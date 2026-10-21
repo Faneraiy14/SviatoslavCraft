@@ -42,7 +42,7 @@ public class VoxelinDragonTest {
 
     static void type() throws Exception {
         MobType t = g.mobTypes.get("voxelin:ender_dragon");
-        check(t != null && t.flying && t.boss && t.persistent && t.health == 200 && t.attackDamage == 6 && t.hostile(), "дракон: політ, бос, 200 здоров'я, шкода 6");
+        check(t != null && t.flying && t.boss && t.persistent && t.health == 200 && t.attackDamage == 10 && t.armorPierce == 0.5 && t.hostile(), "дракон: політ, бос, 200 здоров'я, шкода 10, пробиття 0.5");
         check(t.parts.stream().anyMatch(p -> p.swing == 3) && t.parts.stream().anyMatch(p -> p.swing == 4), "модель має крила");
         check(t.drops.stream().anyMatch(d -> d.item.equals("voxelin:dragon_egg")), "дропає яйце");
         check(g.items.get("voxelin:dragon_egg") != null && g.items.get("voxelin:dragon_egg").placesBlock != null, "яйце - блок-предмет");
@@ -82,7 +82,7 @@ public class VoxelinDragonTest {
         int ticks = 3000;
         for (int i = 0; i < ticks; i++) { w.tick(); if (i > 200) { minY = Math.min(minY, d.pos.y); maxY = Math.max(maxY, d.pos.y); } }
         check(p.hits >= 3, "дракон пікірує й б'є: " + p.hits);
-        check(Math.abs(p.total - 6.0 * p.hits) < 1e-9, "кожен удар 6");
+        check(Math.abs(p.total - 10.0 * p.hits) < 1e-9, "кожен удар 10");
         check(p.hits * 50 <= ticks + 100, "перезарядка 2.5 с дотримується: " + p.hits);
         check(minY < EndGenerator.TOP + 8 && maxY > EndGenerator.TOP + 18, "пікірує вниз і злітає назад: " + minY + ".." + maxY);
         // творчий гравець - не б'є

@@ -36,7 +36,13 @@ public final class Inventory implements ItemHolder {
     public static final double ARMOR_PER_POINT = 0.04, ARMOR_CAP = 0.8;
 
     /** Шкода після броні: кожне очко - 4% менше, не більше 80%. */
-    public static double reduce(double damage, int points) { return damage * (1.0 - Math.min(ARMOR_CAP, Math.max(0, points) * ARMOR_PER_POINT)); }
+    public static double reduce(double damage, int points) { return reduce(damage, points, 0); }
+
+    /** Те саме, але удар пробиває частку pierce (0..1) захисту броні. */
+    public static double reduce(double damage, int points, double pierce) {
+        double p = Double.isNaN(pierce) ? 0 : Math.max(0, Math.min(1, pierce));
+        return damage * (1.0 - Math.min(ARMOR_CAP, Math.max(0, points) * ARMOR_PER_POINT) * (1 - p));
+    }
 
     /** Сума очок захисту надягнутої броні. */
     public int armorPoints(ItemRegistry reg) {

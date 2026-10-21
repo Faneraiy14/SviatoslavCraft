@@ -99,10 +99,7 @@ public class VoxelinInfectionTest {
     static void spread() throws Exception {
         World w = open("g1", WorldInfo.EggChoice.INFECTION);
         int y = placeEgg(w);
-        // далеко від гравця - не росте
-        for (int k = 0; k < 3000; k++) w.infection.spread(5000, 5000);
-        check(w.infection.growthCount() == 0, "далеко від гравця зараження стоїть");
-        for (int k = 0; k < 4000; k++) w.infection.spread(0, 0);
+        for (int k = 0; k < 4000; k++) w.infection.spread();
         int c = w.infection.growthCount();
         check(c > 20, "біля гравця росте: " + c);
         check(growBlocks(w, 40) == c, "кожна клітинка списку - блок наросту: " + growBlocks(w, 40) + " vs " + c);
@@ -117,15 +114,39 @@ public class VoxelinInfectionTest {
         check(dark > lit, "у темряві швидше: " + dark + " > " + lit);
         w.setBlock(P, 31, sy - 6, 30, b(w, "voxelin:water"));
         check(w.infection.chance(30, sy - 6, 30) < dark, "вода поруч гальмує");
-        // тік світу з гравцем поруч
-        w.setPlayerTarget(new Fake(Pos.ofBlock(0, y + 1, 0)));
+        // тік світу: росте й без гравця (зараження росте завжди, поки йде відлік)
         int before = w.infection.growthCount();
         for (int k = 0; k < 2000; k++) w.tick();
-        check(w.infection.growthCount() > before, "тік світу розрощує біля гравця");
+        check(w.infection.growthCount() > before, "тік світу розрощує навіть без гравця");
+        // зона: нічого за межею радіуса
+        boolean inside = true;
+        w.info.infOwed = 50_000;
+        for (int k = 0; k < 400; k++) w.tick();
+        check(w.info.infOwed < 50_000 - 1000, "накопичені спроби виконуються (доростає пропущене): " + w.info.infOwed);
+        int gid0 = b(w, Infection.GROWTH).id;
+        for (long x = -100; x <= 100 && inside; x += 1) for (long z = -100; z <= 100 && inside; z += 1) {
+            if (Math.abs(x) <= Infection.RADIUS && Math.abs(z) <= Infection.RADIUS) continue;
+            if (w.chunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16)) == null) continue;
+            for (int yy = 0; yy < 120; yy++) if (w.blockId(x, yy, z) == gid0) { inside = false; break; }
+        }
+        check(inside, "наріст не виходить за радіус 64 до прориву");
+        check(w.infection.radius() == Infection.RADIUS, "радіус 64");
+        w.info.time = w.info.infStart + w.dayTicks() * Infection.DAYS;
+        check(w.infection.radius() == Infection.BREACH_RADIUS && w.infection.rate() == 2 * 4 / 12.0, "після 30-го дня: радіус 128, удвічі швидше");
+        w.info.time = w.info.infStart;
+        check(Math.abs(w.infection.rate() - 0.01) < 1e-12, "тиха пора: спроба на 100 тіків");
+        // ділянка ядра не завантажена: борг накопичується, нічого не росте
+        long cx = w.info.infX; w.info.infX = 10_000_000;
+        double owed = w.info.infOwed;
+        int cnt = w.infection.growthCount();
+        check(w.infection.step() == Infection.Step.DEFERRED, "незавантажене ядро - відкладено");
+        for (int k = 0; k < 300; k++) w.tick();
+        check(w.info.infOwed > owed && w.infection.growthCount() <= cnt, "борг росте, поки ділянка не завантажена");
+        w.info.infX = cx;
         // зламаний наріст забувається
         int gid = b(w, Infection.GROWTH).id;
         for (long x = -40; x <= 40; x++) for (long z = -40; z <= 40; z++) for (int yy = 0; yy < 120; yy++) if (w.blockId(x, yy, z) == gid) w.setBlock(P, x, yy, z, b(w, "voxelin:stone"));
-        for (int k = 0; k < 6000; k++) w.infection.spread(0, 0);
+        for (int k = 0; k < 6000; k++) w.infection.spread();
         check(growBlocks(w, 40) <= w.infection.growthCount(), "наріст рахується чесно після ламання");
         w.close();
     }
@@ -135,7 +156,7 @@ public class VoxelinInfectionTest {
     static void tame() throws Exception {
         World w = open("t1", WorldInfo.EggChoice.INFECTION);
         int y = placeEgg(w);
-        for (int k = 0; k < 3000; k++) w.infection.spread(0, 0);
+        for (int k = 0; k < 3000; k++) w.infection.spread();
         String st = w.infection.use(inv(w, null, 0), 0, y, 0, false);
         check(st != null && st.contains("день 1") && st.contains("з 30"), "ПКМ по ядру - стан: " + st);
         check(w.infection.use(inv(w, null, 0), 3, y, 3, false) == null, "не ядро - null");
@@ -145,10 +166,10 @@ public class VoxelinInfectionTest {
         w.infection.use(ten, 0, y, 0, false);
         check(w.info.infState == WorldInfo.InfState.TAMED && Trading.count(ten, w.itemTypes, Infection.SHARD) == 2, "приручено, забрано рівно 8");
         int c = w.infection.growthCount();
-        for (int k = 0; k < 3000; k++) w.infection.spread(0, 0);
-        w.setPlayerTarget(new Fake(Pos.ofBlock(0, y + 1, 0)));
+        for (int k = 0; k < 3000; k++) w.infection.spread();
+        w.info.infOwed = 5000;
         for (int k = 0; k < 500; k++) w.tick();
-        check(w.infection.growthCount() == c || w.info.infState == WorldInfo.InfState.TAMED, "приручене не росте від тіку");
+        check(w.infection.growthCount() == c, "приручене не росте");
         int gb = growBlocks(w, 40);
         for (int k = 0; k < 500; k++) w.tick();
         check(growBlocks(w, 40) == gb && gb > 0, "наріст лишився, але не росте");
@@ -159,7 +180,7 @@ public class VoxelinInfectionTest {
     static void cure() throws Exception {
         World w = open("c1", WorldInfo.EggChoice.INFECTION);
         int y = placeEgg(w);
-        for (int k = 0; k < 3000; k++) w.infection.spread(0, 0);
+        for (int k = 0; k < 3000; k++) w.infection.spread();
         check(growBlocks(w, 40) > 0, "є що лікувати");
         Inventory i = inv(w, Infection.CURE, 1);
         check(w.infection.use(i, 0, y, 0, false) != null && i.selectedStack() == null, "зілля витрачено");
@@ -175,7 +196,7 @@ public class VoxelinInfectionTest {
     static void burn() throws Exception {
         World w = open("b1", WorldInfo.EggChoice.INFECTION);
         int y = placeEgg(w);
-        for (int k = 0; k < 3000; k++) w.infection.spread(0, 0);
+        for (int k = 0; k < 3000; k++) w.infection.spread();
         Inventory i = inv(w, Infection.FIRE, 1);
         w.infection.use(i, 0, y, 0, true); // креатив: не витрачається
         check(i.selectedStack() != null, "у креативі вогонь не витрачається");
@@ -191,12 +212,13 @@ public class VoxelinInfectionTest {
     static void persistence() throws Exception {
         World w = open("r1", WorldInfo.EggChoice.INFECTION);
         int y = placeEgg(w);
-        for (int k = 0; k < 3000; k++) w.infection.spread(0, 0);
+        for (int k = 0; k < 3000; k++) w.infection.spread();
         int c = w.infection.growthCount();
         long start = w.info.infStart;
+        w.info.infOwed = 123.5;
         w.close();
         World r = g.openWorld("r1");
-        check(r.info.infState == WorldInfo.InfState.ACTIVE && r.info.infY == y && r.info.infStart == start && r.infection.growthCount() == c, "стан і наріст збережені");
+        check(r.info.infState == WorldInfo.InfState.ACTIVE && r.info.infY == y && r.info.infStart == start && r.infection.growthCount() == c && r.info.infOwed == 123.5, "стан, наріст і борг збережені");
         load(r);
         check(at(r, 0, y, 0).equals(Infection.CORE), "ядро в збереженому світі");
         Inventory i = inv(r, Infection.CURE, 1);

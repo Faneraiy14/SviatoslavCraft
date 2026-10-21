@@ -90,7 +90,7 @@ public final class Mob {
             speed = l > type.reach * 0.6 ? type.speed : 0;
             if (tdist <= type.reach + type.width / 2 && Math.abs(target.body().y - (pos.y + type.height / 2)) < 1.6 && attackCooldown == 0 && type.attackDamage > 0) {
                 attackCooldown = type.cooldownTicks;
-                target.hurt(type.attackDamage, dirX, dirZ);
+                target.hurt(type.attackDamage, dirX, dirZ, type.armorPierce);
             }
         } else {
             if (wanderTicks <= 0) { // нова мить блукання: пауза або іти в випадковому напрямі
@@ -157,7 +157,7 @@ public final class Mob {
                 if (dist <= type.reach + type.width / 2 && attackCooldown == 0 && type.attackDamage > 0) {
                     attackCooldown = type.cooldownTicks;
                     double dx = tbx - cx, dz = tbz - cz, l = Math.hypot(dx, dz);
-                    target.hurt(type.attackDamage * (enraged ? 1.5 : 1), l > 1e-6 ? dx / l : 0, l > 1e-6 ? dz / l : 1);
+                    target.hurt(type.attackDamage * (enraged ? 1.5 : 1), l > 1e-6 ? dx / l : 0, l > 1e-6 ? dz / l : 1, type.armorPierce);
                     flyState = 2; flyTimer = 0;
                 }
                 if (flyTimer > 200) { flyState = 2; flyTimer = 0; }

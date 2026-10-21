@@ -9,7 +9,7 @@ import java.util.List;
 /** Зареєстрований вид істоти: незмінні властивості. */
 public final class MobType implements MobRef {
     public final String name, title;
-    public final double health, speed, width, height, attackDamage, reach, detect;
+    public final double health, speed, width, height, attackDamage, reach, detect, armorPierce;
     public final int cooldownTicks;
     public final MobSettings.Behavior behavior;
     public final boolean burnsInSun, persistent, flying, boss, invulnerable;
@@ -26,7 +26,7 @@ public final class MobType implements MobRef {
         title = s.titleText() != null ? s.titleText() : ItemType.prettify(name);
         health = s.healthValue(); speed = s.speedValue(); width = s.widthValue(); height = s.heightValue(); behavior = s.behaviorValue();
         attackDamage = s.attackDamageValue(); reach = s.reachValue(); detect = s.detectValue(); cooldownTicks = Math.max(2, Math.round(s.cooldownValue() * 20));
-        burnsInSun = s.burnsInSunValue(); persistent = s.persistentValue(); flying = s.flyingValue(); boss = s.bossValue(); invulnerable = s.invulnerableValue(); dialog = s.dialogKind(); homeRadius = s.homeRadiusValue(); trades = List.copyOf(s.tradeList()); greetings = List.copyOf(s.greetingList());
+        burnsInSun = s.burnsInSunValue(); persistent = s.persistentValue(); flying = s.flyingValue(); boss = s.bossValue(); armorPierce = s.armorPierceValue(); invulnerable = s.invulnerableValue(); dialog = s.dialogKind(); homeRadius = s.homeRadiusValue(); trades = List.copyOf(s.tradeList()); greetings = List.copyOf(s.greetingList());
         drops = List.copyOf(s.dropList()); parts = List.copyOf(s.partList()); spawnOn = List.copyOf(s.spawnOnList());
     }
 

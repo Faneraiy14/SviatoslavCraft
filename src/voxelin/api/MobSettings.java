@@ -69,6 +69,10 @@ public final class MobSettings {
     public MobSettings flying(boolean b) { flying = b; return this; }
     /** Бос: смуга здоров'я, не відкидається, його смерть записується у світ. */
     public MobSettings boss(boolean b) { boss = b; return this; }
+    /** Частка броні гравця, яку пробиває удар (0 - броня діє повністю, 1 - ігнорується). Для босів. */
+    public MobSettings armorPierce(float f) { armorPierce = Float.isNaN(f) ? 0 : Math.max(0, Math.min(1, f)); return this; }
+    float armorPierce;
+    public float armorPierceValue() { return armorPierce; }
     /** Крило: хитається вгору-вниз (поворот навколо осі вперед); left - ліве чи праве. */
     public MobSettings wingPart(float cx, float y0, float cz, float w, float h, float d, int rgb, boolean left) { parts.add(new Part(cx, y0, cz, w, h, d, rgb, left ? 3 : 4)); return this; }
     /** Невразливий (Сторож Шва). */
@@ -86,7 +90,7 @@ public final class MobSettings {
     public MobSettings qualified(String modId) {
         MobSettings s = new MobSettings();
         s.health = health; s.speed = speed; s.width = width; s.height = height; s.behavior = behavior; s.attackDamage = attackDamage; s.reach = reach; s.cooldown = cooldown;
-        s.homeRadius = homeRadius; s.persistent = persistent; s.flying = flying; s.boss = boss; s.invulnerable = invulnerable; s.dialog = dialog; s.greetings.addAll(greetings);
+        s.homeRadius = homeRadius; s.persistent = persistent; s.flying = flying; s.boss = boss; s.armorPierce = armorPierce; s.invulnerable = invulnerable; s.dialog = dialog; s.greetings.addAll(greetings);
         for (Trade t : trades) s.trades.add(new Trade(t.in.indexOf(':') >= 0 ? t.in : modId + ":" + t.in, t.inCount, t.out.indexOf(':') >= 0 ? t.out : modId + ":" + t.out, t.outCount));
         s.detect = detect; s.burnsInSun = burnsInSun; s.title = title; s.parts.addAll(parts);
         for (BlockSettings.Drop d : drops) s.drops.add(new BlockSettings.Drop(d.item.indexOf(':') >= 0 ? d.item : modId + ":" + d.item, d.min, d.max, d.chance));

@@ -14,4 +14,6 @@ public interface PlayerTarget {
     default void notify(String message) {}
     /** Удар: шкода й поштовх (kx,kz - напрям від нападника, нормований). */
     void hurt(double damage, double kx, double kz);
+    /** Удар, що пробиває частку броні (pierce 0..1). Типово - як звичайний. */
+    default void hurt(double damage, double kx, double kz, double pierce) { hurt(damage, kx, kz); }
 }

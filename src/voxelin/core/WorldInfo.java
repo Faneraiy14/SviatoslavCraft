@@ -52,6 +52,8 @@ public final class WorldInfo {
     public enum InfState { NONE, ACTIVE, CURED, BURNED, TAMED }
     public InfState infState = InfState.NONE;
     public long infX, infZ, infStart; public int infY;
+    /** Накопичені спроби росту зараження (виконуються, коли ділянка ядра завантажена). */
+    public double infOwed;
     public long returnX, returnZ;
     public int returnY;
     public final List<String> palette = new ArrayList<>();
@@ -106,6 +108,7 @@ public final class WorldInfo {
             try { w.infX = Long.parseLong(p.getProperty("infX").trim()); w.infY = Integer.parseInt(p.getProperty("infY").trim()); w.infZ = Long.parseLong(p.getProperty("infZ").trim()); w.infStart = Long.parseLong(p.getProperty("infStart").trim()); }
             catch (RuntimeException e) { w.infState = InfState.NONE; }
             if (w.infY < 0 || w.infY >= Chunk.HEIGHT) w.infState = InfState.NONE;
+            try { double o = Double.parseDouble(p.getProperty("infOwed", "0").trim()); w.infOwed = Double.isNaN(o) || o < 0 ? 0 : Math.min(Infection.OWED_CAP, o); } catch (NumberFormatException e) { w.infOwed = 0; }
         }
         try { w.ritualKills = Math.max(0, Math.min(3, Integer.parseInt(p.getProperty("ritualKills", "0").trim()))); } catch (NumberFormatException e) { w.ritualKills = 0; }
         try { w.ritualStage = Math.max(0, Math.min(2, Integer.parseInt(p.getProperty("ritualStage", "0").trim()))); } catch (NumberFormatException e) { w.ritualStage = 0; }
@@ -138,7 +141,7 @@ public final class WorldInfo {
         if (dragonDead) p.setProperty("dragonDead", "true");
         if (!records.isEmpty()) p.setProperty("records", String.join(",", records));
         if (eggChoice != EggChoice.NONE) p.setProperty("eggChoice", eggChoice.name());
-        if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); }
+        if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); p.setProperty("infOwed", String.valueOf(infOwed)); }
         if (ritualKills != 0) p.setProperty("ritualKills", String.valueOf(ritualKills));
         if (ritualStage != 0) p.setProperty("ritualStage", String.valueOf(ritualStage));
         if (hasReturn) { p.setProperty("returnX", String.valueOf(returnX)); p.setProperty("returnY", String.valueOf(returnY)); p.setProperty("returnZ", String.valueOf(returnZ)); }

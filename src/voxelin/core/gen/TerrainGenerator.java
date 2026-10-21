@@ -284,7 +284,7 @@ public final class TerrainGenerator implements Generator {
         vein(c, 1, iron, 12, 3, 8, 5, 70, 1.0);
         vein(c, 2, copper, 9, 4, 9, 20, 90, 1.0);
         vein(c, 3, gold, 4, 3, 6, 5, 34, 1.0);
-        vein(c, 4, diamond, 3, 2, 5, 3, 16, 0.6);
+        vein(c, 4, diamond, 3, 2, 5, 3, 16, 0.3); // баланс 21.10: вдвічі рідше (було 0.6, ~5.4 руди на чанк)
         vein(c, 5, liminite, wastes ? 5 : 1, 2, 5, 8, wastes ? Math.min(90, surf[8 + 8 * 16]) : 48, wastes ? 1.0 : 0.4);
     }
 

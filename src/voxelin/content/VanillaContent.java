@@ -280,18 +280,18 @@ public final class VanillaContent implements VoxelinMod {
             if (i == 2) v.greeting("Тут колись було тихо... Кажуть, під лімінітом земля тонка, як папір.", "Не ходи ночами в печери без світла. Темрява тут - не просто відсутність світла.", "Мандрівники приносять дивні вісті про Шов. Я лише старий і не вірю в казки.", "Є місця, де тиша гучніша за грім. Обминай мовчазні пустища.");
             r.mob(vName[i], v);
         }
-        r.mob("ender_dragon", new MobSettings().health(200).speed(12f).size(4.5f, 2.2f).behavior(MobSettings.Behavior.HOSTILE).attack(6, 3.2f, 2.5f).detect(80).persistent(true).flying(true).boss(true).title("Дракон Краю")
+        r.mob("ender_dragon", new MobSettings().health(200).speed(12f).size(4.5f, 2.2f).behavior(MobSettings.Behavior.HOSTILE).attack(10, 3.2f, 2.5f).armorPierce(0.5f).detect(80).persistent(true).flying(true).boss(true).title("Дракон Краю")
                 .drops("dragon_egg", 1, 1, 1f)
                 .part(0, 0.3f, 0, 2.2f, 1.5f, 3.8f, 0x1E1030).part(0, 1.0f, -2.5f, 1.0f, 0.9f, 1.4f, 0x241438).part(0, 1.1f, -3.5f, 1.4f, 1.1f, 1.5f, 0x2D1A44)
                 .part(0, 0.7f, -3.55f, 1.2f, 0.35f, 1.1f, 0x180C26).part(-0.4f, 1.6f, -4.0f, 0.3f, 0.3f, 0.1f, 0xE040FF).part(0.4f, 1.6f, -4.0f, 0.3f, 0.3f, 0.1f, 0xE040FF)
                 .part(0, 0.9f, 2.4f, 0.9f, 0.7f, 2.2f, 0x1E1030).part(0, 0.8f, 4.2f, 0.5f, 0.45f, 1.8f, 0x180C26)
                 .wingPart(-3.4f, 1.3f, 0.2f, 4.6f, 0.14f, 2.6f, 0x2A1844, true).wingPart(3.4f, 1.3f, 0.2f, 4.6f, 0.14f, 2.6f, 0x2A1844, false));
-        r.mob("seam_weaver", new MobSettings().health(160).speed(13f).size(2.6f, 1.6f).behavior(MobSettings.Behavior.HOSTILE).attack(5, 2.8f, 2.0f).detect(80).persistent(true).flying(true).boss(true).title("Ткач")
+        r.mob("seam_weaver", new MobSettings().health(160).speed(13f).size(2.6f, 1.6f).behavior(MobSettings.Behavior.HOSTILE).attack(7, 2.8f, 2.0f).armorPierce(0.4f).detect(80).persistent(true).flying(true).boss(true).title("Ткач")
                 .drops("diamond", 2, 4, 1f).drops("liminite_shard", 4, 8, 1f)
                 .part(0, 0.3f, 0, 1.4f, 1.0f, 2.4f, 0xC8C0E8).part(0, 0.8f, -1.7f, 1.0f, 0.9f, 1.0f, 0xE0D8FF).part(-0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0x40FFE0).part(0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0x40FFE0)
                 .part(0, 0.4f, 1.8f, 0.4f, 0.3f, 1.6f, 0xA8A0D0)
                 .wingPart(-2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0xE8E0FF, true).wingPart(2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0xE8E0FF, false));
-        r.mob("seam_unraveler", new MobSettings().health(160).speed(13f).size(2.6f, 1.6f).behavior(MobSettings.Behavior.HOSTILE).attack(5, 2.8f, 2.0f).detect(80).persistent(true).flying(true).boss(true).title("Розплітач")
+        r.mob("seam_unraveler", new MobSettings().health(160).speed(13f).size(2.6f, 1.6f).behavior(MobSettings.Behavior.HOSTILE).attack(7, 2.8f, 2.0f).armorPierce(0.4f).detect(80).persistent(true).flying(true).boss(true).title("Розплітач")
                 .drops("diamond", 2, 4, 1f).drops("liminite_shard", 4, 8, 1f)
                 .part(0, 0.3f, 0, 1.4f, 1.0f, 2.4f, 0x5A1028).part(0, 0.8f, -1.7f, 1.0f, 0.9f, 1.0f, 0x701838).part(-0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0xFF6020).part(0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0xFF6020)
                 .part(0, 0.4f, 1.8f, 0.4f, 0.3f, 1.6f, 0x400A1C)

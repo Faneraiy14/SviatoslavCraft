@@ -89,7 +89,8 @@ public class VoxelinBalanceReport {
         public Pos body() { return pos; }
         public boolean alive() { return true; }
         public boolean creative() { return false; }
-        public void hurt(double d, double kx, double kz) { hits++; total += Inventory.reduce(d, pts); }
+        public void hurt(double d, double kx, double kz) { hurt(d, kx, kz, 0); }
+        public void hurt(double d, double kx, double kz, double pierce) { hits++; total += Inventory.reduce(d, pts, pierce); }
     }
 
     static World end(String name) throws Exception {
@@ -119,13 +120,14 @@ public class VoxelinBalanceReport {
         p("| бос | здоров'я | шкода за удар (без броні -> в алмазі) | ударів за хв | шкода за хв | відновлення за хв | час убити алмазним мечем |");
         p("|---|---|---|---|---|---|---|");
         String[][] list = {{"voxelin:ender_dragon", "0"}, {"voxelin:seam_weaver", "0"}, {"voxelin:seam_weaver", "1"}};
+        p("(удари босів пробивають частину броні: дракон 50%, Ткач і Розплітач 40%)");
         for (String[] b : list) {
             MobType t = g.mobTypes.get(b[0]);
             boolean en = b[1].equals("1");
             double[] r = flight(b[0], en);
             double raw = t.attackDamage * (en ? 1.5 : 1);
             int hits = (int) Math.ceil(t.health / weaponDamage("voxelin:diamond_sword"));
-            p("| " + t.title + (en ? " (лютий)" : "") + " | " + (int) t.health + " | " + fmt(raw) + " -> " + fmt(Inventory.reduce(raw, setPoints(3))) + " | " + fmt(r[2]) + " | " + fmt(r[1] / 2) + " | " + fmt(REGEN_PER_S * 60) + " | " + hits + " ударів, якщо влучати щоразу, коли пролітає |");
+            p("| " + t.title + (en ? " (лютий)" : "") + " | " + (int) t.health + " | " + fmt(raw) + " -> " + fmt(Inventory.reduce(raw, setPoints(3), t.armorPierce)) + " | " + fmt(r[2]) + " | " + fmt(r[1] / 2) + " | " + fmt(REGEN_PER_S * 60) + " | " + hits + " ударів, якщо влучати щоразу, коли пролітає |");
         }
     }
 
@@ -189,7 +191,7 @@ public class VoxelinBalanceReport {
     }
 
     static void infection() throws Exception {
-        p("\n## 7. Зараження: скільки блоків наросту за день (гравець стоїть біля ядра весь день)");
+        p("\n## 7. Зараження: скільки блоків наросту за день (росте завжди, поки йде відлік)");
         g.createWorld("inf", 7, WorldInfo.Type.NORMAL);
         World w = g.openWorld("inf");
         w.naturalSpawning = false;
@@ -202,14 +204,13 @@ public class VoxelinBalanceReport {
         for (int dn = 0; dn < 32; dn++) {
             w.info.time = w.info.infStart + dn * day + 1;
             Infection.Phase ph = w.infection.phase();
-            int interval = ph == Infection.Phase.QUIET ? 100 : ph == Infection.Phase.ACTIVE ? 40 : 12, batch = (ph == Infection.Phase.QUIET ? 1 : ph == Infection.Phase.ACTIVE ? 2 : 4) * (dn >= Infection.DAYS ? 2 : 1);
-            long tries = day / interval * batch;
+            long tries = Math.round(w.infection.rate() * day);
             int before = w.infection.growthCount();
-            for (long k = 0; k < tries; k++) w.infection.spread(0, 0);
+            for (long k = 0; k < tries; k++) w.infection.spread();
             if (dn % 3 == 0 || dn >= 28 || dn == 10 || dn == 20) p("| " + (dn + 1) + " | " + ph + " | " + tries + " | " + (w.infection.growthCount() - before) + " | " + w.infection.growthCount() + " |");
         }
         w.close();
-        p("(межа наросту - " + Infection.CAP + " блоків; росте лише в " + Infection.RADIUS + " блоках від гравця)");
+        p("(межа наросту - " + Infection.CAP + " блоків; зона - " + Infection.RADIUS + " блоків від ядра, після 30-го дня - " + Infection.BREACH_RADIUS + ")");
     }
 
     static String fmt(double v) { return v == Math.rint(v) ? String.valueOf((long) v) : String.format(Locale.ROOT, "%.1f", v); }

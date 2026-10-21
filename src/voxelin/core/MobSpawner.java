@@ -18,6 +18,13 @@ public final class MobSpawner {
         if (tick % 20 == 0) { attempt(w, p, rng, true); attempt(w, p, rng, true); attempt(w, p, rng, false); }
     }
 
+    /** Ліміт ворогів: у міжсвітті 6, удвічі більше, поки у світі зараження, і вдвічі менше після Ритуалу. */
+    public static int hostileCap(World w) {
+        if (w.info.type != WorldInfo.Type.BETWEEN) return HOSTILE_CAP;
+        if (w.info.overInf == WorldInfo.InfState.ACTIVE) return 12;
+        return w.info.ritualStage >= 2 ? 3 : 6;
+    }
+
     private static int count(World w, Pos c, boolean hostile) {
         int n = 0;
         for (Mob m : w.mobs()) {
@@ -30,10 +37,10 @@ public final class MobSpawner {
     /** Одна спроба; повертає, чи з'явилась істота. */
     public boolean attempt(World w, PlayerTarget p, Random rng, boolean hostile) {
         Pos pc = p.body();
-        if (hostile) { if (count(w, pc, true) >= HOSTILE_CAP) return false; }
+        if (hostile) { if (count(w, pc, true) >= hostileCap(w)) return false; }
         else if (count(w, pc, false) >= PASSIVE_CAP || w.skyLevel() < 0.6) return false;
         List<MobType> pool = new ArrayList<>();
-        for (MobType t : w.mobTypes.all()) if (!t.persistent && !t.boss && (hostile ? (t.hostile() || t.behavior == voxelin.api.MobSettings.Behavior.NEUTRAL_DAY) : t.passive())) pool.add(t); // боси й постійні (дракон, Ткач, жителі) природно не з'являються
+        for (MobType t : w.mobTypes.all()) if (!t.persistent && !t.boss && t.dimension.equals(w.dimension()) && (hostile ? (t.hostile() || t.behavior == voxelin.api.MobSettings.Behavior.NEUTRAL_DAY) : t.passive())) pool.add(t); // боси й постійні (дракон, Ткач, жителі) природно не з'являються
         if (pool.isEmpty()) return false;
         MobType type = pool.get(rng.nextInt(pool.size()));
         double ang = rng.nextDouble() * Math.PI * 2, dist = hostile ? 24 + rng.nextDouble() * 36 : 16 + rng.nextDouble() * 32;
@@ -69,7 +76,7 @@ public final class MobSpawner {
         int l = c.lightAt((int) Math.floorMod(x, 16L), y, (int) Math.floorMod(z, 16L)), sky = l >> 4, blk = l & 15;
         if (hostile) {
             int eff = Math.max(blk, (int) (sky * w.skyLevel()));
-            if (eff > 7) return false;
+            if (eff > (w.info.type == WorldInfo.Type.BETWEEN ? 10 : 7)) return false; // у міжсвітті вічні сутінки - Відлуння з'являються й на поверхні островів
         } else {
             if (sky < 15) return false;
             if (!t.spawnOn.isEmpty() && !t.spawnOn.contains(w.blocks.get(w.blockId(x, y - 1, z)).name)) return false;

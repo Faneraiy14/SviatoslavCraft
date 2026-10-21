@@ -971,4 +971,78 @@ BBBBBBBBBBB
 BBBBBBBBBBB
 BBBBBBBBBBB
 """;
+
+    /** Дім Сторожа в міжсвітті (ставить генератор міжсвіття біля острова прибуття; у звичайному світі не з'являється - роль). Двері на +z. */
+    public static final String KEEPER_HOME = """
+place: manual
+legend:
+  T = threshold_stone
+  P = oak_planks
+  O = oak_log
+  W = glass
+  L = lamp
+  R = seam_thread
+  K = chest loot=keeper_home
+  _ = air
+layers:
+TTTTTTTTT
+TTTTTTTTT
+TTTTTTTTT
+TTTTTTTTT
+TTTTTTTTT
+TTTTTTTTT
+TTTTTTTTT
+TTTTTTTTT
+TTTTTTTTT
+---
+TPPPPPPPT
+P_______P
+P_O___K_P
+P_______P
+P_______P
+P_______P
+P_O_____P
+P_______P
+TPPP_PPPT
+---
+TPPWWWPPT
+P_______P
+P_______P
+W_______W
+W_______W
+W_______W
+P_______P
+P_______P
+TPPP_PPPT
+---
+TPPPPPPPT
+P_______P
+P_______P
+P_______P
+P___L___P
+P_______P
+P_______P
+P_______P
+TPPPPPPPT
+---
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+RRRRRRRRR
+---
+.........
+.RRRRRRR.
+.RRRRRRR.
+.RRRRRRR.
+.RRRRRRR.
+.RRRRRRR.
+.RRRRRRR.
+.RRRRRRR.
+.........
+""";
 }

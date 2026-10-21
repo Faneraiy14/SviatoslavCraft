@@ -145,7 +145,7 @@ public final class TerrainGenerator implements Generator {
 
     @Override public java.util.List<String> structureNames() {
         java.util.List<String> r = new java.util.ArrayList<>();
-        if (placer != null) { for (StructureTemplate t : placer.templates()) if (t.role == null) r.add(t.name); if (placer.hasVillages()) r.add("village"); }
+        if (placer != null) { for (StructureTemplate t : placer.templates()) if (t.role == null && t.place != StructureTemplate.Place.MANUAL) r.add(t.name); if (placer.hasVillages()) r.add("village"); }
         return r;
     }
 

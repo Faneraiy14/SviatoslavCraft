@@ -64,7 +64,7 @@ public final class VanillaContent implements VoxelinMod {
         tex("seam_core", ItemTextureGen.seamCore()); tex("seam_growth", ItemTextureGen.seamGrowth()); tex("seam_scar", ItemTextureGen.seamScar());
         tex("threshold_stone", ItemTextureGen.thresholdStone()); tex("seam_thread", ItemTextureGen.seamThread()); tex("seam_rift", ItemTextureGen.rift());
         tex("threshold_bloom", ItemTextureGen.thresholdBloom()); tex("threshold_key", ItemTextureGen.thresholdKey());
-        tex("seam_wings", ItemTextureGen.wings());
+        tex("seam_wings", ItemTextureGen.wings()); tex("echo_dust", ItemTextureGen.dust(0xB8B8C8));
         tex("seam_anchor", ItemTextureGen.anchor()); tex("seam_heart", ItemTextureGen.heart());
         tex("seam_cure", ItemTextureGen.flask(0x50E0B0)); tex("seam_fire", ItemTextureGen.flask(0xFF6A20));
         tex("end_stone", ItemTextureGen.endStone()); tex("obsidian", ItemTextureGen.obsidian()); tex("end_frame_side", ItemTextureGen.frameSide());
@@ -198,7 +198,7 @@ public final class VanillaContent implements VoxelinMod {
         r.item("seam_heart", new ItemSettings().color(0xF0C0FF).texture("seam_heart").maxStack(1).title("Серце Шву"));
         r.item("seam_cure", new ItemSettings().color(0x50E0B0).texture("seam_cure").title("Зілля Шву"));
         r.item("seam_fire", new ItemSettings().color(0xFF6A20).texture("seam_fire").title("Вогонь Шву"));
-        r.recipe("seam_cure", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "gold_ingot", "apple", "glass").result("seam_cure", 1));
+        r.recipe("seam_cure", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "threshold_bloom", "glass").result("seam_cure", 1)); // квітка росте лише в міжсвітті
         r.recipe("seam_fire", RecipeSettings.shapeless("liminite_shard", "coal", "coal", "coal", "glass").result("seam_fire", 1));
         r.recipe("chest", RecipeSettings.shaped("PPP", "P.P", "PPP").key('P', "#planks").result("chest", 1));
         r.loot("ruins", new LootSettings().rolls(1, 3).entry("stick", 2, 6, 10).entry("coal", 1, 4, 8).entry("apple", 1, 2, 6).entry("cobblestone", 3, 8, 8)
@@ -263,6 +263,12 @@ public final class VanillaContent implements VoxelinMod {
                 .part(0, 0.8f, 0, 0.5f, 0.7f, 0.25f, 0x2F8F8F)
                 .part(-0.38f, 1.0f, -0.25f, 0.2f, 0.2f, 0.6f, 0x5B8F3A).part(0.38f, 1.0f, -0.25f, 0.2f, 0.2f, 0.6f, 0x5B8F3A)
                 .part(0, 1.5f, 0, 0.5f, 0.5f, 0.5f, 0x5B8F3A));
+        r.item("echo_dust", new ItemSettings().color(0xB8B8C8).texture("echo_dust").title("Пил відлуння"));
+        r.mob("echo", new MobSettings().health(14).speed(1.8f).size(0.6f, 1.9f).behavior(MobSettings.Behavior.HOSTILE).attack(4, 1.2f, 1.2f).detect(18).dimension("between").title("Відлуння")
+                .drops("echo_dust", 0, 2, 1f)
+                .legPart(-0.14f, 0, 0, 0.22f, 0.85f, 0.22f, 0x9A9AA8, false).legPart(0.14f, 0, 0, 0.22f, 0.85f, 0.22f, 0x9A9AA8, true)
+                .part(0, 0.85f, 0, 0.48f, 0.7f, 0.24f, 0xB0B0BE).part(-0.34f, 1.0f, 0, 0.16f, 0.65f, 0.16f, 0xA4A4B2).part(0.34f, 1.0f, 0, 0.16f, 0.65f, 0.16f, 0xA4A4B2)
+                .part(0, 1.55f, 0, 0.46f, 0.46f, 0.46f, 0xC4C4D0).part(-0.1f, 1.6f, -0.24f, 0.08f, 0.06f, 0.02f, 0x2A2A3A).part(0.1f, 1.6f, -0.24f, 0.08f, 0.06f, 0.02f, 0x2A2A3A));
         MobSettings spider = new MobSettings().health(16).speed(3.2f).size(1.0f, 0.6f).behavior(MobSettings.Behavior.NEUTRAL_DAY).attack(2, 1.3f, 0.8f).detect(12).title("Павук")
                 .drops("string", 0, 2, 1f)
                 .part(0, 0.25f, 0.15f, 0.6f, 0.35f, 0.6f, 0x2A2420).part(0, 0.28f, -0.4f, 0.4f, 0.3f, 0.35f, 0x3A302A)
@@ -318,6 +324,8 @@ public final class VanillaContent implements VoxelinMod {
         r.record("infection_start", "Яйце пустило корені", "Ядро стоїть. Тиха пора - перші десять днів; активна - наступні десять; потім криза.\nПоки зараження активне, ядро не зламати.");
         r.record("infection_end", "Шов затягнувся", "Зараження зупинено. Земля пам'ятатиме: шрами лишаться, але росту більше нема.");
         r.record("between", "Міжсвіття", "Тут немає неба й немає землі - лише уламки. Трава, якої ніхто не садив; камінь Краю поруч із рудою зі звичайного світу.\nІ нитки. Хтось колись зшивав ці уламки докупи.");
+        r.record("keeper_home", "Дім Сторожа", "Хата на краю уламка. Стіл, полиця, ліжко без ковдри. Сторож жив тут довго - задовго до Дракона.\nНа стіні видряпано: «Я не сторожу Шов. Я сторожу тих, хто його шиє».");
+        r.record("threads", "Нитки", "Нитки тягнуться від уламка до уламка, і жодна не обірвана. Хтось досі їх латає.\nСторож каже, що це не він. Він не каже, хто.");
         r.record("ritual_twins", "Ткач і Розплітач", "Двоє, що тримали Дракона на ланцюгу Шву. Один зшиває, другий розпускає.\nПоки обидва живі, вони стримують одне одного. Коли падає один, другий втрачає міру.");
         r.record("ritual_done", "Ритуал звершено", "Ткач і Розплітач упали. Шов запечатаний заново. Сторож мовчить - уперше задоволений.");
 
@@ -332,6 +340,8 @@ public final class VanillaContent implements VoxelinMod {
         r.structure("mine", Structures.MINE);
         r.structure("temple", Structures.TEMPLE);
         r.structure("seam_gate", Structures.SEAM_GATE);
+        r.structure("keeper_home", Structures.KEEPER_HOME);
+        r.loot("keeper_home", new LootSettings().rolls(3, 5).entry("liminite_shard", 2, 5, 10).entry("threshold_bloom", 1, 2, 6).entry("echo_dust", 1, 3, 6).entry("diamond", 1, 2, 3).entry("lamp", 1, 2, 4).entry("apple", 1, 3, 5));
         r.structure("fortress", Structures.FORTRESS);
         r.structure("village_house_small", Structures.VILLAGE_HOUSE_SMALL);
         r.structure("village_house_big", Structures.VILLAGE_HOUSE_BIG);

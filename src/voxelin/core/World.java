@@ -43,6 +43,7 @@ public final class World implements WorldAccess {
     public final RecordRegistry records;
     private final EventBus events;
     private final Generator generator;
+    public Generator generator() { return generator; }
     private final RegionStorage storage;
     private final int[] rt2p, p2rt;
     private final ConcurrentHashMap<ChunkPos, Chunk> chunks = new ConcurrentHashMap<>();
@@ -78,7 +79,7 @@ public final class World implements WorldAccess {
         loadMobs();
         infection = new Infection(this);
         loadMarks();
-        if (info.type == WorldInfo.Type.END || info.type == WorldInfo.Type.BETWEEN) naturalSpawning = false;
+        if (info.type == WorldInfo.Type.END) naturalSpawning = false;
         // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
         int threads = Integer.getInteger("voxelin.genThreads", Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)));
         genPool = Executors.newFixedThreadPool(threads, daemon("voxelin-gen"));

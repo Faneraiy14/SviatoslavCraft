@@ -19,18 +19,30 @@ public final class BetweenGenerator implements Generator {
     public static final int PLATFORM_X = 0, PLATFORM_Z = 0, EXIT_Z = -3, ARRIVAL_Z = 2;
 
     public enum Kind { GRASS, STONE, END, THRESHOLD }
-    public record Island(long x, long z, int top, int r, Kind kind) {}
+    public record Island(long x, long z, int top, int r, Kind kind, boolean flat) {}
+    /** Дім Сторожа: острів у клітинці (1,0), центр і кут шаблона. */
+    public static final long HOUSE_X = CELL, HOUSE_Z = 0;
 
     private final long seed;
     private final int grass, dirt, stone, coal, iron, liminite, endStone, obsidian, threshold, thread, portal, bloom, lamp;
     private final Noise edge;
+    private final int cobble;
+    private final StructureTemplate house;
+    private final StructurePlacer stamper;
 
-    public BetweenGenerator(long seed, BlockRegistry reg) {
+    public BetweenGenerator(long seed, BlockRegistry reg) { this(seed, reg, java.util.List.of()); }
+
+    public BetweenGenerator(long seed, BlockRegistry reg, java.util.List<StructureTemplate> templates) {
         this.seed = seed;
         grass = id(reg, "grass"); dirt = id(reg, "dirt"); stone = id(reg, "stone"); coal = id(reg, "coal_ore"); iron = id(reg, "iron_ore"); liminite = id(reg, "liminite_ore");
         endStone = id(reg, "end_stone"); obsidian = id(reg, "obsidian"); threshold = id(reg, "threshold_stone"); thread = id(reg, "seam_thread"); portal = id(reg, "end_portal");
         bloom = id(reg, "threshold_bloom"); lamp = id(reg, "lamp");
         edge = new Noise(seed ^ 0xBE7AL);
+        cobble = id(reg, "cobblestone");
+        StructureTemplate h = null;
+        for (StructureTemplate t : templates) if (t.name.endsWith("keeper_home")) h = t;
+        house = h;
+        stamper = new StructurePlacer(seed, java.util.List.of(), (x, z) -> 0, 0);
     }
 
     private static int id(BlockRegistry reg, String n) { BlockType b = reg.byName("voxelin:" + n); return b == null ? 0 : b.id; }
@@ -40,12 +52,13 @@ public final class BetweenGenerator implements Generator {
 
     /** Острів клітинки або null (порожня клітинка). */
     public Island island(long cx, long cz) {
-        if (cx == 0 && cz == 0) return new Island(PLATFORM_X, PLATFORM_Z, TOP, 11, Kind.THRESHOLD);
+        if (cx == 0 && cz == 0) return new Island(PLATFORM_X, PLATFORM_Z, TOP, 11, Kind.THRESHOLD, true);
+        if (cx == 1 && cz == 0) return new Island(HOUSE_X, HOUSE_Z, TOP, 10, Kind.GRASS, true); // острів Дому Сторожа
         long hh = h(seed, cx, cz, 0xB1L);
         if (frac(hh) >= 0.55) return null;
         long x = cellMin(cx) + 14 + (hh >>> 8) % 20, z = cellMin(cz) + 14 + (hh >>> 16) % 20;
         int r = 5 + (int) ((hh >>> 40) % 7), top = TOP - 14 + (int) ((hh >>> 48) % 29);
-        return new Island(x, z, top, r, Kind.values()[(int) ((hh >>> 24) % 4)]);
+        return new Island(x, z, top, r, Kind.values()[(int) ((hh >>> 24) % 4)], false);
     }
 
     /** Верх острова в колонці або -1. */
@@ -53,7 +66,7 @@ public final class BetweenGenerator implements Generator {
         double d = Math.hypot(x - is.x, z - is.z);
         double rr = is.r + 1.6 * edge.fractal2(x, z, 6, 2);
         if (d >= rr) return -1;
-        if (is.x == PLATFORM_X && is.z == PLATFORM_Z && Math.abs(x) <= 5 && Math.abs(z) <= 5) return TOP;
+        if (is.flat && Math.abs(x - is.x) <= 6 && Math.abs(z - is.z) <= 6) return is.top; // рівний майданчик (прибуття, дім)
         return is.top + (int) Math.round(edge.fractal2(x + 7000, z, 9, 1));
     }
 
@@ -72,7 +85,10 @@ public final class BetweenGenerator implements Generator {
     @Override public String biomeAt(long x, long z) { return "Міжсвіття"; }
     @Override public int seaLevel() { return 0; }
 
-    private static boolean thread(long seed, long cx, long cz, int dir) { return frac(h(seed, cx * 2 + dir, cz, 0x7E4DL)) < 0.6; }
+    private static boolean thread(long seed, long cx, long cz, int dir) { return (cx == 0 && cz == 0 && dir == 0) || frac(h(seed, cx * 2 + dir, cz, 0x7E4DL)) < 0.6; } // до дому нитка є завжди
+
+    /** Слід Херобрина в клітинці (рідко; ні моба, ні запису - лише слід). */
+    public boolean trace(long cx, long cz) { return !(Math.abs(cx) <= 1 && cz == 0) && frac(h(seed, cx, cz, 0x4E7BL)) < 0.03; }
 
     @Override public void generate(Chunk c) {
         final long bx = c.cx * 16, bz = c.cz * 16;
@@ -90,6 +106,8 @@ public final class BetweenGenerator implements Generator {
                 if (b != null && thread(seed, cx, cz, dir)) drawThread(c, a, b, bx, bz);
             }
         }
+        for (long cx = c0x; cx <= c1x; cx++) for (long cz = c0z; cz <= c1z; cz++) if (trace(cx, cz)) drawTrace(c, cx, cz, bx, bz);
+        if (house != null) stamper.stampAt(c, house, HOUSE_X - house.sx / 2, TOP + 1, HOUSE_Z - house.sz / 2, 0, seed ^ 0x40E5L);
         // платформа прибуття з постійним виходом
         for (long x = PLATFORM_X - 4; x <= PLATFORM_X + 4; x++) for (long z = PLATFORM_Z - 4; z <= PLATFORM_Z + 4; z++) {
             if (x < bx || x >= bx + 16 || z < bz || z >= bz + 16) continue;
@@ -121,6 +139,24 @@ public final class BetweenGenerator implements Generator {
             case END: return r < 34 ? obsidian : endStone;
             default: return r < 40 ? liminite : threshold;
         }
+    }
+
+    /** Слід: на острові - прорізаний наскрізь тунель 1x2, у порожній клітинці - самотня лампа на стовпі. */
+    private void drawTrace(Chunk c, long cx, long cz, long bx, long bz) {
+        Island is = island(cx, cz);
+        long hh = h(seed, cx, cz, 0x4E7CL);
+        if (is != null) {
+            for (long x = is.x - is.r - 3; x <= is.x + is.r + 3; x++) {
+                if (x < bx || x >= bx + 16 || is.z < bz || is.z >= bz + 16) continue;
+                for (int y = is.top - 2; y <= is.top - 1; y++) if (y > 0) c.set((int) (x - bx), y, (int) (is.z - bz), 0);
+            }
+            return;
+        }
+        long x = cellMin(cx) + HALF, z = cellMin(cz) + HALF;
+        if (x < bx || x >= bx + 16 || z < bz || z >= bz + 16 || lamp == 0) return;
+        int base = TOP - 10 + (int) ((hh >>> 8) % 20);
+        for (int y = base; y < base + 4; y++) c.set((int) (x - bx), y, (int) (z - bz), cobble);
+        c.set((int) (x - bx), base + 4, (int) (z - bz), lamp);
     }
 
     private void drawThread(Chunk c, Island a, Island b, long bx, long bz) {

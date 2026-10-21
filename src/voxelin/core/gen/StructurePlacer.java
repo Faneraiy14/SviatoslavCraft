@@ -90,7 +90,7 @@ public final class StructurePlacer {
     public void apply(Chunk c, voxelin.core.BlockRegistry blocks) {
         final long bx = c.cx * 16, bz = c.cz * 16;
         for (StructureTemplate t : templates) {
-            if (t.role != null) continue; // частини сіл ставить розкладка села
+            if (t.role != null || t.place == StructureTemplate.Place.MANUAL) continue; // частини сіл ставить розкладка села, ручні - генератор виміру
             int maxDim = Math.max(t.sx, t.sz);
             long x0 = Math.floorDiv(bx - maxDim + 1, (long) t.spacing), x1 = Math.floorDiv(bx + 15, (long) t.spacing);
             long z0 = Math.floorDiv(bz - maxDim + 1, (long) t.spacing), z1 = Math.floorDiv(bz + 15, (long) t.spacing);
@@ -227,6 +227,9 @@ public final class StructurePlacer {
         }
         return best;
     }
+
+    /** Поставити шаблон у точку (ox,oy,oz) з поворотом - лише клітинки цього чанка (для генераторів вимірів). */
+    public void stampAt(Chunk c, StructureTemplate t, long ox, int oy, long oz, int rot, long seed) { stamp(c, new Placement(t, ox, oz, oy, rot, seed), c.cx * 16, c.cz * 16); }
 
     private void stamp(Chunk c, Placement p, long bx, long bz) {
         StructureTemplate t = p.t;

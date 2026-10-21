@@ -265,7 +265,7 @@ public class VoxelinMobTest {
         int hostile = 0, passive = 0;
         for (Mob m : w.mobs()) { if (m.type.hostile() || m.type.behavior == MobSettings.Behavior.NEUTRAL_DAY) hostile++; else passive++; }
         check(hostile > 0 && hostile <= MobSpawner.HOSTILE_CAP, "уночі з'явились вороги в межах ліміту: " + hostile);
-        for (Mob m : w.mobs()) check(!m.type.boss && !m.type.persistent, "боси й постійні природно не з'являються: " + m.type.name);
+        for (Mob m : w.mobs()) check(!m.type.boss && !m.type.persistent && m.type.dimension.equals("overworld"), "боси, постійні й чужі для виміру (Відлуння) природно не з'являються: " + m.type.name);
         for (Mob m : w.mobs()) {
             double d = Math.hypot(m.pos.relX(0) - p.pos.x, m.pos.relZ(0) - p.pos.z);
             check(!w.isSolid(m.pos.blockX(), m.pos.blockY(), m.pos.blockZ()) && !w.isSolid(m.pos.blockX(), m.pos.blockY() + 1, m.pos.blockZ()), "істота не в блоці: " + m.type.name + " " + m.pos.blockX() + "," + m.pos.blockY() + "," + m.pos.blockZ() + " id=" + w.blockId(m.pos.blockX(), m.pos.blockY(), m.pos.blockZ()) + "/" + w.blockId(m.pos.blockX(), m.pos.blockY() + 1, m.pos.blockZ()));

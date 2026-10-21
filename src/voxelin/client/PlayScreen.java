@@ -177,6 +177,8 @@ final class PlayScreen {
             if (sprinting) vt.exhaust(0.1 * Math.hypot(player.pos.relX(player.prev.cx) - player.prev.x, player.pos.relZ(player.prev.cz) - player.prev.z));
             if (player.jumped) vt.exhaust(sprinting ? 0.2 : 0.05);
             vt.land(player.takeLanded());
+            if (world.info.type == WorldInfo.Type.BETWEEN && Math.abs(player.pos.blockX() - voxelin.core.gen.BetweenGenerator.HOUSE_X) <= 3 && Math.abs(player.pos.blockZ() - voxelin.core.gen.BetweenGenerator.HOUSE_Z) <= 3
+                    && player.pos.y > voxelin.core.gen.BetweenGenerator.TOP && player.pos.y < voxelin.core.gen.BetweenGenerator.TOP + 6) { world.unlockRecord("voxelin:keeper_home"); world.unlockRecord("voxelin:threads"); } // зайшов у Дім Сторожа
             double imp = player.takeImpact();
             if (imp > 0) vt.hurt(imp, false);
             if (player.gliding && world.tickCount() % 20 == 0 && !world.creative()) inv.wearWings(world.itemTypes);

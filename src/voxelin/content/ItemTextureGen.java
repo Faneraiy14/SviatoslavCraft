@@ -515,4 +515,14 @@ public final class ItemTextureGen {
         for (int y = 3; y <= 9; y++) { px(a, 7, y, 0xFF4A3A70); px(a, 8, y, 0xFF4A3A70); }
         return outlined(a);
     }
+
+    /** Пил: купка дрібних світлих крупинок. */
+    public static int[] dust(int rgb) {
+        int[] a = new int[256];
+        for (int y = 6; y < 15; y++) for (int x = 2; x < 14; x++) {
+            double nx = (x - 7.5) / 5.5, ny = (y - 14) / 7.0;
+            if (nx * nx + ny * ny <= 1 && hash(x, y, 105) % 3 != 0) a[x + y * N] = hash(x, y, 106) % 4 == 0 ? 0xFFFFFFFF : 0xFF000000 | shadeRgb(rgb, -(hash(x, y, 107) % 40));
+        }
+        return a;
+    }
 }

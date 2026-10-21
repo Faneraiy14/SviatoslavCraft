@@ -20,6 +20,8 @@ public final class MobType implements MobRef {
     public final List<BlockSettings.Drop> drops;
     public final List<MobSettings.Part> parts;
     public final List<String> spawnOn;
+    /** Вимір природного спавну ("overworld" за замовчуванням). */
+    public final String dimension;
 
     MobType(String name, MobSettings s) {
         this.name = name;
@@ -27,7 +29,7 @@ public final class MobType implements MobRef {
         health = s.healthValue(); speed = s.speedValue(); width = s.widthValue(); height = s.heightValue(); behavior = s.behaviorValue();
         attackDamage = s.attackDamageValue(); reach = s.reachValue(); detect = s.detectValue(); cooldownTicks = Math.max(2, Math.round(s.cooldownValue() * 20));
         burnsInSun = s.burnsInSunValue(); persistent = s.persistentValue(); flying = s.flyingValue(); boss = s.bossValue(); armorPierce = s.armorPierceValue(); invulnerable = s.invulnerableValue(); dialog = s.dialogKind(); homeRadius = s.homeRadiusValue(); trades = List.copyOf(s.tradeList()); greetings = List.copyOf(s.greetingList());
-        drops = List.copyOf(s.dropList()); parts = List.copyOf(s.partList()); spawnOn = List.copyOf(s.spawnOnList());
+        drops = List.copyOf(s.dropList()); parts = List.copyOf(s.partList()); spawnOn = List.copyOf(s.spawnOnList()); dimension = s.dimensionValue() == null ? "overworld" : s.dimensionValue();
     }
 
     /** Можна говорити (є угоди або репліки). */

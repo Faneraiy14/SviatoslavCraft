@@ -1,5 +1,6 @@
 import voxelin.core.*;
 import voxelin.core.gen.*;
+import voxelin.core.gen.StructureTemplate;
 import voxelin.loader.*;
 
 import java.io.File;
@@ -29,7 +30,7 @@ public class VoxelinBetweenTest {
     public static void main(String[] a) throws Exception {
         root = Files.createTempDirectory("vx-between").toFile();
         g = new Game(new File(root, "saves"), null);
-        dims(); generator(); world(); rift(); state();
+        dims(); generator(); world(); rift(); state(); house(); echo(); traces();
         System.out.println("VoxelinBetweenTest: " + n + " перевірок OK");
     }
 
@@ -72,7 +73,7 @@ public class VoxelinBetweenTest {
     static void world() throws Exception {
         World w = between("w1");
         check(w.dimension().equals("between") && w.info.type == WorldInfo.Type.BETWEEN && w.dir.getPath().replace('\\', '/').endsWith("dimensions/between"), "окрема тека виміру");
-        check(!w.naturalSpawning && w.skyLevel() == World.BETWEEN_SKY, "без природного спавну; стале небо");
+        check(w.skyLevel() == World.BETWEEN_SKY, "стале небо");
         int ts = BetweenGenerator.TOP;
         check(at(w, 0, ts, 0).equals("voxelin:threshold_stone") && at(w, 0, ts + 1, 0).equals("voxelin:air"), "платформа");
         int portal = 0;
@@ -171,5 +172,86 @@ public class VoxelinBetweenTest {
         World back = g.openDimension("s1", "between");
         check(back.info.overInf == WorldInfo.InfState.ACTIVE, "настрій зберігається");
         back.close();
+    }
+
+    static void house() throws Exception {
+        StructureTemplate t = null;
+        for (StructureTemplate x : g.structures.templates()) if (x.name.endsWith("keeper_home")) t = x;
+        check(t != null && t.place == StructureTemplate.Place.MANUAL && t.chance == 0, "Дім Сторожа - ручний шаблон, у світі сам не з'являється");
+        World w = between("h1");
+        long ox = BetweenGenerator.HOUSE_X - t.sx / 2, oz = BetweenGenerator.HOUSE_Z - t.sz / 2;
+        int y = BetweenGenerator.TOP + 1;
+        check(at(w, ox, y, oz).equals("voxelin:threshold_stone") && at(w, ox, y + 4, oz).equals("voxelin:seam_thread"), "підлога й дах дому");
+        check(at(w, ox + 4, y + 1, oz + 8).equals("voxelin:air") && at(w, ox + 4, y + 2, oz + 8).equals("voxelin:air"), "двері відчинені");
+        for (int k = 0; k < 40; k++) { w.update(0, 0, 4); w.tick(); Thread.sleep(5); }
+        ChestEntity ch = w.chestAt(ox + 6, y + 1, oz + 2);
+        boolean full = false;
+        if (ch != null) for (int i = 0; i < ChestEntity.SIZE; i++) if (ch.get(i) != null) full = true;
+        check(ch != null && full, "у домі скриня зі здобиччю");
+        int threads = 0;
+        for (long x = 6; x < BetweenGenerator.HOUSE_X - 10; x++) for (int yy = BetweenGenerator.TOP - 2; yy <= BetweenGenerator.TOP + 2; yy++) for (long z = -2; z <= 2; z++) if (at(w, x, yy, z).equals("voxelin:seam_thread")) { threads++; break; }
+        check(threads > 10, "нитка від прибуття до дому: " + threads);
+        w.close();
+        // у звичайному світі /locate не знає Дому
+        g.createWorld("h2", 4, WorldInfo.Type.NORMAL);
+        World o = g.openWorld("h2");
+        check(o.generator().structureNames().stream().noneMatch(n -> n.endsWith("keeper_home")), "у звичайному світі Дому нема");
+        o.close();
+    }
+
+    static final class Fake implements PlayerTarget {
+        Pos pos; Fake(Pos p) { pos = p; }
+        public Pos body() { return pos; }
+        public boolean alive() { return true; }
+        public boolean creative() { return true; }
+        public void hurt(double d, double kx, double kz) {}
+    }
+
+    static void echo() throws Exception {
+        MobType e = g.mobTypes.get("voxelin:echo");
+        check(e != null && e.hostile() && e.dimension.equals("between") && g.mobTypes.get("voxelin:zombie").dimension.equals("overworld"), "Відлуння - ворог міжсвіття");
+        World w = between("e1");
+        check(w.naturalSpawning, "у міжсвітті природний спавн увімкнено");
+        w.setPlayerTarget(new Fake(Dimensions.arrival("between")));
+        for (int t = 0; t < 20 * 90; t++) { w.tick(); if (t % 40 == 0) w.update(0, 0, 5); }
+        int echoes = 0, other = 0;
+        for (voxelin.core.entity.Mob m : w.mobs()) { if (m.type == e) echoes++; else other++; }
+        check(echoes > 0 && echoes <= MobSpawner.hostileCap(w) && other == 0, "з'являються лише Відлуння, у межах ліміту: " + echoes + " / інших " + other);
+        check(MobSpawner.hostileCap(w) == 6, "звичайний ліміт 6");
+        w.info.overInf = WorldInfo.InfState.ACTIVE;
+        check(MobSpawner.hostileCap(w) == 12, "під час зараження - удвічі більше");
+        w.info.overInf = WorldInfo.InfState.NONE; w.info.ritualStage = 2;
+        check(MobSpawner.hostileCap(w) == 3, "після Ритуалу - удвічі менше");
+        w.close();
+        World end = g.openDimension("e1", "end");
+        check(!end.naturalSpawning, "в Енді природного спавну як і раніше нема");
+        end.close();
+    }
+
+    static void traces() {
+        BetweenGenerator b = new BetweenGenerator(77, g.blocks, g.structures.templates());
+        int onIsland = 0, inVoid = 0, checked = 0;
+        for (long cx = -40; cx <= 40 && checked < 6; cx++) for (long cz = -40; cz <= 40 && checked < 6; cz++) {
+            if (!b.trace(cx, cz)) continue;
+            BetweenGenerator.Island is = b.island(cx, cz);
+            if (is != null) {
+                onIsland++;
+                Chunk c = new Chunk(Math.floorDiv(is.x(), 16L), Math.floorDiv(is.z(), 16L));
+                b.generate(c);
+                check(c.get((int) Math.floorMod(is.x(), 16L), is.top() - 1, (int) Math.floorMod(is.z(), 16L)) == 0, "слід: тунель крізь острів");
+            } else {
+                inVoid++;
+                long x = BetweenGenerator.cellMin(cx) + BetweenGenerator.HALF, z = BetweenGenerator.cellMin(cz) + BetweenGenerator.HALF;
+                Chunk c = new Chunk(Math.floorDiv(x, 16L), Math.floorDiv(z, 16L));
+                b.generate(c);
+                boolean lamp = false;
+                for (int y = 1; y < 200; y++) if (c.get((int) Math.floorMod(x, 16L), y, (int) Math.floorMod(z, 16L)) == g.blocks.byName("voxelin:lamp").id) lamp = true;
+                check(lamp, "слід: лампа на стовпі в порожнечі");
+            }
+            checked++;
+        }
+        check(onIsland + inVoid > 0, "сліди трапляються");
+        check(!b.trace(0, 0) && !b.trace(1, 0), "біля прибуття й дому слідів нема");
+        check(g.records.all().stream().noneMatch(r -> r.id.contains("herobrine") || r.title.contains("Херобрин")), "про Херобрина в журналі ні слова");
     }
 }

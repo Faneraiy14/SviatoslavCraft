@@ -11,7 +11,8 @@ import java.util.*;
  * Розбір суворий: будь-яка помилка - виняток з номером рядка (невалідний шаблон гра пропускає з попередженням).
  */
 public final class StructureTemplate {
-    public enum Place { SURFACE, UNDERGROUND }
+    /** MANUAL - сам не розкидається по світу, його ставить генератор виміру (Дім Сторожа). */
+    public enum Place { SURFACE, UNDERGROUND, MANUAL }
 
     public static final class StructureException extends Exception {
         public StructureException(int line, String msg) { super("рядок " + line + ": " + msg); }
@@ -101,10 +102,10 @@ public final class StructureTemplate {
         }
         Place place;
         String pl = head.getOrDefault("place", role != null ? "surface" : "");
-        if (pl.equals("surface")) place = Place.SURFACE; else if (pl.equals("underground")) place = Place.UNDERGROUND; else throw new StructureException(1, "place: має бути surface або underground");
-        int spacing = role != null && !head.containsKey("spacing") ? 64 : intOf(head, "spacing", 16, 4096);
+        if (pl.equals("surface")) place = Place.SURFACE; else if (pl.equals("underground")) place = Place.UNDERGROUND; else if (pl.equals("manual")) place = Place.MANUAL; else throw new StructureException(1, "place: має бути surface, underground або manual");
+        int spacing = (role != null || place == Place.MANUAL) && !head.containsKey("spacing") ? 64 : intOf(head, "spacing", 16, 4096);
         double chance;
-        if (role != null && !head.containsKey("chance")) chance = 0;
+        if ((role != null && !head.containsKey("chance")) || place == Place.MANUAL) chance = 0;
         else {
             try { chance = Double.parseDouble(head.getOrDefault("chance", "")); } catch (NumberFormatException e) { throw new StructureException(1, "chance: не число"); }
             if (!(chance >= 0 && chance <= 1)) throw new StructureException(1, "chance: від 0 до 1");

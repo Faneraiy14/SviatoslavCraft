@@ -12,7 +12,7 @@ import java.util.*;
 public final class WorldInfo {
     public static final String FILE = "voxelin.world";
     public static final int FORMAT = 2;
-    public enum Type { NORMAL, FLAT }
+    public enum Type { NORMAL, FLAT, END }
     public enum Mode { SURVIVAL, CREATIVE }
 
     public String name;
@@ -37,6 +37,10 @@ public final class WorldInfo {
     public final String[] inv = new String[Inventory.SIZE];
     public int invSelected;
     public final String[] armor = new String[4];
+    /** Лише для виміру Енд: куди повертати гравця в звичайний світ і чи вбито дракона. */
+    public boolean hasReturn, dragonDead;
+    public long returnX, returnZ;
+    public int returnY;
     public final List<String> palette = new ArrayList<>();
 
     public static boolean isValidName(String n) {
@@ -81,6 +85,11 @@ public final class WorldInfo {
         for (int i = 0; i < Inventory.SIZE; i++) w.inv[i] = p.getProperty("inv." + i);
         for (int i = 0; i < 4; i++) w.armor[i] = p.getProperty("armor." + i);
         try { w.invSelected = Math.max(0, Math.min(Inventory.HOTBAR - 1, Integer.parseInt(p.getProperty("invSelected", "0").trim()))); } catch (NumberFormatException e) { w.invSelected = 0; }
+        w.dragonDead = "true".equals(p.getProperty("dragonDead"));
+        try {
+            w.returnX = Long.parseLong(p.getProperty("returnX").trim()); w.returnY = Integer.parseInt(p.getProperty("returnY").trim()); w.returnZ = Long.parseLong(p.getProperty("returnZ").trim());
+            w.hasReturn = w.returnY >= 0 && w.returnY < 256;
+        } catch (RuntimeException e) { w.hasReturn = false; }
         w.hasVitals = "true".equals(p.getProperty("hasVitals"));
         if (w.hasVitals) try {
             w.health = Double.parseDouble(p.getProperty("health")); w.hunger = Double.parseDouble(p.getProperty("hunger")); w.saturation = Double.parseDouble(p.getProperty("saturation", "0"));
@@ -103,6 +112,8 @@ public final class WorldInfo {
         p.setProperty("mode", mode.name());
         if (hasInv) { p.setProperty("hasInv", "true"); p.setProperty("invSelected", String.valueOf(invSelected)); for (int i = 0; i < Inventory.SIZE; i++) if (inv[i] != null) p.setProperty("inv." + i, inv[i]); }
         if (hasInv) for (int i = 0; i < 4; i++) if (armor[i] != null) p.setProperty("armor." + i, armor[i]);
+        if (dragonDead) p.setProperty("dragonDead", "true");
+        if (hasReturn) { p.setProperty("returnX", String.valueOf(returnX)); p.setProperty("returnY", String.valueOf(returnY)); p.setProperty("returnZ", String.valueOf(returnZ)); }
         p.setProperty("time", String.valueOf(time));
         p.setProperty("dayMinutes", String.valueOf(dayMinutes));
         if (hasVitals) { p.setProperty("hasVitals", "true"); p.setProperty("health", String.valueOf(health)); p.setProperty("hunger", String.valueOf(hunger)); p.setProperty("saturation", String.valueOf(saturation)); }
@@ -115,6 +126,15 @@ public final class WorldInfo {
         File tmp = new File(dir, FILE + ".tmp");
         try (Writer w = new OutputStreamWriter(new FileOutputStream(tmp), StandardCharsets.UTF_8)) { p.store(w, "Voxelin world"); }
         Files2.replace(tmp, new File(dir, FILE));
+    }
+
+    /** Перенести дані гравця (інвентар, броня, здоров'я/голод, режим) з іншого виміру. */
+    public synchronized void copyPlayerFrom(WorldInfo o) {
+        hasInv = o.hasInv; invSelected = o.invSelected;
+        System.arraycopy(o.inv, 0, inv, 0, inv.length);
+        System.arraycopy(o.armor, 0, armor, 0, armor.length);
+        hasVitals = o.hasVitals; health = o.health; hunger = o.hunger; saturation = o.saturation;
+        mode = o.mode;
     }
 
     public synchronized void setPlayer(Pos p, float yaw, float pitch) {

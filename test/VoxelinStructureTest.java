@@ -32,7 +32,7 @@ public class VoxelinStructureTest {
     }
 
     static void parsing() throws Exception {
-        check(g.structures.templates().stream().filter(t -> t.role == null).count() == 5, "п'ять ванільних окремих структур (руїни, підземелля, шахта, храм, фортеця)");
+        check(g.structures.templates().stream().filter(t -> t.role == null).count() == 6, "шість ванільних окремих структур (руїни, підземелля, шахта, храм, фортеця, брама Шву)");
         for (String nm : new String[]{"ruins", "dungeon", "mine"}) check(g.structures.find(nm) != null && g.structures.find("voxelin:" + nm) != null, "шаблон " + nm);
         StructureTemplate t = parse(TINY);
         check(t.sx == 3 && t.sz == 2 && t.sy == 2 && t.place == StructureTemplate.Place.SURFACE && t.spacing == 40 && t.chance == 1 && t.sink == 1, "розміри й заголовок");
@@ -68,7 +68,7 @@ public class VoxelinStructureTest {
         check(dun.place == StructureTemplate.Place.UNDERGROUND && dun.depthMin == 14 && mine.depthMax == 46, "підземні шаблони");
         int chests = 0; for (int y = 0; y < dun.sy; y++) for (int z = 0; z < dun.sz; z++) for (int x = 0; x < dun.sx; x++) if (dun.lootAt(x, y, z) != null) chests++;
         check(chests == 2, "у підземеллі дві скрині: " + chests);
-        for (StructureTemplate t2 : g.structures.templates()) if (t2.role == null) check(g.loot.get(t2.name.substring(t2.name.indexOf(':') + 1)) != null, "таблиця здобичі для " + t2.name);
+        for (StructureTemplate t2 : g.structures.templates()) if (t2.role == null && !t2.name.endsWith("seam_gate")) check(g.loot.get(t2.name.substring(t2.name.indexOf(':') + 1)) != null, "таблиця здобичі для " + t2.name);
     }
 
     static void rotation() throws Exception {
@@ -339,7 +339,7 @@ public class VoxelinStructureTest {
         StructureTemplate ruins = g3.structures.find("ruins");
         check(ruins != null && ruins.sx == 3 && ruins.spacing == 40, "файл гравця перекрив ванільні руїни");
         check(g3.structures.find("extra") != null && g3.structures.find("broken") == null && g3.structures.find("bad name") == null, "новий вид додано, зламані пропущено");
-        check(g3.structures.templates().stream().filter(t -> t.role == null).count() == 6, "ванільні dungeon+mine+temple+fortress + руїни з файла + extra");
+        check(g3.structures.templates().stream().filter(t -> t.role == null).count() == 7, "ванільні dungeon+mine+temple+fortress+seam_gate + руїни з файла + extra");
     }
 
     static void perf() throws Exception {

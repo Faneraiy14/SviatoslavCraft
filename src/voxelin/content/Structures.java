@@ -885,4 +885,90 @@ B...B...............C...B
 .........................
 B.B.B...............B.B.B
 """;
+
+    // --- Брама Шву: підземна кімната з кільцем із 12 рамок для Очей Енду (портал в Енд)
+    public static final String SEAM_GATE = """
+place: underground
+spacing: 400
+chance: 0.5
+depth: 18 38
+legend:
+  B = stone_bricks
+  C = cobblestone
+  F = end_frame
+  M = lamp
+  _ = air
+layers:
+BBBBBBBBBBB
+BCCCCCCCCCB
+BCCCCCCCCCB
+BCCCCCCCCCB
+BCCCCCCCCCB
+BCCCCCCCCCB
+BCCCCCCCCCB
+BCCCCCCCCCB
+BCCCCCCCCCB
+BCCCCCCCCCB
+BBBBBBBBBBB
+---
+BBBBCBBCBBC
+B_________B
+B_________B
+B___FFF___B
+C__F___F__B
+B__F___F__B
+B__F___F__B
+B___FFF___C
+B_________B
+B_________B
+CBBBBBBBCBB
+---
+CBBCBBBBBCC
+B_________C
+C_M_____M_B
+B_________B
+B_________B
+C_________B
+B_________B
+B_________C
+B_M_____M_B
+B_________B
+BBBBBBBCBBB
+---
+BCBBBBBBBCB
+B_________B
+B_________B
+B_________C
+B_________C
+B_________C
+B_________B
+B_________B
+B_________B
+B_________B
+BBBBBBBBBCB
+---
+BBBBCCBBBBB
+B_________B
+B_________C
+B_________B
+C_________B
+B_________B
+B_________B
+B_________B
+B_________B
+B_________C
+CBBBCBBCBBB
+---
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+""";
 }

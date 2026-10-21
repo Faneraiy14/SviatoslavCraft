@@ -325,4 +325,67 @@ public final class ItemTextureGen {
         }
         return outlined(a);
     }
+
+    // ------------------------------------------------------------------ Енд: блоки й Око Енду
+
+    private static int[] noise(int base, int amp, int seed) {
+        int[] a = new int[256];
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            int d = (hash(x, y, seed) % (2 * amp + 1)) - amp;
+            a[x + y * N] = 0xFF000000 | shadeRgb(base, d);
+        }
+        return a;
+    }
+
+    public static int[] endStone() {
+        int[] a = noise(0xDDD8A0, 14, 41);
+        for (int i = 0; i < 256; i++) if (hash(i & 15, i >> 4, 42) % 9 == 0) a[i] = 0xFF000000 | shadeRgb(0xDDD8A0, -34);
+        return a;
+    }
+
+    public static int[] obsidian() {
+        int[] a = noise(0x1B1228, 7, 51);
+        for (int i = 0; i < 256; i++) if (hash(i & 15, i >> 4, 52) % 11 == 0) a[i] = 0xFF4A2A78;
+        return a;
+    }
+
+    private static int[] frameBase() {
+        int[] a = noise(0x2E4A3C, 8, 61);
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) if (x < 1 || y < 1 || x > 14 || y > 14) a[x + y * N] = 0xFF1B2C24;
+        return a;
+    }
+
+    public static int[] frameSide() { int[] a = frameBase(); for (int x = 3; x <= 12; x++) { a[x + 4 * N] = 0xFF4F7A64; a[x + 11 * N] = 0xFF1B2C24; } return a; }
+
+    /** Верх рамки: гніздо для ока; eye - з оком (зелена зіниця). */
+    public static int[] frameTop(boolean eye) {
+        int[] a = frameBase();
+        for (int y = 4; y <= 11; y++) for (int x = 4; x <= 11; x++) a[x + y * N] = 0xFF0F1A15;
+        if (eye) {
+            for (int y = 4; y <= 11; y++) for (int x = 4; x <= 11; x++) {
+                double dx = x - 7.5, dy = y - 7.5, d = Math.hypot(dx, dy);
+                if (d <= 3.8) a[x + y * N] = d <= 1.6 ? 0xFF0B2A12 : 0xFF2FD16A;
+            }
+        }
+        return a;
+    }
+
+    /** Портал: напівпрозорий фіолетово-синій вир. */
+    public static int[] portal() {
+        int[] a = new int[256];
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            int h = hash(x / 2, y / 2, 71) % 5;
+            int c = new int[]{0xFF3A1B7A, 0xFF5A2BB0, 0xFF2B2F9A, 0xFF7A3AD0, 0xFF1B1058}[h];
+            a[x + y * N] = (170 << 24) | (c & 0xFFFFFF);
+        }
+        return a;
+    }
+
+    /** Око Енду: зелене око з вертикальною зіницею. */
+    public static int[] eye() {
+        int[] a = new int[256];
+        ellipse(a, 8, 8, 6.2, 6.2, (x, y, nx, ny) -> nx * nx + ny * ny > 0.62 ? 0xFF1F9E55 : (nx * nx + ny * ny > 0.12 ? 0xFF2FD16A : 0xFF0B2A12));
+        px(a, 6, 5, 0xFFB6FFD0); px(a, 7, 5, 0xFFB6FFD0); px(a, 6, 6, 0xFF8FF0B4);
+        return outlined(a);
+    }
 }

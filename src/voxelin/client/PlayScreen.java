@@ -46,7 +46,7 @@ final class PlayScreen {
     private boolean cmdsDone, shotDone;
     private final Source playerSrc = Sources.player("Player");
     private final Vitals vt;
-    private boolean leaving, deadHandled;
+    private boolean leaving, deadHandled, portalLock = true;
     private PlayerTarget playerTarget;
     private Mob aimedMob;
     private double attackCd;
@@ -166,6 +166,12 @@ final class PlayScreen {
             vt.tick(player.headInWater);
         }
         if (trade != null) trade.mob.talkTicks = 6; // житель слухає
+        { // портал: ноги в блоці порталу -> перехід у інший вимір (після виходу з порталу замок знімається)
+            BlockType feet = world.blocks.get(Math.max(0, world.blockId(player.pos.blockX(), (int) Math.floor(player.pos.y - PlayerEntity.EYE + 0.05), player.pos.blockZ())));
+            boolean inPortal = "portal".equals(feet.interact);
+            if (!inPortal) portalLock = false;
+            else if (!portalLock && !vt.dead() && !v.opts.freeze) { portalLock = true; v.requestTravel(world.dimension().equals("end") ? "overworld" : "end"); }
+        }
         if (!vt.dead() && !v.opts.freeze) world.collectItems(bodyPos(), inv);
         if (vt.dead() && !deadHandled && !world.creative()) {
             Pos at = bodyPos();
@@ -221,9 +227,10 @@ final class PlayScreen {
         }
         boolean under = world.isLiquid(cam.pos.blockX(), cam.pos.blockY(), cam.pos.blockZ());
         rend.underwater = under;
-        double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : DayCycle.sky(phase);
+        boolean endDim = world.dimension().equals("end");
+        double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : (endDim ? World.END_SKY : DayCycle.sky(phase));
         rend.skyBrightness = (float) sky;
-        float[] horizon = DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
+        float[] horizon = endDim ? new float[]{0.10f, 0.05f, 0.16f} : DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
         if (under) { float k = (float) Math.max(0.25, sky); rend.fogColor = new float[]{UNDER_FOG[0] * k, UNDER_FOG[1] * k, UNDER_FOG[2] * k}; }
         else rend.fogColor = horizon;
         long dn = world.dayNumber();
@@ -310,7 +317,12 @@ final class PlayScreen {
             return;
         }
         BlockType target = hit == null ? null : world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
-        if (target != null && target.interact != null && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
+        if (target != null && "end_frame".equals(target.interact)) { // Око Енду в рамку Шву
+            String msg = EndPortal.insertEye(world, playerSrc, hit.x(), hit.y(), hit.z(), inv, world.creative());
+            if (msg != null) say(msg);
+            return;
+        }
+        if (target != null && target.interact != null && !"portal".equals(target.interact) && !"end_frame_eye".equals(target.interact) && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
             if ("workbench".equals(target.interact)) { activeScreen = benchScreen; invOpen = true; grab(false); }
             else if ("chest".equals(target.interact)) {
                 ChestEntity ce = world.chestAt(hit.x(), hit.y(), hit.z());

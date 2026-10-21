@@ -77,7 +77,26 @@ public final class Game {
 
     public World openWorld(String name) throws IOException {
         File d = worldDir(name);
-        WorldInfo info = WorldInfo.load(d);
-        return new World(d, info, blocks, items, recipes, mobTypes, loot, events, new TerrainGenerator(info.seed, info.type, blocks, structures.templates()));
+        return openAt(d, WorldInfo.load(d));
+    }
+
+    /** Відкрити вимір світу (поки що «end»): окрема тека <світ>/dimensions/<вимір>/ із власним WorldInfo; створюється при першому відкритті. */
+    public World openDimension(String worldName, String dimension) throws IOException {
+        if (!dimension.equals("end")) throw new IllegalArgumentException("невідомий вимір: " + dimension);
+        File base = worldDir(worldName), d = new File(base, "dimensions/" + dimension);
+        WorldInfo info;
+        if (WorldInfo.exists(d)) info = WorldInfo.load(d);
+        else {
+            WorldInfo over = WorldInfo.load(base);
+            info = WorldInfo.create(d, worldName, over.seed, WorldInfo.Type.END);
+        }
+        return openAt(d, info);
+    }
+
+    private World openAt(File d, WorldInfo info) throws IOException {
+        voxelin.core.gen.Generator gen = info.type == WorldInfo.Type.END
+                ? new voxelin.core.gen.EndGenerator(info.seed, blocks)
+                : new TerrainGenerator(info.seed, info.type, blocks, structures.templates());
+        return new World(d, info, blocks, items, recipes, mobTypes, loot, events, gen);
     }
 }

@@ -31,6 +31,7 @@ public final class Voxelin {
         final java.util.Set<String> explicit = new java.util.HashSet<>();
         boolean vsync = true;
         float sky = -1f; // --sky 0..1: примусова яскравість неба (інакше - за часом доби)
+        String dimension; // --dimension end: стартувати автосвіт у вимірі (для знімків)
         String open; // --open inventory: відкрити вікно на старті (для знімків)
         float showProgress = -1f; // --show-progress 0..1: показати тріщини цілі (для знімків)
         double dayMinutes = -1; // --day-minutes N: довжина доби (інакше - зі світу, типово 30)
@@ -60,6 +61,7 @@ public final class Voxelin {
                         case "--msaa" -> o.msaa = Math.max(0, Math.min(8, Integer.parseInt(a[++i])));
                         case "--no-vsync" -> o.vsync = false;
                         case "--open" -> o.open = a[++i];
+                        case "--dimension" -> o.dimension = a[++i];
                         case "--show-progress" -> o.showProgress = Math.max(0f, Math.min(1f, Float.parseFloat(a[++i])));
                         case "--day-minutes" -> o.dayMinutes = Double.parseDouble(a[++i]);
                         case "--sky" -> o.sky = Math.max(0f, Math.min(1f, Float.parseFloat(a[++i])));
@@ -194,7 +196,12 @@ public final class Voxelin {
     private void autoWorld() {
         try {
             if (!WorldInfo.exists(new File(opts.saves, opts.autoWorld))) game.createWorld(opts.autoWorld, opts.seed, opts.autoFlat ? WorldInfo.Type.FLAT : WorldInfo.Type.NORMAL);
-            beginLoading(opts.autoWorld);
+            if ("end".equals(opts.dimension)) {
+                World end = game.openDimension(opts.autoWorld, "end");
+                end.info.setPlayer(Pos.ofBlock(voxelin.core.gen.EndGenerator.PLATFORM_X, voxelin.core.gen.EndGenerator.TOP + 1 + voxelin.core.entity.PlayerEntity.EYE + 0.02, voxelin.core.gen.EndGenerator.ARRIVAL_Z), 0f, 0f);
+                refreshTextures();
+                beginLoadingWorld(end);
+            } else beginLoading(opts.autoWorld);
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ автосвіт: " + e); }
     }
 
@@ -215,19 +222,54 @@ public final class Voxelin {
                 if (opts.screenshot != null && frames > 30) { Screenshot.save(window, opts.screenshot); running = false; }
             }
             case LOADING -> loadingFrame();
-            case PLAYING -> { if (!play.frame(alpha)) leaveWorld(); }
+            case PLAYING -> { if (!play.frame(alpha)) leaveWorld(); else if (pendingTravel != null) doTravel(); }
+        }
+    }
+
+    private String pendingTravel;
+
+    /** Перехід між вимірами (portal): виконується між кадрами. to: "end" або "overworld". */
+    void requestTravel(String to) { if (pendingTravel == null) pendingTravel = to; }
+
+    private void doTravel() {
+        String to = pendingTravel;
+        pendingTravel = null;
+        World cur = play.world;
+        String base = cur.info.name;
+        boolean toEnd = to.equals("end");
+        long rx = play.player.pos.blockX(), rz = play.player.pos.blockZ();
+        int ry = (int) Math.floor(play.player.pos.y - voxelin.core.entity.PlayerEntity.EYE + 0.05);
+        WorldInfo curInfo = cur.info;
+        play.close(); // зберігає поточний вимір (інвентар теж)
+        play = null; loading = null;
+        try {
+            World target = toEnd ? game.openDimension(base, "end") : game.openWorld(base);
+            target.info.copyPlayerFrom(curInfo);
+            if (toEnd) {
+                target.info.hasReturn = true; target.info.returnX = rx; target.info.returnY = ry; target.info.returnZ = rz;
+                target.info.setPlayer(Pos.ofBlock(voxelin.core.gen.EndGenerator.PLATFORM_X, voxelin.core.gen.EndGenerator.TOP + 1 + voxelin.core.entity.PlayerEntity.EYE + 0.02, voxelin.core.gen.EndGenerator.ARRIVAL_Z), 0f, 0f);
+            } else if (curInfo.hasReturn) {
+                target.info.setPlayer(Pos.ofBlock(curInfo.returnX, curInfo.returnY + voxelin.core.entity.PlayerEntity.EYE + 0.02, curInfo.returnZ), 0f, 0f);
+            }
+            beginLoadingWorld(target);
+        } catch (IOException | RuntimeException e) {
+            System.out.println("[Voxelin] ⚠️ перехід у вимір " + to + " не вдався: " + e);
+            state = State.MENU; menus.show(Menus.Screen.WORLDS);
         }
     }
 
     void beginLoading(String name) {
         refreshTextures();
         try {
-            loading = game.openWorld(name);
+            beginLoadingWorld(game.openWorld(name));
         } catch (IOException | RuntimeException e) {
             System.out.println("[Voxelin] ⚠️ не вдалося відкрити світ " + name + ": " + e);
             menus.show(Menus.Screen.WORLDS);
-            return;
         }
+    }
+
+    private void beginLoadingWorld(World w) {
+        loading = w;
         WorldInfo i = loading.info;
         long[] land = loading.findLand(0, 0); // новий світ: з'являємось на суші, а не в морі
         loadCx = i.hasPlayer ? i.playerCx : Math.floorDiv(land[0], 16L);

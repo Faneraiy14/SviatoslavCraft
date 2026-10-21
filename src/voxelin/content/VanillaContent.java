@@ -60,6 +60,8 @@ public final class VanillaContent implements VoxelinMod {
         tex("grass_side", TextureGen.grassSide()); tex("pale_grass_side", TextureGen.paleGrassSide());
         tex("oak_log_top", TextureGen.oakLogTop()); tex("birch_log_top", TextureGen.birchLogTop()); tex("spruce_log_top", TextureGen.spruceLogTop()); tex("pale_log_top", TextureGen.paleLogTop());
         tex("cactus_top", TextureGen.cactusTop());
+        tex("end_stone", ItemTextureGen.endStone()); tex("obsidian", ItemTextureGen.obsidian()); tex("end_frame_side", ItemTextureGen.frameSide());
+        tex("end_frame_top", ItemTextureGen.frameTop(false)); tex("end_frame_eye_top", ItemTextureGen.frameTop(true)); tex("end_portal", ItemTextureGen.portal()); tex("end_eye", ItemTextureGen.eye());
         tex("chest_top", ItemTextureGen.chestTop()); tex("chest_side", ItemTextureGen.chestSide());
         tex("furnace_top", ItemTextureGen.furnaceTop()); tex("furnace_side", ItemTextureGen.furnaceSide());
         tex("workbench_top", ItemTextureGen.workbenchTop()); tex("workbench_side", ItemTextureGen.workbenchSide());
@@ -106,6 +108,11 @@ public final class VanillaContent implements VoxelinMod {
         block("workbench", new BlockSettings().textures("workbench_top", "workbench_side", "oak_planks").color(0xB08850).tool(ToolKind.AXE).interact("workbench").title("Верстак").hardness(2f));
         block("furnace", new BlockSettings().textures("furnace_top", "furnace_side", "furnace_top").color(0x777777).tool(ToolKind.PICKAXE).minTier(1).interact("furnace").title("Піч").hardness(3.5f));
         block("chest", new BlockSettings().textures("chest_top", "chest_side", "chest_top").color(0xA0763C).tool(ToolKind.AXE).interact("chest").title("Скриня").hardness(2.5f));
+        block("end_stone", new BlockSettings().texture("end_stone").color(0xDDD8A0).tool(ToolKind.PICKAXE).minTier(1).title("Камінь Краю").hardness(3f));
+        block("obsidian", new BlockSettings().texture("obsidian").color(0x1B1228).tool(ToolKind.PICKAXE).minTier(4).title("Обсидіан").hardness(50f));
+        block("end_frame", new BlockSettings().textures("end_frame_top", "end_frame_side", "end_frame_side").color(0x2E4A3C).interact("end_frame").noItem().light(2).title("Рамка Шву").hardness(-1f));
+        block("end_frame_eye", new BlockSettings().textures("end_frame_eye_top", "end_frame_side", "end_frame_side").color(0x2E4A3C).interact("end_frame_eye").noItem().light(5).title("Рамка Шву з оком").hardness(-1f));
+        block("end_portal", new BlockSettings().texture("end_portal").color(0x5A2BB0).solid(false).translucent(true).light(7).noItem().interact("portal").title("Портал").hardness(-1f));
         // --- предмети (не блоки): матеріали, їжа, інструменти
         tex("stick", ItemTextureGen.stick()); tex("coal", ItemTextureGen.coal()); tex("raw_iron", ItemTextureGen.rawOre(0xE0B49A)); tex("raw_copper", ItemTextureGen.rawOre(0xE0803F));
         tex("raw_gold", ItemTextureGen.rawOre(0xF5D13A)); tex("diamond", ItemTextureGen.diamond()); tex("liminite_shard", ItemTextureGen.shard()); tex("apple", ItemTextureGen.apple());
@@ -166,6 +173,8 @@ public final class VanillaContent implements VoxelinMod {
             r.recipe(aMat[m] + "_boots", RecipeSettings.shaped("M.M", "M.M").key('M', aHead[m]).result(aMat[m] + "_boots", 1));
         }
 
+        r.item("end_eye", new ItemSettings().color(0x2FD16A).texture("end_eye").title("Око Енду"));
+        r.recipe("end_eye", RecipeSettings.shapeless("liminite_shard", "diamond", "gold_ingot").result("end_eye", 1));
         r.recipe("chest", RecipeSettings.shaped("PPP", "P.P", "PPP").key('P', "#planks").result("chest", 1));
         r.loot("ruins", new LootSettings().rolls(1, 3).entry("stick", 2, 6, 10).entry("coal", 1, 4, 8).entry("apple", 1, 2, 6).entry("cobblestone", 3, 8, 8)
                 .entry("raw_iron", 1, 3, 5).entry("leather", 1, 2, 4).entry("string", 1, 3, 4).entry("iron_ingot", 1, 2, 2));
@@ -260,6 +269,7 @@ public final class VanillaContent implements VoxelinMod {
         r.structure("dungeon", Structures.DUNGEON);
         r.structure("mine", Structures.MINE);
         r.structure("temple", Structures.TEMPLE);
+        r.structure("seam_gate", Structures.SEAM_GATE);
         r.structure("fortress", Structures.FORTRESS);
         r.structure("village_house_small", Structures.VILLAGE_HOUSE_SMALL);
         r.structure("village_house_big", Structures.VILLAGE_HOUSE_BIG);

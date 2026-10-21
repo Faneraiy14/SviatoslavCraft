@@ -76,6 +76,7 @@ public final class World implements WorldAccess {
         loadBlockEntities();
         loadMobs();
         loadMarks();
+        if (info.type == WorldInfo.Type.END) naturalSpawning = false;
         // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
         int threads = Integer.getInteger("voxelin.genThreads", Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)));
         genPool = Executors.newFixedThreadPool(threads, daemon("voxelin-gen"));
@@ -95,8 +96,11 @@ public final class World implements WorldAccess {
     @Override public long dayTicks() { return DayCycle.dayTicks(info.dayMinutes); }
     public double dayPhase() { return DayCycle.phase(info.time, dayTicks()); }
     public long dayNumber() { return DayCycle.day(info.time, dayTicks()); }
-    /** Яскравість неба 0.12..1 за часом доби. */
-    public double skyLevel() { return DayCycle.sky(dayPhase()); }
+    /** Яскравість неба 0.12..1 за часом доби; в Енді стала. */
+    public double skyLevel() { return info.type == WorldInfo.Type.END ? END_SKY : DayCycle.sky(dayPhase()); }
+    public static final double END_SKY = 0.35;
+    /** "overworld" або "end". */
+    public String dimension() { return info.type == WorldInfo.Type.END ? "end" : "overworld"; }
 
     private final Map<Source, Vitals> vitals = new IdentityHashMap<>();
     private Vitals mainVitals;

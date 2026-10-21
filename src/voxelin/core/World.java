@@ -76,6 +76,7 @@ public final class World implements WorldAccess {
         loadItems();
         loadBlockEntities();
         loadMobs();
+        infection = new Infection(this);
         loadMarks();
         if (info.type == WorldInfo.Type.END) naturalSpawning = false;
         // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
@@ -226,6 +227,8 @@ public final class World implements WorldAccess {
     private final Random mobRng = new Random();
     private final MobSpawner spawner = new MobSpawner();
     private PlayerTarget target;
+    /** Зараження (гілка розвилки яйця). */
+    public Infection infection;
     /** Вимкнути природний спавн (тести, /gamerule пізніше). */
     public boolean naturalSpawning = true;
 
@@ -540,6 +543,8 @@ public final class World implements WorldAccess {
         if (c == null) return false;
         BlockType nb = blocks.get(ref.id());
         if (nb != ref && blocks.byName(ref.name()) != nb) return false; // чужий BlockRef
+        boolean infect = infection != null && infection.shouldStart(nb) && blocks.byName(Infection.CORE) != null;
+        if (infect) nb = blocks.byName(Infection.CORE); // яйце пускає корені
         int[] b = budgets.computeIfAbsent(src, k -> new int[1]);
         if (b[0] >= src.blockBudgetPerTick()) return false;
         int old = c.get((int) (x & 15), y, (int) (z & 15));
@@ -553,6 +558,7 @@ public final class World implements WorldAccess {
         if (!blockEntities.isEmpty()) blockEntityRemovedCheck(x, y, z, nb);
         if (batchDepth > 0) batchChunks.add(c); else light.blockChanged(c, (int) (x & 15), y, (int) (z & 15), old, nb.id);
         if (listener != null) listener.blockChanged(x, y, z);
+        if (infect) infection.start(x, y, z);
         return true;
     }
 
@@ -644,6 +650,7 @@ public final class World implements WorldAccess {
         tickItems();
         tickBlockEntities();
         tickMobs();
+        infection.tick(tick, target);
         budgets.clear();
         events.post(new TickEvent(this, tick));
         if (System.currentTimeMillis() - lastAutosave > 30_000) { lastAutosave = System.currentTimeMillis(); autosave(); }
@@ -670,6 +677,7 @@ public final class World implements WorldAccess {
         saveBlockEntities();
         saveMobs();
         saveMarks();
+        infection.save();
         try { info.save(dir); } catch (IOException e) { System.out.println("[Voxelin] ⚠️ " + e); }
     }
 

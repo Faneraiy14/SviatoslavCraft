@@ -400,4 +400,35 @@ public final class ItemTextureGen {
         }
         return a;
     }
+
+    /** Ядро Шву: яйце, проросле фіолетовими жилами. */
+    public static int[] seamCore() {
+        int[] a = dragonEgg();
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) if ((x + y * 3 + hash(x, y, 91) % 3) % 7 == 0) a[x + y * N] = 0xFFE070FF;
+        return a;
+    }
+
+    /** Наріст Шву: сіро-фіолетова тканина з жилками. */
+    public static int[] seamGrowth() {
+        int[] a = noise(0x4A3458, 12, 93);
+        for (int i = 0; i < 256; i++) { int h = hash(i & 15, i >> 4, 94) % 13; if (h == 0) a[i] = 0xFFA060E0; else if (h == 1) a[i] = 0xFF2A1A36; }
+        return a;
+    }
+
+    /** Шрам Шву: обпалена чорно-сіра порода. */
+    public static int[] seamScar() {
+        int[] a = noise(0x2A2628, 9, 95);
+        for (int i = 0; i < 256; i++) if (hash(i & 15, i >> 4, 96) % 10 == 0) a[i] = 0xFF5A3A2A;
+        return a;
+    }
+
+    /** Пляшечка з рідиною (зілля/вогонь Шву). */
+    public static int[] flask(int liquid) {
+        int[] a = new int[256];
+        for (int y = 2; y <= 4; y++) for (int x = 7; x <= 8; x++) px(a, x, y, 0xFF8A6A4A);
+        for (int y = 5; y <= 6; y++) for (int x = 7; x <= 8; x++) px(a, x, y, 0xFFD8E8F0);
+        ellipse(a, 8, 10, 4.6, 4.6, (x, y, nx, ny) -> ny < -0.3 ? 0xFFD8E8F0 : (0xFF000000 | liquid));
+        px(a, 6, 8, 0xFFFFFFFF);
+        return outlined(a);
+    }
 }

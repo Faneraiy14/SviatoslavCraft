@@ -324,6 +324,10 @@ final class PlayScreen {
             return;
         }
         BlockType target = hit == null ? null : world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
+        if (target != null && target.name.equals(Infection.CORE)) { // ядро зараження: стан або зупинка (зілля, вогонь, лімініт)
+            String msg = world.infection.use(inv, hit.x(), hit.y(), hit.z(), world.creative());
+            if (msg != null) { say(msg); return; }
+        }
         if (target != null && "end_frame".equals(target.interact)) { // Око Енду в рамку Шву
             String msg = EndPortal.insertEye(world, playerSrc, hit.x(), hit.y(), hit.z(), inv, world.creative());
             if (msg != null) { say(msg); if (msg.contains("відчинився")) world.unlockRecord("voxelin:gate"); }
@@ -577,6 +581,12 @@ final class PlayScreen {
         }
         hotbar(g);
         vitalsHud();
+        if (world.info.infState == WorldInfo.InfState.ACTIVE) { // відлік зараження в правому верхньому куті
+            Infection.Phase ph = world.infection.phase();
+            String t = "ШОВ: день " + Math.min(Infection.DAYS, world.infection.day() + 1) + "/" + Infection.DAYS;
+            float r = ph == Infection.Phase.QUIET ? 0.75f : 1f, gg = ph == Infection.Phase.CRISIS ? 0.3f : 0.6f;
+            Gui.text(t, Gui.W - 300, 12, 2.2f, r, gg, 1f);
+        }
         for (Mob boss : world.mobs()) if (boss.type.boss && boss.alive()) { // смуга боса вгорі екрана
             float w = 520, x = (Gui.W - w) / 2f;
             Gui.text(boss.type.title, x, 8, 2.4f, 0.95f, 0.8f, 1f);

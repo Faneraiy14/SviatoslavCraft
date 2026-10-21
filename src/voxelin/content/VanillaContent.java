@@ -61,6 +61,8 @@ public final class VanillaContent implements VoxelinMod {
         tex("oak_log_top", TextureGen.oakLogTop()); tex("birch_log_top", TextureGen.birchLogTop()); tex("spruce_log_top", TextureGen.spruceLogTop()); tex("pale_log_top", TextureGen.paleLogTop());
         tex("cactus_top", TextureGen.cactusTop());
         tex("dragon_egg", ItemTextureGen.dragonEgg());
+        tex("seam_core", ItemTextureGen.seamCore()); tex("seam_growth", ItemTextureGen.seamGrowth()); tex("seam_scar", ItemTextureGen.seamScar());
+        tex("seam_cure", ItemTextureGen.flask(0x50E0B0)); tex("seam_fire", ItemTextureGen.flask(0xFF6A20));
         tex("end_stone", ItemTextureGen.endStone()); tex("obsidian", ItemTextureGen.obsidian()); tex("end_frame_side", ItemTextureGen.frameSide());
         tex("end_frame_top", ItemTextureGen.frameTop(false)); tex("end_frame_eye_top", ItemTextureGen.frameTop(true)); tex("end_portal", ItemTextureGen.portal()); tex("end_eye", ItemTextureGen.eye());
         tex("chest_top", ItemTextureGen.chestTop()); tex("chest_side", ItemTextureGen.chestSide());
@@ -114,6 +116,9 @@ public final class VanillaContent implements VoxelinMod {
         block("end_frame", new BlockSettings().textures("end_frame_top", "end_frame_side", "end_frame_side").color(0x2E4A3C).interact("end_frame").noItem().light(2).title("Рамка Шву").hardness(-1f));
         block("end_frame_eye", new BlockSettings().textures("end_frame_eye_top", "end_frame_side", "end_frame_side").color(0x2E4A3C).interact("end_frame_eye").noItem().light(5).title("Рамка Шву з оком").hardness(-1f));
         block("dragon_egg", new BlockSettings().texture("dragon_egg").color(0x24103A).light(6).title("Яйце дракона").hardness(3f));
+        block("seam_core", new BlockSettings().texture("seam_core").color(0x3A1458).light(9).noItem().title("Ядро Шву").hardness(-1f));
+        block("seam_growth", new BlockSettings().texture("seam_growth").color(0x4A3458).light(1).tool(ToolKind.SHOVEL).noDrops().title("Наріст Шву").hardness(1.2f));
+        block("seam_scar", new BlockSettings().texture("seam_scar").color(0x2A2628).tool(ToolKind.PICKAXE).minTier(1).title("Шрам Шву").hardness(2.5f));
         block("end_portal", new BlockSettings().texture("end_portal").color(0x5A2BB0).solid(false).translucent(true).light(7).noItem().interact("portal").title("Портал").hardness(-1f));
         // --- предмети (не блоки): матеріали, їжа, інструменти
         tex("stick", ItemTextureGen.stick()); tex("coal", ItemTextureGen.coal()); tex("raw_iron", ItemTextureGen.rawOre(0xE0B49A)); tex("raw_copper", ItemTextureGen.rawOre(0xE0803F));
@@ -177,6 +182,10 @@ public final class VanillaContent implements VoxelinMod {
 
         r.item("end_eye", new ItemSettings().color(0x2FD16A).texture("end_eye").title("Око Енду"));
         r.recipe("end_eye", RecipeSettings.shapeless("liminite_shard", "diamond", "gold_ingot").result("end_eye", 1));
+        r.item("seam_cure", new ItemSettings().color(0x50E0B0).texture("seam_cure").title("Зілля Шву"));
+        r.item("seam_fire", new ItemSettings().color(0xFF6A20).texture("seam_fire").title("Вогонь Шву"));
+        r.recipe("seam_cure", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "gold_ingot", "apple", "glass").result("seam_cure", 1));
+        r.recipe("seam_fire", RecipeSettings.shapeless("liminite_shard", "coal", "coal", "coal", "glass").result("seam_fire", 1));
         r.recipe("chest", RecipeSettings.shaped("PPP", "P.P", "PPP").key('P', "#planks").result("chest", 1));
         r.loot("ruins", new LootSettings().rolls(1, 3).entry("stick", 2, 6, 10).entry("coal", 1, 4, 8).entry("apple", 1, 2, 6).entry("cobblestone", 3, 8, 8)
                 .entry("raw_iron", 1, 3, 5).entry("leather", 1, 2, 4).entry("string", 1, 3, 4).entry("iron_ingot", 1, 2, 2));

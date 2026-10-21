@@ -60,6 +60,7 @@ public final class VanillaContent implements VoxelinMod {
         tex("grass_side", TextureGen.grassSide()); tex("pale_grass_side", TextureGen.paleGrassSide());
         tex("oak_log_top", TextureGen.oakLogTop()); tex("birch_log_top", TextureGen.birchLogTop()); tex("spruce_log_top", TextureGen.spruceLogTop()); tex("pale_log_top", TextureGen.paleLogTop());
         tex("cactus_top", TextureGen.cactusTop());
+        tex("dragon_egg", ItemTextureGen.dragonEgg());
         tex("end_stone", ItemTextureGen.endStone()); tex("obsidian", ItemTextureGen.obsidian()); tex("end_frame_side", ItemTextureGen.frameSide());
         tex("end_frame_top", ItemTextureGen.frameTop(false)); tex("end_frame_eye_top", ItemTextureGen.frameTop(true)); tex("end_portal", ItemTextureGen.portal()); tex("end_eye", ItemTextureGen.eye());
         tex("chest_top", ItemTextureGen.chestTop()); tex("chest_side", ItemTextureGen.chestSide());
@@ -112,6 +113,7 @@ public final class VanillaContent implements VoxelinMod {
         block("obsidian", new BlockSettings().texture("obsidian").color(0x1B1228).tool(ToolKind.PICKAXE).minTier(4).title("Обсидіан").hardness(50f));
         block("end_frame", new BlockSettings().textures("end_frame_top", "end_frame_side", "end_frame_side").color(0x2E4A3C).interact("end_frame").noItem().light(2).title("Рамка Шву").hardness(-1f));
         block("end_frame_eye", new BlockSettings().textures("end_frame_eye_top", "end_frame_side", "end_frame_side").color(0x2E4A3C).interact("end_frame_eye").noItem().light(5).title("Рамка Шву з оком").hardness(-1f));
+        block("dragon_egg", new BlockSettings().texture("dragon_egg").color(0x24103A).light(6).title("Яйце дракона").hardness(3f));
         block("end_portal", new BlockSettings().texture("end_portal").color(0x5A2BB0).solid(false).translucent(true).light(7).noItem().interact("portal").title("Портал").hardness(-1f));
         // --- предмети (не блоки): матеріали, їжа, інструменти
         tex("stick", ItemTextureGen.stick()); tex("coal", ItemTextureGen.coal()); tex("raw_iron", ItemTextureGen.rawOre(0xE0B49A)); tex("raw_copper", ItemTextureGen.rawOre(0xE0803F));
@@ -265,6 +267,12 @@ public final class VanillaContent implements VoxelinMod {
             if (i == 2) v.greeting("Тут колись було тихо... Кажуть, під лімінітом земля тонка, як папір.", "Не ходи ночами в печери без світла. Темрява тут - не просто відсутність світла.", "Мандрівники приносять дивні вісті про Шов. Я лише старий і не вірю в казки.", "Є місця, де тиша гучніша за грім. Обминай мовчазні пустища.");
             r.mob(vName[i], v);
         }
+        r.mob("ender_dragon", new MobSettings().health(200).speed(12f).size(4.5f, 2.2f).behavior(MobSettings.Behavior.HOSTILE).attack(6, 3.2f, 2.5f).detect(80).persistent(true).flying(true).boss(true).title("Дракон Краю")
+                .drops("dragon_egg", 1, 1, 1f)
+                .part(0, 0.3f, 0, 2.2f, 1.5f, 3.8f, 0x1E1030).part(0, 1.0f, -2.5f, 1.0f, 0.9f, 1.4f, 0x241438).part(0, 1.1f, -3.5f, 1.4f, 1.1f, 1.5f, 0x2D1A44)
+                .part(0, 0.7f, -3.55f, 1.2f, 0.35f, 1.1f, 0x180C26).part(-0.4f, 1.6f, -4.0f, 0.3f, 0.3f, 0.1f, 0xE040FF).part(0.4f, 1.6f, -4.0f, 0.3f, 0.3f, 0.1f, 0xE040FF)
+                .part(0, 0.9f, 2.4f, 0.9f, 0.7f, 2.2f, 0x1E1030).part(0, 0.8f, 4.2f, 0.5f, 0.45f, 1.8f, 0x180C26)
+                .wingPart(-3.4f, 1.3f, 0.2f, 4.6f, 0.14f, 2.6f, 0x2A1844, true).wingPart(3.4f, 1.3f, 0.2f, 4.6f, 0.14f, 2.6f, 0x2A1844, false));
         r.structure("ruins", Structures.RUINS);
         r.structure("dungeon", Structures.DUNGEON);
         r.structure("mine", Structures.MINE);

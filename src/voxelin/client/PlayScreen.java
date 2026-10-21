@@ -83,6 +83,7 @@ final class PlayScreen {
             public void teleport(long x, int y, long z) { player.teleport(Pos.ofBlock(x, y + PlayerEntity.EYE + 0.02, z)); }
         };
         world.setPlayerTarget(playerTarget);
+        if (world.dimension().equals("end")) world.spawnDragonIfNeeded();
         icons = new IconAtlas(v.textures, world);
         java.util.function.Consumer<Inventory.Stack> dropper = st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); };
         invScreen = InventoryScreen.craft("ІНВЕНТАР", new CraftMenu(world.itemTypes, v.game.recipes, inv, 2), inv, world, icons, dropper);
@@ -474,7 +475,11 @@ final class PlayScreen {
             for (voxelin.api.MobSettings.Part p : m.type.parts) {
                 float r = ((p.rgb >> 16) & 255) / 255f * light * tr, g = ((p.rgb >> 8) & 255) / 255f * light * tg, b = (p.rgb & 255) / 255f * light * tb;
                 glPushMatrix();
-                if (p.swing != 0) { glTranslatef(p.cx, p.y0 + p.h, p.cz); glRotatef(p.swing == 1 ? swing : -swing, 1, 0, 0); glTranslatef(-p.cx, -(p.y0 + p.h), -p.cz); }
+                if (p.swing == 1 || p.swing == 2) { glTranslatef(p.cx, p.y0 + p.h, p.cz); glRotatef(p.swing == 1 ? swing : -swing, 1, 0, 0); glTranslatef(-p.cx, -(p.y0 + p.h), -p.cz); }
+                else if (p.swing >= 3) { // крило: махає навколо осі вперед від внутрішнього краю
+                    float px0 = p.cx - Math.signum(p.cx) * p.w / 2f, flap = (float) (Math.sin(m.age * 0.3 + (p.swing == 3 ? 0 : 0)) * 32);
+                    glTranslatef(px0, p.y0 + p.h / 2, p.cz); glRotatef(p.swing == 3 ? -flap : flap, 0, 0, 1); glTranslatef(-px0, -(p.y0 + p.h / 2), -p.cz);
+                }
                 box(p.cx, p.y0, p.cz, p.w, p.h, p.d, r, g, b);
                 glPopMatrix();
             }
@@ -566,6 +571,13 @@ final class PlayScreen {
         }
         hotbar(g);
         vitalsHud();
+        for (Mob boss : world.mobs()) if (boss.type.boss && boss.alive()) { // смуга боса вгорі екрана
+            float w = 520, x = (Gui.W - w) / 2f;
+            Gui.text(boss.type.title, x, 8, 2.4f, 0.95f, 0.8f, 1f);
+            Gui.rect(x - 2, 34, w + 4, 16, 0, 0, 0, 0.7f);
+            Gui.rect(x, 36, (float) (w * Math.max(0, boss.health / boss.type.health)), 12, 0.7f, 0.15f, 0.8f, 1f);
+            break;
+        }
         if (aimedMob != null && !invOpen && !chatOpen) {
             String t = aimedMob.type.title + "  " + Math.max(0, (int) Math.ceil(aimedMob.health)) + "/" + (int) aimedMob.type.health;
             float w = Gui.textWidth(t, 2.2f) + 16, x = (Gui.W - w) / 2f;

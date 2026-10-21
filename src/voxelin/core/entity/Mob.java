@@ -24,6 +24,9 @@ public final class Mob {
     public boolean keep;
     public int talkTicks;
     public int age, hurtTicks, invuln, deathTicks, attackCooldown, fleeTicks, wanderTicks;
+    /** Стан польоту дракона: 0 кружляє, 1 пікірує, 2 відлітає. */
+    public int flyState, flyTimer, diveCooldown;
+    public double orbitAngle;
     public boolean dying, onGround, provoked, inWater, burning, lootDropped;
     /** Пройдена відстань - для анімації ходьби. */
     public double walk;
@@ -35,7 +38,7 @@ public final class Mob {
         this.type = type; this.pos = at.copy(); this.health = type.health;
     }
 
-    public boolean removable() { return dying && deathTicks >= DEATH_TICKS; }
+    public boolean removable() { return dying && deathTicks >= (type.boss ? 80 : DEATH_TICKS); }
     public boolean alive() { return !dying; }
 
     /** Шкода від удару; true - удар прийнято (не в невразливості). kx,kz - напрям поштовху від нападника. */
@@ -44,7 +47,7 @@ public final class Mob {
         health -= Math.min(amount, 1e6);
         invuln = INVULN; hurtTicks = 10;
         double len = Math.hypot(kx, kz);
-        if (len > 1e-6) { vx = kx / len * 5.0; vz = kz / len * 5.0; vy = 4.0; onGround = false; }
+        if (len > 1e-6 && !type.boss) { vx = kx / len * 5.0; vz = kz / len * 5.0; vy = 4.0; onGround = false; }
         provoked = true;
         if (type.passive()) { fleeTicks = 100; threat = from == null ? null : from.copy(); }
         if (health <= 0) { dying = true; deathTicks = 0; }
@@ -58,6 +61,7 @@ public final class Mob {
         if (invuln > 0) invuln--;
         if (attackCooldown > 0) attackCooldown--;
         if (dying) { deathTicks++; return; }
+        if (type.flying) { flyTick(w, target, rng); return; }
         if (talkTicks > 0) { talkTicks--; vx *= 0.5; vz *= 0.5; moveHOnly(w); return; }
         long bx = pos.blockX(), bz = pos.blockZ();
         inWater = w.isLiquid(bx, pos.blockY(), bz);
@@ -118,6 +122,54 @@ public final class Mob {
         moveY(w, vy * DT);
         moveH(w, vx * DT, vz * DT);
         pos.normalize();
+    }
+
+    /** Політ дракона: кружляє над домом на висоті +22, помітивши гравця - пікірує, вдаривши - відлітає. Колізій немає. */
+    private void flyTick(World w, PlayerTarget target, Random rng) {
+        if (home == null) home = pos.copy();
+        double hx = home.relX(pos.cx), hz = home.relZ(pos.cz);
+        double cx = pos.x, cy = pos.y, cz = pos.z;
+        double speed = type.speed;
+        double tx, ty, tz;
+        boolean hunt = target != null && target.alive() && !target.creative();
+        double dist = Double.MAX_VALUE, tbx = 0, tby = 0, tbz = 0;
+        if (hunt) {
+            Pos tb = target.body();
+            tbx = tb.relX(pos.cx); tby = tb.y; tbz = tb.relZ(pos.cz);
+            dist = Math.sqrt((tbx - cx) * (tbx - cx) + (tby - cy) * (tby - cy) + (tbz - cz) * (tbz - cz));
+        }
+        orbitAngle += 0.35 * DT;
+        double orbX = hx + 35 * Math.cos(orbitAngle), orbZ = hz + 35 * Math.sin(orbitAngle), orbY = home.y + 22;
+        flyTimer++;
+        if (diveCooldown > 0) diveCooldown--;
+        if (flyState == 0) {
+            tx = orbX; ty = orbY; tz = orbZ;
+            if (hunt && diveCooldown == 0 && dist < type.detect) { flyState = 1; flyTimer = 0; }
+        } else if (flyState == 1) {
+            if (!hunt) { flyState = 2; flyTimer = 0; tx = orbX; ty = orbY; tz = orbZ; }
+            else {
+                tx = tbx; ty = tby; tz = tbz; speed *= 1.5;
+                if (dist <= type.reach + type.width / 2 && attackCooldown == 0 && type.attackDamage > 0) {
+                    attackCooldown = type.cooldownTicks;
+                    double dx = tbx - cx, dz = tbz - cz, l = Math.hypot(dx, dz);
+                    target.hurt(type.attackDamage, l > 1e-6 ? dx / l : 0, l > 1e-6 ? dz / l : 1);
+                    flyState = 2; flyTimer = 0;
+                }
+                if (flyTimer > 200) { flyState = 2; flyTimer = 0; }
+            }
+        } else {
+            tx = orbX; ty = orbY + 6; tz = orbZ;
+            if (flyTimer > 60) { flyState = 0; diveCooldown = 80; }
+        }
+        double dx = tx - cx, dy = ty - cy, dz = tz - cz, l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double wx = 0, wy = 0, wz = 0;
+        if (l > 1e-6) { wx = dx / l * speed; wy = dy / l * speed; wz = dz / l * speed; }
+        vx += (wx - vx) * 0.12; vy += (wy - vy) * 0.12; vz += (wz - vz) * 0.12;
+        pos.add(vx * DT, vy * DT, vz * DT);
+        walk += Math.hypot(vx, vz) * DT;
+        if (Math.hypot(vx, vz) > 0.5) yaw = (float) Math.toDegrees(Math.atan2(vx, -vz));
+        if (pos.y < 2) pos.y = 2;
+        if (pos.y > 250) pos.y = 250;
     }
 
     private boolean daylight(World w) {

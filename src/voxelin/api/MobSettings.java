@@ -19,7 +19,7 @@ public final class MobSettings {
     /** Одна коробка моделі: центр по x/z, низ по y, розміри, колір; swing 0 - нерухома, 1/2 - хитається в протифазі при ході (ноги). */
     public static final class Part {
         public final float cx, y0, cz, w, h, d; public final int rgb, swing;
-        public Part(float cx, float y0, float cz, float w, float h, float d, int rgb, int swing) { this.cx = cx; this.y0 = y0; this.cz = cz; this.w = w; this.h = h; this.d = d; this.rgb = rgb & 0xFFFFFF; this.swing = Math.max(0, Math.min(2, swing)); }
+        public Part(float cx, float y0, float cz, float w, float h, float d, int rgb, int swing) { this.cx = cx; this.y0 = y0; this.cz = cz; this.w = w; this.h = h; this.d = d; this.rgb = rgb & 0xFFFFFF; this.swing = Math.max(0, Math.min(4, swing)); }
     }
 
     /** Угода жителя: віддай inCount x in - отримай outCount x out. */
@@ -31,6 +31,7 @@ public final class MobSettings {
     final List<Trade> trades = new ArrayList<>();
     final List<String> greetings = new ArrayList<>();
     float homeRadius;
+    boolean flying, boss;
     boolean persistent;
     float health = 10, speed = 2f, width = 0.6f, height = 1.0f;
     Behavior behavior = Behavior.PASSIVE;
@@ -63,6 +64,12 @@ public final class MobSettings {
     public MobSettings homeRadius(float r) { homeRadius = Float.isNaN(r) ? 0 : Math.max(0, Math.min(256, r)); return this; }
     /** Зберігається у світі й не зникає (жителі); решта мирних теж зберігаються, але можуть зникати далеко. */
     public MobSettings persistent(boolean b) { persistent = b; return this; }
+    /** Літає (без гравітації): кружляє над домом, пікірує на гравця (дракон). */
+    public MobSettings flying(boolean b) { flying = b; return this; }
+    /** Бос: смуга здоров'я, не відкидається, його смерть записується у світ. */
+    public MobSettings boss(boolean b) { boss = b; return this; }
+    /** Крило: хитається вгору-вниз (поворот навколо осі вперед); left - ліве чи праве. */
+    public MobSettings wingPart(float cx, float y0, float cz, float w, float h, float d, int rgb, boolean left) { parts.add(new Part(cx, y0, cz, w, h, d, rgb, left ? 3 : 4)); return this; }
     public MobSettings title(String t) { title = t; return this; }
     /** Що випадає після смерті: предмет, кількість min..max, шанс 0..1. */
     public MobSettings drops(String item, int min, int max, float chance) { drops.add(new BlockSettings.Drop(item, min, max, chance)); return this; }
@@ -74,7 +81,7 @@ public final class MobSettings {
     public MobSettings qualified(String modId) {
         MobSettings s = new MobSettings();
         s.health = health; s.speed = speed; s.width = width; s.height = height; s.behavior = behavior; s.attackDamage = attackDamage; s.reach = reach; s.cooldown = cooldown;
-        s.homeRadius = homeRadius; s.persistent = persistent; s.greetings.addAll(greetings);
+        s.homeRadius = homeRadius; s.persistent = persistent; s.flying = flying; s.boss = boss; s.greetings.addAll(greetings);
         for (Trade t : trades) s.trades.add(new Trade(t.in.indexOf(':') >= 0 ? t.in : modId + ":" + t.in, t.inCount, t.out.indexOf(':') >= 0 ? t.out : modId + ":" + t.out, t.outCount));
         s.detect = detect; s.burnsInSun = burnsInSun; s.title = title; s.parts.addAll(parts);
         for (BlockSettings.Drop d : drops) s.drops.add(new BlockSettings.Drop(d.item.indexOf(':') >= 0 ? d.item : modId + ":" + d.item, d.min, d.max, d.chance));
@@ -93,6 +100,8 @@ public final class MobSettings {
     public float detectValue() { return detect; }
     public List<Trade> tradeList() { return Collections.unmodifiableList(trades); }
     public List<String> greetingList() { return Collections.unmodifiableList(greetings); }
+    public boolean flyingValue() { return flying; }
+    public boolean bossValue() { return boss; }
     public float homeRadiusValue() { return homeRadius; }
     public boolean persistentValue() { return persistent; }
     public boolean burnsInSunValue() { return burnsInSun; }

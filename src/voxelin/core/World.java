@@ -243,6 +243,19 @@ public final class World implements WorldAccess {
         return m;
     }
 
+    /** Дракон Краю: створити над островом, якщо ще не вбитий і його немає. true - створено. */
+    public boolean spawnDragonIfNeeded() {
+        if (info.type != WorldInfo.Type.END || info.dragonDead) return false;
+        MobType t = mobTypes.get("voxelin:ender_dragon");
+        if (t == null) return false;
+        for (Mob m : mobs) if (m.type == t && !m.dying) return false;
+        Mob d = spawnMob(t, Pos.ofBlock(0, voxelin.core.gen.EndGenerator.TOP + 24, 0));
+        if (d == null) return false;
+        d.home = Pos.ofBlock(0, voxelin.core.gen.EndGenerator.TOP, 0);
+        d.keep = true;
+        return true;
+    }
+
     /** Для команд: поставити істоту біля блока (x,y,z), піднявши її, якщо там твердо (до 5 блоків). */
     public Mob summon(MobType type, long x, int y, long z) {
         int yy = y;
@@ -268,10 +281,12 @@ public final class World implements WorldAccess {
     private void dropLoot(Mob m) {
         if (m.lootDropped) return;
         m.lootDropped = true;
+        if (m.type.boss) info.dragonDead = true; // смерть боса записується у світ (не відроджується)
         for (voxelin.api.BlockSettings.Drop d : m.type.drops) {
             if (d.chance < 1f && mobRng.nextFloat() >= d.chance) continue;
             int n = d.min + (d.max > d.min ? mobRng.nextInt(d.max - d.min + 1) : 0);
-            if (n > 0) spawnItem(new Pos(m.pos.cx, m.pos.cz, m.pos.x, m.pos.y + m.type.height / 2, m.pos.z), d.item, n, 0, true);
+            Pos at = m.type.boss && m.home != null ? new Pos(m.home.cx, m.home.cz, m.home.x, m.home.y + 2, m.home.z) : new Pos(m.pos.cx, m.pos.cz, m.pos.x, m.pos.y + m.type.height / 2, m.pos.z); // здобич боса - на землі біля дому, а не в повітрі
+            if (n > 0) spawnItem(at, d.item, n, 0, true);
         }
     }
 

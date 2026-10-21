@@ -388,4 +388,16 @@ public final class ItemTextureGen {
         px(a, 6, 5, 0xFFB6FFD0); px(a, 7, 5, 0xFFB6FFD0); px(a, 6, 6, 0xFF8FF0B4);
         return outlined(a);
     }
+
+    /** Яйце дракона: темно-фіолетовий овал із сяючими крапками. */
+    public static int[] dragonEgg() {
+        int[] a = noise(0x1A0A2C, 6, 81);
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            double dx = (x - 7.5) / 6.5, dy = (y - 7.5) / 7.5;
+            if (dx * dx + dy * dy > 1) a[x + y * N] = 0xFF0A0414;
+            else if (hash(x, y, 83) % 7 == 0) a[x + y * N] = 0xFFB040FF;
+            else if (hash(x, y, 84) % 11 == 0) a[x + y * N] = 0xFF5A20A0;
+        }
+        return a;
+    }
 }

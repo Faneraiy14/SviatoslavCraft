@@ -292,4 +292,37 @@ public final class ItemTextureGen {
         a[7 + 8 * N] = 0xFF8A8A8A; a[8 + 8 * N] = 0xFF8A8A8A;
         return a;
     }
+
+    // ------------------------------------------------------------------ броня
+
+    private static final int[][] ARMOR_MAT = { // шкіра, залізо, алмаз: основний, світлий, темний
+            {0xFFA06A3C, 0xFFC48E5C, 0xFF70482A}, {0xFFDADADA, 0xFFFFFFFF, 0xFFA6A6A6}, {0xFF5DE6E0, 0xFFBDFFFB, 0xFF2FAEA8}};
+    private static final String[][] ARMOR_SHAPE = {
+            { // шолом
+                    "................", "................", "....hhhhhhhh....", "...hhhhhhhhhh...", "..hhhhhhhhhhhh..", "..hhhhhhhhhhhh..", "..hhhhhhhhhhhh..", "..hhh......hhh..", "..hhh......hhh..", "..dd........dd.."},
+            { // нагрудник
+                    "................", "..hhh......hhh..", "..hhhh....hhhh..", "..hhhhhhhhhhhh..", "..hhhhhhhhhhhh..", "..hh.hhhhhh.hh..", "..hh.hhhhhh.hh..", "....hhhhhhhh....", "....hhhhhhhh....", "....hhhhhhhh....", "....dddddddd...."},
+            { // поножі
+                    "................", "....hhhhhhhh....", "....hhhhhhhh....", "....hhhhhhhh....", "....hhh..hhh....", "....hhh..hhh....", "....hhh..hhh....", "....hhh..hhh....", "....ddd..ddd...."},
+            { // черевики
+                    "................", "................", "................", "...hhh....hhh...", "...hhh....hhh...", "...hhh....hhh...", "..hhhh....hhhh..", "..dddd....dddd.."}};
+
+    /** Іконка броні: slot 0 шолом, 1 нагрудник, 2 поножі, 3 черевики; mat 0 шкіра, 1 залізо, 2 алмаз. */
+    public static int[] armor(int slot, int mat) {
+        int[] a = new int[256], m = ARMOR_MAT[mat];
+        String[] shape = ARMOR_SHAPE[slot];
+        int top = shape.length, y0 = (N - shape.length) / 2;
+        for (int r = 0; r < shape.length; r++) {
+            String row = shape[r];
+            int first = row.indexOf('h') >= 0 ? row.indexOf('h') : row.indexOf('d');
+            for (int x = 0; x < row.length(); x++) {
+                char c = row.charAt(x);
+                if (c == '.') continue;
+                int col = c == 'd' ? m[2] : (r <= 2 || x == first ? m[1] : (x > first + 8 || (c == 'h' && r >= shape.length - 3) ? m[2] : m[0]));
+                if (c == 'h' && r > 2 && x != first && col == m[1]) col = m[0];
+                px(a, x, r + Math.max(0, y0 - 1), col);
+            }
+        }
+        return outlined(a);
+    }
 }

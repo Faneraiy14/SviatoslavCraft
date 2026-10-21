@@ -139,11 +139,21 @@ final class InventoryScreen {
     private static final class CraftTop implements Top {
         private final CraftMenu m;
         CraftTop(CraftMenu m) { this.m = m; }
-        public float height() { return m.n * (SIZE + GAP); }
+        public float height() { return Math.max(m.n * (SIZE + GAP), m.armorBase >= 0 ? 4 * 52 : 0); }
         public void onClose() { m.refresh(); }
         public int draw(InventoryScreen s, Gui g, float x0, float top) {
             int n = m.n, hovered = -1;
-            float gx = x0 + 3 * (SIZE + GAP), gy = top, rx = gx + n * (SIZE + GAP) + 80, ry = gy + (height() - GAP - SIZE) / 2f;
+            float gx = x0 + 3 * (SIZE + GAP), gy = top, rx = gx + n * (SIZE + GAP) + 80, ry = gy + (m.n * (SIZE + GAP) - GAP - SIZE) / 2f;
+            if (m.armorBase >= 0) { // чотири слоти броні ліворуч (шолом, нагрудник, поножі, черевики)
+                for (int k = 0; k < 4; k++) {
+                    float ax = x0 + 20, ay = top + k * 52;
+                    boolean hov = g.over(ax, ay, 46, 46);
+                    if (hov) hovered = m.armorBase + k;
+                    s.slotBox(ax, ay, 46, false, hov);
+                    if (m.get(m.armorBase + k) == null) Gui.text(new String[]{"Ш", "Н", "П", "Ч"}[k], ax + 15, ay + 14, 2.4f, 0.35f, 0.35f, 0.38f);
+                    s.drawStack(m.get(m.armorBase + k), ax, ay, 46);
+                }
+            }
             for (int k = 0; k < n * n; k++) {
                 float x = gx + (k % n) * (SIZE + GAP), y = gy + (k / n) * (SIZE + GAP);
                 boolean hov = g.over(x, y, SIZE, SIZE);

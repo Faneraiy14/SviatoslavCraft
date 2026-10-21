@@ -145,6 +145,27 @@ public final class VanillaContent implements VoxelinMod {
         r.recipe("workbench", RecipeSettings.shaped("PP", "PP").key('P', "#planks").result("workbench", 1));
         r.recipe("stone_bricks", RecipeSettings.shaped("SS", "SS").key('S', "stone").result("stone_bricks", 4));
         r.recipe("lamp", RecipeSettings.shaped(".G.", "GCG", ".G.").key('G', "glass").key('C', "coal").result("lamp", 2));
+        // --- броня: шкіра, залізо, алмаз (очки захисту: сума комплекту 20 = -80% шкоди; рівень матеріалу 4 - алмаз, потрібен для Енду)
+        String[] aMat = {"leather", "iron", "diamond"}, aMatTitle = {"Шкіряний", "Залізний", "Алмазний"}, aMatTitleF = {"Шкіряні", "Залізні", "Алмазні"};
+        int[][] aPts = {{1, 3, 2, 1}, {2, 6, 5, 2}, {3, 8, 6, 3}};
+        int[][] aDur = {{55, 80, 75, 65}, {165, 240, 225, 195}, {363, 528, 495, 429}};
+        int[] aTier = {1, 3, 4}, aCol = {0xA06A3C, 0xD8D8D8, 0x5DE6E0};
+        String[] aKind = {"helmet", "chestplate", "leggings", "boots"}, aTitle = {"шолом", "нагрудник", "поножі", "черевики"};
+        String[] aHead = {"leather", "iron_ingot", "diamond"};
+        ArmorSlot[] aSlots = ArmorSlot.values();
+        for (int m = 0; m < 3; m++) for (int k = 0; k < 4; k++) {
+            String nm = aMat[m] + "_" + aKind[k];
+            tex(nm, ItemTextureGen.armor(k, m));
+            String title = (k == 2 ? aMatTitleF[m] : aMatTitle[m]) + " " + aTitle[k];
+            r.item(nm, new ItemSettings().armor(aSlots[k], aPts[m][k], aTier[m]).durability(aDur[m][k]).color(aCol[m]).texture(nm).title(title));
+        }
+        for (int m = 0; m < 3; m++) {
+            r.recipe(aMat[m] + "_helmet", RecipeSettings.shaped("MMM", "M.M").key('M', aHead[m]).result(aMat[m] + "_helmet", 1));
+            r.recipe(aMat[m] + "_chestplate", RecipeSettings.shaped("M.M", "MMM", "MMM").key('M', aHead[m]).result(aMat[m] + "_chestplate", 1));
+            r.recipe(aMat[m] + "_leggings", RecipeSettings.shaped("MMM", "M.M", "M.M").key('M', aHead[m]).result(aMat[m] + "_leggings", 1));
+            r.recipe(aMat[m] + "_boots", RecipeSettings.shaped("M.M", "M.M").key('M', aHead[m]).result(aMat[m] + "_boots", 1));
+        }
+
         r.recipe("chest", RecipeSettings.shaped("PPP", "P.P", "PPP").key('P', "#planks").result("chest", 1));
         r.loot("ruins", new LootSettings().rolls(1, 3).entry("stick", 2, 6, 10).entry("coal", 1, 4, 8).entry("apple", 1, 2, 6).entry("cobblestone", 3, 8, 8)
                 .entry("raw_iron", 1, 3, 5).entry("leather", 1, 2, 4).entry("string", 1, 3, 4).entry("iron_ingot", 1, 2, 2));
@@ -231,7 +252,7 @@ public final class VanillaContent implements VoxelinMod {
                     .trade("apple", 8, "gold_ingot", 1).trade("raw_beef", 6, "gold_ingot", 1).trade("raw_chicken", 6, "gold_ingot", 1)
                     .trade("gold_ingot", 1, "steak", 3).trade("gold_ingot", 1, "cooked_chicken", 3);
             if (i == 1) v.greeting("Залізо любить терпіння. Золото любить мене.", "Принеси злитки - викую щось путнє.", "Піч - перший друг мандрівника.")
-                    .trade("iron_ingot", 4, "gold_ingot", 1).trade("gold_ingot", 3, "iron_pickaxe", 1).trade("gold_ingot", 3, "iron_sword", 1).trade("gold_ingot", 1, "coal", 8);
+                    .trade("iron_ingot", 4, "gold_ingot", 1).trade("gold_ingot", 2, "iron_helmet", 1).trade("gold_ingot", 2, "iron_boots", 1).trade("gold_ingot", 3, "iron_pickaxe", 1).trade("gold_ingot", 3, "iron_sword", 1).trade("gold_ingot", 1, "coal", 8);
             if (i == 2) v.greeting("Тут колись було тихо... Кажуть, під лімінітом земля тонка, як папір.", "Не ходи ночами в печери без світла. Темрява тут - не просто відсутність світла.", "Мандрівники приносять дивні вісті про Шов. Я лише старий і не вірю в казки.", "Є місця, де тиша гучніша за грім. Обминай мовчазні пустища.");
             r.mob(vName[i], v);
         }
@@ -368,6 +389,12 @@ public final class VanillaContent implements VoxelinMod {
             if (!k.world().teleport(k.source(), x, (int) y, z)) throw new Commands.CommandException("Не вдалось перенести");
             k.reply("Перенесено в " + x + " " + y + " " + z);
         });
+        c.register("wear", "", 2, k -> {
+            ItemHolder h = k.world().items(k.source());
+            if (!(h instanceof voxelin.core.Inventory) || !(k.world() instanceof voxelin.core.World)) throw new Commands.CommandException("У цього джерела нема інвентаря");
+            if (!((voxelin.core.Inventory) h).equipSelected(((voxelin.core.World) k.world()).itemTypes)) throw new Commands.CommandException("У руці нема броні");
+            k.reply("Броню надягнуто");
+        });
         c.register("clear", "", 2, k -> {
             ItemHolder h = k.world().items(k.source());
             if (h == null) throw new Commands.CommandException("У цього джерела нема інвентаря");
@@ -382,7 +409,7 @@ public final class VanillaContent implements VoxelinMod {
             if (now && !was && h != null) for (String s : STARTER) h.give(s, 64);
             k.reply("Режим гри: " + k.world().gameMode());
         });
-        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /summon, /killall, /locate, /tp, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
+        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /summon, /killall, /locate, /tp, /wear, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
     }
 
     /** Назва блока з аргументу команди: "stone" = "voxelin:stone". */

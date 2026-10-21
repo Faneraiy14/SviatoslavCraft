@@ -29,7 +29,7 @@ public class VoxelinTradeTest {
             check(!t.greetings.isEmpty(), "репліки " + v);
         }
         MobType f = g.mobTypes.find("villager_farmer"), s = g.mobTypes.find("villager_smith"), e = g.mobTypes.find("villager_elder");
-        check(Trading.offers(f, g.items).size() == 5 && Trading.offers(s, g.items).size() == 4 && Trading.offers(e, g.items).isEmpty(), "угоди: " + Trading.offers(f, g.items).size() + "/" + Trading.offers(s, g.items).size());
+        check(Trading.offers(f, g.items).size() == 5 && Trading.offers(s, g.items).size() == 6 && Trading.offers(e, g.items).isEmpty(), "угоди: " + Trading.offers(f, g.items).size() + "/" + Trading.offers(s, g.items).size());
         for (MobType t : g.mobTypes.all()) for (MobSettings.Trade tt : t.trades) check(g.items.get(tt.in) != null && g.items.get(tt.out) != null, "предмети угоди існують: " + t.name);
         check(!g.mobTypes.find("zombie").talkable() && !g.mobTypes.find("cow").talkable(), "звичайні істоти не говорять");
         check(tr("a", 0, "b", 999).inCount == 1 && tr("a", 999, "b", -3).inCount == 64 && tr("a", 1, "b", -3).outCount == 1, "межі угоди");

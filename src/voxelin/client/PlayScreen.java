@@ -72,7 +72,14 @@ final class PlayScreen {
             public Pos body() { return bodyPos(); }
             public boolean alive() { return !vt.dead(); }
             public boolean creative() { return world.creative(); }
-            public void hurt(double damage, double kx, double kz) { vt.hurt(damage, false); player.knock(kx * 6, 4, kz * 6); }
+            public void hurt(double damage, double kx, double kz) {
+                int pts = inv.armorPoints(world.itemTypes);
+                double reduced = damage * (1.0 - Math.min(0.8, pts * 0.04)); // кожне очко броні - 4% менше шкоди, не більше 80%
+                double before = vt.health();
+                vt.hurt(reduced, false);
+                if (vt.health() < before && !world.creative()) inv.wearArmor(world.itemTypes, damage, new java.util.Random());
+                player.knock(kx * 6, 4, kz * 6);
+            }
             public void teleport(long x, int y, long z) { player.teleport(Pos.ofBlock(x, y + PlayerEntity.EYE + 0.02, z)); }
         };
         world.setPlayerTarget(playerTarget);
@@ -326,6 +333,7 @@ final class PlayScreen {
         Inventory.Stack st = inv.selectedStack();
         ItemType t = st == null ? null : world.itemTypes.get(st.item);
         if (t == null) return;
+        if (t.armorSlot != null) { inv.equipSelected(world.itemTypes); return; } // ПКМ з бронею в руці - надягти
         if (t.food > 0) {
             if (vt.hunger() < Vitals.MAX && !vt.dead()) { vt.feed(t.food); if (!world.creative()) inv.takeSelected(); }
         } else if (hit != null && t.placesBlock != null && !player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
@@ -587,6 +595,7 @@ final class PlayScreen {
 
     private static final String[] HEART = {".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."};
     private static final String[] FOOD = {"...XXX.", "..XXXXX", "..XXXXX", ".XXXXX.", "XXXXX..", "XXX....", "XX....."};
+    private static final String[] SHIELD = {"XXXXXXX", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."};
     private static final String[] BUBBLE = {".XXX.", "X...X", "X...X", "X...X", ".XXX."};
 
     private static void icon(String[] pat, float x, float y, float px, int full, float r, float g, float b) { // full: 0 порожня, 1 половина, 2 повна
@@ -605,6 +614,8 @@ final class PlayScreen {
         float wob = low ? (float) Math.sin(System.currentTimeMillis() / 90.0) * 1.5f : 0;
         for (int i = 0; i < 10; i++) icon(HEART, x0 + i * step, y + (low && i % 2 == 0 ? wob : 0), px, hp >= 2 * i + 2 ? 2 : (hp == 2 * i + 1 ? 1 : 0), 0.9f, 0.12f, 0.15f);
         for (int i = 0; i < 10; i++) icon(FOOD, x0 + total - (i + 1) * step + 2, y, px, food >= 2 * i + 2 ? 2 : (food == 2 * i + 1 ? 1 : 0), 0.78f, 0.5f, 0.2f);
+        int apts = inv.armorPoints(world.itemTypes);
+        if (apts > 0) { int sh = (apts + 1) / 2; for (int i = 0; i < 10; i++) icon(SHIELD, x0 + i * step, y - 24, px, sh >= i + 1 ? (apts % 2 == 1 && sh == i + 1 ? 1 : 2) : 0, 0.7f, 0.8f, 0.95f); }
         if (vt.air() < Vitals.MAX_AIR) {
             int bubbles = (int) Math.ceil(Math.max(0, vt.air()) / Vitals.MAX_AIR * 10);
             for (int i = 0; i < bubbles; i++) icon(BUBBLE, x0 + total - (i + 1) * step + 2, y - 26, px, 2, 0.45f, 0.7f, 1f);

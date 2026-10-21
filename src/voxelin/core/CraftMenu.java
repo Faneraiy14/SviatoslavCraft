@@ -4,6 +4,9 @@ package voxelin.core;
 public final class CraftMenu extends Menu {
     public static final int RESULT = 36, GRID = 37;
     public final int n;
+    /** Індекс першого слота броні (є лише в інвентарі гравця, n == 2); -1 - броні нема. */
+    public final int armorBase;
+    private final Inventory inv;
     private final Inventory.Stack[] grid;
     private final RecipeRegistry recipes;
     private Inventory.Stack result;
@@ -11,7 +14,8 @@ public final class CraftMenu extends Menu {
 
     public CraftMenu(ItemRegistry items, RecipeRegistry recipes, Inventory inv, int n) {
         super(items);
-        this.n = n; this.recipes = recipes; grid = new Inventory.Stack[n * n];
+        this.n = n; this.recipes = recipes; this.inv = inv; grid = new Inventory.Stack[n * n];
+        armorBase = n == 2 ? GRID + n * n : -1;
         addInventory(inv);
         slots.add(new Slot() {
             public Inventory.Stack get() { return result; }
@@ -27,6 +31,23 @@ public final class CraftMenu extends Menu {
                 public void set(Inventory.Stack s) { grid[idx] = s == null || s.count <= 0 ? null : s; }
             });
         }
+        if (armorBase >= 0) for (int k = 0; k < 4; k++) {
+            final int slot = k;
+            slots.add(new Slot() {
+                public Inventory.Stack get() { return inv.armor(slot); }
+                public void set(Inventory.Stack s) { inv.setArmor(slot, s); }
+                public boolean canPlace(Inventory.Stack s) { ItemType t = items == null ? null : items.get(s.item); return t != null && t.armorSlot != null && t.armorSlot.ordinal() == slot && s.count == 1; }
+            });
+        }
+    }
+
+    @Override protected int[] shiftTarget(int i, Inventory.Stack st) {
+        if (armorBase >= 0 && i >= armorBase) return new int[]{0, Inventory.SIZE - 1};
+        if (armorBase >= 0 && i < Inventory.SIZE && st != null) {
+            ItemType t = items == null ? null : items.get(st.item);
+            if (t != null && t.armorSlot != null && inv.armor(t.armorSlot.ordinal()) == null) return new int[]{armorBase + t.armorSlot.ordinal(), armorBase + t.armorSlot.ordinal()};
+        }
+        return super.shiftTarget(i, st);
     }
 
     @Override protected int[] shiftTarget(int i) {
@@ -53,6 +74,13 @@ public final class CraftMenu extends Menu {
     }
 
     @Override public void doubleClick(int i) { super.doubleClick(i); refresh(); }
+
+    /** Закриття вікна повертає лише вміст сітки; броня лишається надягнутою. */
+    @Override public java.util.List<Inventory.Stack> drainExtra() {
+        java.util.List<Inventory.Stack> out = new java.util.ArrayList<>();
+        for (int k = 0; k < grid.length; k++) if (grid[k] != null) { out.add(grid[k]); grid[k] = null; }
+        return out;
+    }
 
     /** Поточний результат (null - нема). */
     public Inventory.Stack result() { return result; }

@@ -22,6 +22,8 @@ public final class Mob {
     public Pos home;
     /** Створена структурою (житель, тварини загону): не зникає від відстані. */
     public boolean keep;
+    /** Лютує (напарника-боса вбито): швидше й б'є сильніше. */
+    public boolean enraged;
     public int talkTicks;
     public int age, hurtTicks, invuln, deathTicks, attackCooldown, fleeTicks, wanderTicks;
     /** Стан польоту дракона: 0 кружляє, 1 пікірує, 2 відлітає. */
@@ -125,11 +127,14 @@ public final class Mob {
     }
 
     /** Політ дракона: кружляє над домом на висоті +22, помітивши гравця - пікірує, вдаривши - відлітає. Колізій немає. */
+    /** Зсув кола польоту (щоб двоє босів не летіли одне в одному). */
+    public void orbitOffset(double a) { orbitAngle = a; }
+
     private void flyTick(World w, PlayerTarget target, Random rng) {
         if (home == null) home = pos.copy();
         double hx = home.relX(pos.cx), hz = home.relZ(pos.cz);
         double cx = pos.x, cy = pos.y, cz = pos.z;
-        double speed = type.speed;
+        double speed = type.speed * (enraged ? 1.4 : 1);
         double tx, ty, tz;
         boolean hunt = target != null && target.alive() && !target.creative();
         double dist = Double.MAX_VALUE, tbx = 0, tby = 0, tbz = 0;
@@ -152,14 +157,14 @@ public final class Mob {
                 if (dist <= type.reach + type.width / 2 && attackCooldown == 0 && type.attackDamage > 0) {
                     attackCooldown = type.cooldownTicks;
                     double dx = tbx - cx, dz = tbz - cz, l = Math.hypot(dx, dz);
-                    target.hurt(type.attackDamage, l > 1e-6 ? dx / l : 0, l > 1e-6 ? dz / l : 1);
+                    target.hurt(type.attackDamage * (enraged ? 1.5 : 1), l > 1e-6 ? dx / l : 0, l > 1e-6 ? dz / l : 1);
                     flyState = 2; flyTimer = 0;
                 }
                 if (flyTimer > 200) { flyState = 2; flyTimer = 0; }
             }
         } else {
             tx = orbX; ty = orbY + 6; tz = orbZ;
-            if (flyTimer > 60) { flyState = 0; diveCooldown = 80; }
+            if (flyTimer > 60) { flyState = 0; diveCooldown = enraged ? 40 : 80; }
         }
         double dx = tx - cx, dy = ty - cy, dz = tz - cz, l = Math.sqrt(dx * dx + dy * dy + dz * dz);
         double wx = 0, wy = 0, wz = 0;

@@ -268,7 +268,51 @@ public final class World implements WorldAccess {
     }
 
     /** Наповнити Енд при вході: дракон (якщо ще живий) або Сторож (якщо дракона вбито). */
-    public void populateEnd() { if (!spawnDragonIfNeeded()) spawnKeeperIfNeeded(); }
+    public void populateEnd() { if (!spawnDragonIfNeeded()) spawnKeeperIfNeeded(); spawnRitualBossesIfNeeded(); }
+
+    public static final String WEAVER = "voxelin:seam_weaver", UNRAVELER = "voxelin:seam_unraveler";
+
+    /** Ритуал (стадія 1): Ткач і Розплітач над островом - ті, хто ще не впав і кого ще нема. Повертає, скільки створено. */
+    public int spawnRitualBossesIfNeeded() {
+        if (info.type != WorldInfo.Type.END || info.ritualStage != 1) return 0;
+        int n = 0;
+        String[] ids = {WEAVER, UNRAVELER};
+        for (int k = 0; k < 2; k++) {
+            if ((info.ritualKills & (1 << k)) != 0) continue;
+            MobType t = mobTypes.get(ids[k]);
+            if (t == null) continue;
+            boolean present = false;
+            for (Mob m : mobs) if (m.type == t && !m.dying) present = true;
+            if (present) continue;
+            Mob b = spawnMob(t, Pos.ofBlock(k == 0 ? -20 : 20, voxelin.core.gen.EndGenerator.TOP + 20, 0));
+            if (b == null) continue;
+            b.home = Pos.ofBlock(0, voxelin.core.gen.EndGenerator.TOP, 0);
+            b.keep = true;
+            b.orbitOffset(k * Math.PI);
+            n++;
+        }
+        return n;
+    }
+
+    /** Смерть боса Ритуалу: напарник лютує; обидва впали - Ритуал звершено. */
+    private void ritualBossDied(Mob dead) {
+        int bit = dead.type.name.equals(WEAVER) ? 1 : 2;
+        info.ritualKills |= bit;
+        if (info.ritualKills == 3) {
+            if (info.ritualStage == 1) {
+                info.ritualStage = 2;
+                unlockRecord("voxelin:ritual_done");
+                Pos at = dead.home != null ? new Pos(dead.home.cx, dead.home.cz, dead.home.x, dead.home.y + 2, dead.home.z) : dead.pos.copy();
+                spawnItem(at, "voxelin:seam_heart", 1, 0, true);
+                if (target != null) target.notify("Ритуал звершено. Шов запечатано.");
+            }
+            return;
+        }
+        for (Mob m : mobs) if (!m.dying && m != dead && (m.type.name.equals(WEAVER) || m.type.name.equals(UNRAVELER))) {
+            m.enraged = true;
+            if (target != null) target.notify(m.type.title + " лютує!");
+        }
+    }
 
     /** Дракон Краю: створити над островом, якщо ще не вбитий і його немає. true - створено. */
     public boolean spawnDragonIfNeeded() {
@@ -309,6 +353,7 @@ public final class World implements WorldAccess {
         if (m.lootDropped) return;
         m.lootDropped = true;
         if (m.type.boss && m.type.name.equals("voxelin:ender_dragon")) { info.dragonDead = true; unlockRecord("voxelin:dragon"); keeperPending = true; } // смерть дракона записується у світ (не відроджується)
+        if (m.type.name.equals(WEAVER) || m.type.name.equals(UNRAVELER)) ritualBossDied(m);
         for (voxelin.api.BlockSettings.Drop d : m.type.drops) {
             if (d.chance < 1f && mobRng.nextFloat() >= d.chance) continue;
             int n = d.min + (d.max > d.min ? mobRng.nextInt(d.max - d.min + 1) : 0);

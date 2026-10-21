@@ -431,4 +431,26 @@ public final class ItemTextureGen {
         px(a, 6, 8, 0xFFFFFFFF);
         return outlined(a);
     }
+
+    /** Якір Шву: фіолетовий якір із сяйвом. */
+    public static int[] anchor() {
+        int[] a = new int[256]; int c = 0xFF7A4AD0, l = 0xFFC8A0FF;
+        for (int y = 2; y <= 12; y++) px(a, 7, y, c);
+        for (int y = 2; y <= 12; y++) px(a, 8, y, l);
+        for (int x = 4; x <= 11; x++) px(a, x, 5, c);
+        for (int x = 3; x <= 12; x++) { int y = 12 - (int) Math.round(Math.abs(x - 7.5) * 0.6); px(a, x, y, c); px(a, x, y + 1, l); }
+        px(a, 7, 1, l); px(a, 8, 1, l);
+        return outlined(a);
+    }
+
+    /** Серце Шву: сяюче рожево-фіолетове серце. */
+    public static int[] heart() {
+        int[] a = new int[256];
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            double nx = (x - 7.5) / 6.5, ny = (y - 7) / 6.5;
+            double v = Math.pow(nx * nx + ny * ny - 0.6, 3) - nx * nx * Math.pow(-ny, 3) * 1.4;
+            if (v <= 0) a[x + y * N] = hash(x, y, 97) % 5 == 0 ? 0xFFFFF0FF : (y < 6 ? 0xFFF0C0FF : 0xFFC060E0);
+        }
+        return outlined(a);
+    }
 }

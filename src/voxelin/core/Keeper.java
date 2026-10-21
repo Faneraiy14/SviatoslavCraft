@@ -56,6 +56,19 @@ public final class Keeper {
                 i.eggChoice = WorldInfo.EggChoice.INFECTION;
                 w.unlockRecord("voxelin:keeper"); w.unlockRecord("voxelin:choice_infection");
                 return "Ти обрав Зараження. Забери яйце.";
+            case "give_anchors":
+                if (i.eggChoice != WorldInfo.EggChoice.RITUAL || i.ritualStage != 0 || inv == null || Trading.count(inv, w.itemTypes, ANCHOR) < 3) return null;
+                int left = 3;
+                for (int k = 0; k < Inventory.SIZE && left > 0; k++) {
+                    Inventory.Stack s = inv.get(k);
+                    if (s == null || !s.item.equals(ANCHOR)) continue;
+                    int m = Math.min(left, s.count); s.count -= m; left -= m;
+                    if (s.count <= 0) inv.set(k, null);
+                }
+                i.ritualStage = 1;
+                w.unlockRecord("voxelin:ritual_twins");
+                w.spawnRitualBossesIfNeeded();
+                return "Якорі прийнято. Край розступається: Ткач і Розплітач прокинулись.";
             default:
                 return null;
         }

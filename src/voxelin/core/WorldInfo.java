@@ -46,6 +46,8 @@ public final class WorldInfo {
     public EggChoice eggChoice = EggChoice.NONE;
     /** Ритуал: 0 не розпочато, 1 боси в Енді, 2 виконано. */
     public int ritualStage;
+    /** Ритуал: хто з босів уже впав (1 - Ткач, 2 - Розплітач). */
+    public int ritualKills;
     /** Зараження (лише звичайний світ): стан, ядро, час початку. */
     public enum InfState { NONE, ACTIVE, CURED, BURNED, TAMED }
     public InfState infState = InfState.NONE;
@@ -105,6 +107,7 @@ public final class WorldInfo {
             catch (RuntimeException e) { w.infState = InfState.NONE; }
             if (w.infY < 0 || w.infY >= Chunk.HEIGHT) w.infState = InfState.NONE;
         }
+        try { w.ritualKills = Math.max(0, Math.min(3, Integer.parseInt(p.getProperty("ritualKills", "0").trim()))); } catch (NumberFormatException e) { w.ritualKills = 0; }
         try { w.ritualStage = Math.max(0, Math.min(2, Integer.parseInt(p.getProperty("ritualStage", "0").trim()))); } catch (NumberFormatException e) { w.ritualStage = 0; }
         try {
             w.returnX = Long.parseLong(p.getProperty("returnX").trim()); w.returnY = Integer.parseInt(p.getProperty("returnY").trim()); w.returnZ = Long.parseLong(p.getProperty("returnZ").trim());
@@ -136,6 +139,7 @@ public final class WorldInfo {
         if (!records.isEmpty()) p.setProperty("records", String.join(",", records));
         if (eggChoice != EggChoice.NONE) p.setProperty("eggChoice", eggChoice.name());
         if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); }
+        if (ritualKills != 0) p.setProperty("ritualKills", String.valueOf(ritualKills));
         if (ritualStage != 0) p.setProperty("ritualStage", String.valueOf(ritualStage));
         if (hasReturn) { p.setProperty("returnX", String.valueOf(returnX)); p.setProperty("returnY", String.valueOf(returnY)); p.setProperty("returnZ", String.valueOf(returnZ)); }
         p.setProperty("time", String.valueOf(time));

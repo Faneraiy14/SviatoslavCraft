@@ -587,12 +587,13 @@ final class PlayScreen {
             float r = ph == Infection.Phase.QUIET ? 0.75f : 1f, gg = ph == Infection.Phase.CRISIS ? 0.3f : 0.6f;
             Gui.text(t, Gui.W - 300, 12, 2.2f, r, gg, 1f);
         }
-        for (Mob boss : world.mobs()) if (boss.type.boss && boss.alive()) { // смуга боса вгорі екрана
-            float w = 520, x = (Gui.W - w) / 2f;
-            Gui.text(boss.type.title, x, 8, 2.4f, 0.95f, 0.8f, 1f);
-            Gui.rect(x - 2, 34, w + 4, 16, 0, 0, 0, 0.7f);
-            Gui.rect(x, 36, (float) (w * Math.max(0, boss.health / boss.type.health)), 12, 0.7f, 0.15f, 0.8f, 1f);
-            break;
+        int bars = 0;
+        for (Mob boss : world.mobs()) if (boss.type.boss && boss.alive() && bars < 2) { // смуги босів вгорі екрана (до двох: Ткач і Розплітач)
+            float w = 520, x = (Gui.W - w) / 2f, oy = bars * 52;
+            Gui.text(boss.type.title + (boss.enraged ? "  (лютує)" : ""), x, 8 + oy, 2.4f, 0.95f, boss.enraged ? 0.45f : 0.8f, 1f);
+            Gui.rect(x - 2, 34 + oy, w + 4, 16, 0, 0, 0, 0.7f);
+            Gui.rect(x, 36 + oy, (float) (w * Math.max(0, boss.health / boss.type.health)), 12, boss.enraged ? 0.9f : 0.7f, 0.15f, boss.enraged ? 0.3f : 0.8f, 1f);
+            bars++;
         }
         if (aimedMob != null && !invOpen && !chatOpen) {
             String t = aimedMob.type.title + "  " + Math.max(0, (int) Math.ceil(aimedMob.health)) + "/" + (int) aimedMob.type.health;

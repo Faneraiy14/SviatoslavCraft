@@ -62,6 +62,7 @@ public final class VanillaContent implements VoxelinMod {
         tex("cactus_top", TextureGen.cactusTop());
         tex("dragon_egg", ItemTextureGen.dragonEgg());
         tex("seam_core", ItemTextureGen.seamCore()); tex("seam_growth", ItemTextureGen.seamGrowth()); tex("seam_scar", ItemTextureGen.seamScar());
+        tex("seam_anchor", ItemTextureGen.anchor()); tex("seam_heart", ItemTextureGen.heart());
         tex("seam_cure", ItemTextureGen.flask(0x50E0B0)); tex("seam_fire", ItemTextureGen.flask(0xFF6A20));
         tex("end_stone", ItemTextureGen.endStone()); tex("obsidian", ItemTextureGen.obsidian()); tex("end_frame_side", ItemTextureGen.frameSide());
         tex("end_frame_top", ItemTextureGen.frameTop(false)); tex("end_frame_eye_top", ItemTextureGen.frameTop(true)); tex("end_portal", ItemTextureGen.portal()); tex("end_eye", ItemTextureGen.eye());
@@ -182,6 +183,9 @@ public final class VanillaContent implements VoxelinMod {
 
         r.item("end_eye", new ItemSettings().color(0x2FD16A).texture("end_eye").title("Око Енду"));
         r.recipe("end_eye", RecipeSettings.shapeless("liminite_shard", "diamond", "gold_ingot").result("end_eye", 1));
+        r.item("seam_anchor", new ItemSettings().color(0x7A4AD0).texture("seam_anchor").title("Якір Шву"));
+        r.recipe("seam_anchor", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "obsidian", "diamond").result("seam_anchor", 1));
+        r.item("seam_heart", new ItemSettings().color(0xF0C0FF).texture("seam_heart").maxStack(1).title("Серце Шву"));
         r.item("seam_cure", new ItemSettings().color(0x50E0B0).texture("seam_cure").title("Зілля Шву"));
         r.item("seam_fire", new ItemSettings().color(0xFF6A20).texture("seam_fire").title("Вогонь Шву"));
         r.recipe("seam_cure", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "gold_ingot", "apple", "glass").result("seam_cure", 1));
@@ -282,6 +286,16 @@ public final class VanillaContent implements VoxelinMod {
                 .part(0, 0.7f, -3.55f, 1.2f, 0.35f, 1.1f, 0x180C26).part(-0.4f, 1.6f, -4.0f, 0.3f, 0.3f, 0.1f, 0xE040FF).part(0.4f, 1.6f, -4.0f, 0.3f, 0.3f, 0.1f, 0xE040FF)
                 .part(0, 0.9f, 2.4f, 0.9f, 0.7f, 2.2f, 0x1E1030).part(0, 0.8f, 4.2f, 0.5f, 0.45f, 1.8f, 0x180C26)
                 .wingPart(-3.4f, 1.3f, 0.2f, 4.6f, 0.14f, 2.6f, 0x2A1844, true).wingPart(3.4f, 1.3f, 0.2f, 4.6f, 0.14f, 2.6f, 0x2A1844, false));
+        r.mob("seam_weaver", new MobSettings().health(160).speed(13f).size(2.6f, 1.6f).behavior(MobSettings.Behavior.HOSTILE).attack(5, 2.8f, 2.0f).detect(80).persistent(true).flying(true).boss(true).title("Ткач")
+                .drops("diamond", 2, 4, 1f).drops("liminite_shard", 4, 8, 1f)
+                .part(0, 0.3f, 0, 1.4f, 1.0f, 2.4f, 0xC8C0E8).part(0, 0.8f, -1.7f, 1.0f, 0.9f, 1.0f, 0xE0D8FF).part(-0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0x40FFE0).part(0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0x40FFE0)
+                .part(0, 0.4f, 1.8f, 0.4f, 0.3f, 1.6f, 0xA8A0D0)
+                .wingPart(-2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0xE8E0FF, true).wingPart(2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0xE8E0FF, false));
+        r.mob("seam_unraveler", new MobSettings().health(160).speed(13f).size(2.6f, 1.6f).behavior(MobSettings.Behavior.HOSTILE).attack(5, 2.8f, 2.0f).detect(80).persistent(true).flying(true).boss(true).title("Розплітач")
+                .drops("diamond", 2, 4, 1f).drops("liminite_shard", 4, 8, 1f)
+                .part(0, 0.3f, 0, 1.4f, 1.0f, 2.4f, 0x5A1028).part(0, 0.8f, -1.7f, 1.0f, 0.9f, 1.0f, 0x701838).part(-0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0xFF6020).part(0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0xFF6020)
+                .part(0, 0.4f, 1.8f, 0.4f, 0.3f, 1.6f, 0x400A1C)
+                .wingPart(-2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0x8A1840, true).wingPart(2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0x8A1840, false));
         // --- журнал записів (відкриваються подіями гри; лор «Шов»)
         r.record("seam", "Шов", "Світи зшиті. Де шов тонкий - земля сивіє, а лімініт проступає крізь камінь.\nТак записав той, хто ходив тут до тебе.");
         r.record("elder", "Слова старійшини", "«Є місця, де тиша гучніша за грім.»\nСтарійшина не каже більше: його погляд завжди йде в бік мовчазних пустищ.");
@@ -293,6 +307,7 @@ public final class VanillaContent implements VoxelinMod {
         r.record("choice_infection", "Вибір: Зараження", "Ти вирішив забрати яйце. Постав його, де хочеш, - і почнеться відлік тридцяти днів.\nНебо темнітиме, звуки стихатимуть: це перше попередження.");
         r.record("infection_start", "Яйце пустило корені", "Ядро стоїть. Тиха пора - перші десять днів; активна - наступні десять; потім криза.\nПоки зараження активне, ядро не зламати.");
         r.record("infection_end", "Шов затягнувся", "Зараження зупинено. Земля пам'ятатиме: шрами лишаться, але росту більше нема.");
+        r.record("ritual_twins", "Ткач і Розплітач", "Двоє, що тримали Дракона на ланцюгу Шву. Один зшиває, другий розпускає.\nПоки обидва живі, вони стримують одне одного. Коли падає один, другий втрачає міру.");
         r.record("ritual_done", "Ритуал звершено", "Ткач і Розплітач упали. Шов запечатаний заново. Сторож мовчить - уперше задоволений.");
 
         // --- Сторож Шва: невразливий, стоїть біля яйця в Енді, говорить вікном вибору

@@ -24,7 +24,7 @@ public class VoxelinStoryTest {
     public static void main(String[] a) throws Exception {
         File root = Files.createTempDirectory("vx-story").toFile();
         g = new Game(new File(root, "saves"), null);
-        records(); keeper(); choice(); persistence();
+        records(); keeper(); choice(); persistence(); ritual(); ritualPersistence();
         System.out.println("VoxelinStoryTest: " + n + " перевірок OK");
     }
 
@@ -80,5 +80,59 @@ public class VoxelinStoryTest {
         World b = g.openDimension("k4", "end");
         check(b.info.eggChoice == WorldInfo.EggChoice.RITUAL && b.info.records.contains("voxelin:elder") && b.info.records.contains("voxelin:choice_ritual"), "вибір і записи збережені");
         b.close();
+    }
+
+    static Mob find(World w, String id) { for (Mob m : w.mobs()) if (m.type.name.equals(id) && !m.dying) return m; return null; }
+
+    static void ritual() throws Exception {
+        check(g.items.get(Keeper.ANCHOR) != null && g.items.get("voxelin:seam_heart") != null, "якір і серце існують");
+        World w = end("r1");
+        w.info.dragonDead = true;
+        Inventory inv = new Inventory(w.itemTypes);
+        check(Keeper.act(w, inv, "give_anchors") == null, "без вибору Ритуалу якорі не беруться");
+        Keeper.act(w, inv, "ritual");
+        inv.add(Keeper.ANCHOR, 2);
+        check(Keeper.act(w, inv, "give_anchors") == null && w.info.ritualStage == 0, "двох якорів замало");
+        check(w.spawnRitualBossesIfNeeded() == 0, "до віддачі якорів босів нема");
+        inv.add(Keeper.ANCHOR, 2);
+        check(Keeper.dialog(w, inv).choices().get(0).enabled(), "з 4 якорями кнопка активна");
+        check(Keeper.act(w, inv, "give_anchors") != null && w.info.ritualStage == 1, "якорі віддано");
+        check(Trading.count(inv, w.itemTypes, Keeper.ANCHOR) == 1, "забрано рівно 3");
+        Mob a = find(w, World.WEAVER), b = find(w, World.UNRAVELER);
+        check(a != null && b != null && a.type.boss && a.type.flying && b.keep, "Ткач і Розплітач прилетіли");
+        check(w.spawnRitualBossesIfNeeded() == 0, "удруге не створюються");
+        check(Keeper.act(w, inv, "give_anchors") == null, "удруге якорі не беруться");
+        check(w.info.records.contains("voxelin:ritual_twins"), "запис про двох");
+        // перший падає - другий лютує
+        w.hurtMob(a, 10_000, 0, 0, a.pos);
+        check(w.info.ritualKills == 1 && w.info.ritualStage == 1 && b.enraged && !a.enraged, "Розплітач лютує після смерті Ткача");
+        check(w.spawnRitualBossesIfNeeded() == 0, "вбитий не відроджується");
+        w.hurtMob(b, 10_000, 0, 0, b.pos);
+        check(w.info.ritualKills == 3 && w.info.ritualStage == 2 && w.info.records.contains("voxelin:ritual_done"), "Ритуал звершено");
+        boolean heart = false;
+        for (voxelin.core.entity.ItemEntity e : w.itemEntities()) if (e.item.equals("voxelin:seam_heart")) heart = true;
+        check(heart, "Серце Шву випало");
+        check(Keeper.dialog(w, inv).text().contains("звершено"), "Сторож дякує");
+        // лютий б'є сильніше
+        w.close();
+    }
+
+    static void ritualPersistence() throws Exception {
+        World w = end("r2");
+        w.info.dragonDead = true;
+        Inventory inv = new Inventory(w.itemTypes);
+        Keeper.act(w, inv, "ritual");
+        inv.add(Keeper.ANCHOR, 3);
+        Keeper.act(w, inv, "give_anchors");
+        Mob a = find(w, World.WEAVER);
+        w.hurtMob(a, 10_000, 0, 0, a.pos);
+        for (int k = 0; k < 40; k++) w.tick();
+        w.close();
+        World r = g.openDimension("r2", "end");
+        check(r.info.ritualStage == 1 && r.info.ritualKills == 1, "стан ритуалу збережено");
+        check(find(r, World.WEAVER) == null && find(r, World.UNRAVELER) != null, "живий бос збережений, вбитий - ні");
+        r.killAll(null);
+        check(r.spawnRitualBossesIfNeeded() == 1 && find(r, World.UNRAVELER) != null && find(r, World.WEAVER) == null, "зниклий живий бос повертається, вбитий - ні");
+        r.close();
     }
 }

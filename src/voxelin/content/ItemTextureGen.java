@@ -453,4 +453,50 @@ public final class ItemTextureGen {
         }
         return outlined(a);
     }
+
+    /** Пороговий камінь: блідо-сірий з холодними прожилками. */
+    public static int[] thresholdStone() {
+        int[] a = noise(0x8A8894, 10, 101);
+        for (int i = 0; i < 256; i++) { int h = hash(i & 15, i >> 4, 102) % 17; if (h == 0) a[i] = 0xFFB8B0D8; else if (h == 1) a[i] = 0xFF5E5C6A; }
+        return a;
+    }
+
+    /** Нитка Шву: волокна сіро-фіолетового кольору. */
+    public static int[] seamThread() {
+        int[] a = new int[256];
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            int band = (x + y / 3 + hash(0, y, 103) % 2) % 4;
+            a[x + y * N] = band == 0 ? 0xFFC8B8F0 : band == 1 ? 0xFF9A88C8 : band == 2 ? 0xFF7A6AA8 : 0xFF5A4A88;
+        }
+        return a;
+    }
+
+    /** Розрив: напівпрозорий сіро-фіолетовий вир. */
+    public static int[] rift() {
+        int[] a = new int[256];
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            int c = new int[]{0xFF9A70E0, 0xFFC8A8FF, 0xFF6A40B0, 0xFFE8D8FF, 0xFF4A2A80}[hash(x / 2, y, 104) % 5];
+            a[x + y * N] = (150 << 24) | (c & 0xFFFFFF);
+        }
+        return a;
+    }
+
+    /** Квітка Порогу: бліда світна квітка на прозорому тлі. */
+    public static int[] thresholdBloom() {
+        int[] a = new int[256];
+        for (int y = 9; y <= 15; y++) px(a, 7 + (y % 3 == 0 ? 1 : 0), y, 0xFF5A8A70);
+        px(a, 6, 12, 0xFF5A8A70); px(a, 5, 11, 0xFF6A9A80); px(a, 9, 13, 0xFF5A8A70); px(a, 10, 12, 0xFF6A9A80);
+        ellipse(a, 8, 6, 3.6, 3.6, (x, y, nx, ny) -> nx * nx + ny * ny < 0.2 ? 0xFFFFF8C0 : 0xFFD8E8FF);
+        px(a, 5, 4, 0xFFB8C8FF); px(a, 11, 8, 0xFFB8C8FF);
+        return a;
+    }
+
+    /** Ключ Порогу: сріблястий ключ з лімінітовим оком. */
+    public static int[] thresholdKey() {
+        int[] a = new int[256];
+        ellipse(a, 5, 5, 3.4, 3.4, (x, y, nx, ny) -> nx * nx + ny * ny < 0.25 ? 0xFF8F6BFF : 0xFFC8C8D8);
+        for (int k = 0; k < 8; k++) { px(a, 7 + k, 7 + k, 0xFFC8C8D8); px(a, 8 + k, 7 + k, 0xFF8A8A9A); }
+        px(a, 11, 13, 0xFFC8C8D8); px(a, 12, 12, 0xFFC8C8D8); px(a, 13, 15, 0xFFC8C8D8);
+        return outlined(a);
+    }
 }

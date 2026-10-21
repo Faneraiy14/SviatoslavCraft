@@ -62,6 +62,8 @@ public final class VanillaContent implements VoxelinMod {
         tex("cactus_top", TextureGen.cactusTop());
         tex("dragon_egg", ItemTextureGen.dragonEgg());
         tex("seam_core", ItemTextureGen.seamCore()); tex("seam_growth", ItemTextureGen.seamGrowth()); tex("seam_scar", ItemTextureGen.seamScar());
+        tex("threshold_stone", ItemTextureGen.thresholdStone()); tex("seam_thread", ItemTextureGen.seamThread()); tex("seam_rift", ItemTextureGen.rift());
+        tex("threshold_bloom", ItemTextureGen.thresholdBloom()); tex("threshold_key", ItemTextureGen.thresholdKey());
         tex("seam_anchor", ItemTextureGen.anchor()); tex("seam_heart", ItemTextureGen.heart());
         tex("seam_cure", ItemTextureGen.flask(0x50E0B0)); tex("seam_fire", ItemTextureGen.flask(0xFF6A20));
         tex("end_stone", ItemTextureGen.endStone()); tex("obsidian", ItemTextureGen.obsidian()); tex("end_frame_side", ItemTextureGen.frameSide());
@@ -120,6 +122,10 @@ public final class VanillaContent implements VoxelinMod {
         block("seam_core", new BlockSettings().texture("seam_core").color(0x3A1458).light(9).noItem().title("Ядро Шву").hardness(-1f));
         block("seam_growth", new BlockSettings().texture("seam_growth").color(0x4A3458).light(1).tool(ToolKind.SHOVEL).noDrops().title("Наріст Шву").hardness(1.2f));
         block("seam_scar", new BlockSettings().texture("seam_scar").color(0x2A2628).tool(ToolKind.PICKAXE).minTier(1).title("Шрам Шву").hardness(2.5f));
+        block("threshold_stone", new BlockSettings().texture("threshold_stone").color(0x8A8894).light(2).tool(ToolKind.PICKAXE).minTier(1).title("Пороговий камінь").hardness(2.5f));
+        block("seam_thread", new BlockSettings().texture("seam_thread").color(0x9A88C8).light(3).tool(ToolKind.AXE).title("Нитка Шву").hardness(1.5f));
+        block("threshold_bloom", new BlockSettings().texture("threshold_bloom").color(0xD8E8FF).solid(false).translucent(true).light(6).title("Квітка Порогу").hardness(0f));
+        block("seam_rift", new BlockSettings().texture("seam_rift").color(0x8A80B0).solid(false).translucent(true).light(8).noItem().interact("rift").title("Розрив Шву").hardness(-1f));
         block("end_portal", new BlockSettings().texture("end_portal").color(0x5A2BB0).solid(false).translucent(true).light(7).noItem().interact("portal").title("Портал").hardness(-1f));
         // --- предмети (не блоки): матеріали, їжа, інструменти
         tex("stick", ItemTextureGen.stick()); tex("coal", ItemTextureGen.coal()); tex("raw_iron", ItemTextureGen.rawOre(0xE0B49A)); tex("raw_copper", ItemTextureGen.rawOre(0xE0803F));
@@ -183,6 +189,8 @@ public final class VanillaContent implements VoxelinMod {
 
         r.item("end_eye", new ItemSettings().color(0x2FD16A).texture("end_eye").title("Око Енду"));
         r.recipe("end_eye", RecipeSettings.shapeless("liminite_shard", "diamond", "gold_ingot").result("end_eye", 1));
+        r.item("threshold_key", new ItemSettings().color(0xC8C8D8).texture("threshold_key").title("Ключ Порогу"));
+        r.recipe("threshold_key", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "liminite_shard", "liminite_shard", "end_eye").result("threshold_key", 1));
         r.item("seam_anchor", new ItemSettings().color(0x7A4AD0).texture("seam_anchor").title("Якір Шву"));
         r.recipe("seam_anchor", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "obsidian", "diamond").result("seam_anchor", 1));
         r.item("seam_heart", new ItemSettings().color(0xF0C0FF).texture("seam_heart").maxStack(1).title("Серце Шву"));
@@ -307,6 +315,7 @@ public final class VanillaContent implements VoxelinMod {
         r.record("choice_infection", "Вибір: Зараження", "Ти вирішив забрати яйце. Постав його, де хочеш, - і почнеться відлік тридцяти днів.\nНебо темнітиме, звуки стихатимуть: це перше попередження.");
         r.record("infection_start", "Яйце пустило корені", "Ядро стоїть. Тиха пора - перші десять днів; активна - наступні десять; потім криза.\nПоки зараження активне, ядро не зламати.");
         r.record("infection_end", "Шов затягнувся", "Зараження зупинено. Земля пам'ятатиме: шрами лишаться, але росту більше нема.");
+        r.record("between", "Міжсвіття", "Тут немає неба й немає землі - лише уламки. Трава, якої ніхто не садив; камінь Краю поруч із рудою зі звичайного світу.\nІ нитки. Хтось колись зшивав ці уламки докупи.");
         r.record("ritual_twins", "Ткач і Розплітач", "Двоє, що тримали Дракона на ланцюгу Шву. Один зшиває, другий розпускає.\nПоки обидва живі, вони стримують одне одного. Коли падає один, другий втрачає міру.");
         r.record("ritual_done", "Ритуал звершено", "Ткач і Розплітач упали. Шов запечатаний заново. Сторож мовчить - уперше задоволений.");
 

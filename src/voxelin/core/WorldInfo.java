@@ -12,7 +12,7 @@ import java.util.*;
 public final class WorldInfo {
     public static final String FILE = "voxelin.world";
     public static final int FORMAT = 2;
-    public enum Type { NORMAL, FLAT, END }
+    public enum Type { NORMAL, FLAT, END, BETWEEN }
     public enum Mode { SURVIVAL, CREATIVE }
     /** Вибір після смерті дракона. */
     public enum EggChoice { NONE, RITUAL, INFECTION }
@@ -54,6 +54,10 @@ public final class WorldInfo {
     public long infX, infZ, infStart; public int infY;
     /** Накопичені спроби росту зараження (виконуються, коли ділянка ядра завантажена). */
     public double infOwed;
+    /** Міжсвіття: стан зараження звичайного світу, з якого прийшов гравець (настрій виміру). */
+    public InfState overInf = InfState.NONE;
+    /** Відкриті розриви Шву: {x, y (нижній блок), z, час закриття}. */
+    public final java.util.List<long[]> rifts = new java.util.ArrayList<>();
     public long returnX, returnZ;
     public int returnY;
     public final List<String> palette = new ArrayList<>();
@@ -111,6 +115,12 @@ public final class WorldInfo {
             try { double o = Double.parseDouble(p.getProperty("infOwed", "0").trim()); w.infOwed = Double.isNaN(o) || o < 0 ? 0 : Math.min(Infection.OWED_CAP, o); } catch (NumberFormatException e) { w.infOwed = 0; }
         }
         try { w.ritualKills = Math.max(0, Math.min(3, Integer.parseInt(p.getProperty("ritualKills", "0").trim()))); } catch (NumberFormatException e) { w.ritualKills = 0; }
+        try { w.overInf = InfState.valueOf(p.getProperty("overInf", "NONE").trim()); } catch (IllegalArgumentException e) { w.overInf = InfState.NONE; }
+        for (String r : p.getProperty("rifts", "").split(";")) {
+            String[] q = r.trim().split(",");
+            if (q.length != 4 || w.rifts.size() >= 64) continue;
+            try { long ry = Long.parseLong(q[1]); if (ry >= 0 && ry < Chunk.HEIGHT) w.rifts.add(new long[]{Long.parseLong(q[0]), ry, Long.parseLong(q[2]), Long.parseLong(q[3])}); } catch (NumberFormatException e) { /* битий запис */ }
+        }
         try { w.ritualStage = Math.max(0, Math.min(2, Integer.parseInt(p.getProperty("ritualStage", "0").trim()))); } catch (NumberFormatException e) { w.ritualStage = 0; }
         try {
             w.returnX = Long.parseLong(p.getProperty("returnX").trim()); w.returnY = Integer.parseInt(p.getProperty("returnY").trim()); w.returnZ = Long.parseLong(p.getProperty("returnZ").trim());
@@ -143,6 +153,8 @@ public final class WorldInfo {
         if (eggChoice != EggChoice.NONE) p.setProperty("eggChoice", eggChoice.name());
         if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); p.setProperty("infOwed", String.valueOf(infOwed)); }
         if (ritualKills != 0) p.setProperty("ritualKills", String.valueOf(ritualKills));
+        if (overInf != InfState.NONE) p.setProperty("overInf", overInf.name());
+        if (!rifts.isEmpty()) { StringBuilder sb = new StringBuilder(); for (long[] r : rifts) { if (sb.length() > 0) sb.append(';'); sb.append(r[0]).append(',').append(r[1]).append(',').append(r[2]).append(',').append(r[3]); } p.setProperty("rifts", sb.toString()); }
         if (ritualStage != 0) p.setProperty("ritualStage", String.valueOf(ritualStage));
         if (hasReturn) { p.setProperty("returnX", String.valueOf(returnX)); p.setProperty("returnY", String.valueOf(returnY)); p.setProperty("returnZ", String.valueOf(returnZ)); }
         p.setProperty("time", String.valueOf(time));
@@ -170,6 +182,7 @@ public final class WorldInfo {
         if (o.eggChoice != EggChoice.NONE) eggChoice = o.eggChoice;
         ritualStage = Math.max(ritualStage, o.ritualStage);
         if (o.dragonDead && type == Type.END) dragonDead = true;
+        if (type == Type.BETWEEN && o.type != Type.END && o.type != Type.BETWEEN) overInf = o.infState;
     }
 
     public synchronized void setPlayer(Pos p, float yaw, float pitch) {

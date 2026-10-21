@@ -78,7 +78,7 @@ public final class World implements WorldAccess {
         loadMobs();
         infection = new Infection(this);
         loadMarks();
-        if (info.type == WorldInfo.Type.END) naturalSpawning = false;
+        if (info.type == WorldInfo.Type.END || info.type == WorldInfo.Type.BETWEEN) naturalSpawning = false;
         // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
         int threads = Integer.getInteger("voxelin.genThreads", Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)));
         genPool = Executors.newFixedThreadPool(threads, daemon("voxelin-gen"));
@@ -99,10 +99,10 @@ public final class World implements WorldAccess {
     public double dayPhase() { return DayCycle.phase(info.time, dayTicks()); }
     public long dayNumber() { return DayCycle.day(info.time, dayTicks()); }
     /** Яскравість неба 0.12..1 за часом доби; в Енді стала. */
-    public double skyLevel() { return info.type == WorldInfo.Type.END ? END_SKY : DayCycle.sky(dayPhase()); }
-    public static final double END_SKY = 0.35;
-    /** "overworld" або "end". */
-    public String dimension() { return info.type == WorldInfo.Type.END ? "end" : "overworld"; }
+    public double skyLevel() { return info.type == WorldInfo.Type.END ? END_SKY : info.type == WorldInfo.Type.BETWEEN ? BETWEEN_SKY : DayCycle.sky(dayPhase()); }
+    public static final double END_SKY = 0.35, BETWEEN_SKY = 0.6;
+    /** "overworld", "end" або "between". */
+    public String dimension() { return Dimensions.of(info.type); }
 
     private final Map<Source, Vitals> vitals = new IdentityHashMap<>();
     private Vitals mainVitals;
@@ -696,6 +696,7 @@ public final class World implements WorldAccess {
         tickBlockEntities();
         tickMobs();
         infection.tick(tick, target);
+        Rift.tick(this);
         budgets.clear();
         events.post(new TickEvent(this, tick));
         if (System.currentTimeMillis() - lastAutosave > 30_000) { lastAutosave = System.currentTimeMillis(); autosave(); }

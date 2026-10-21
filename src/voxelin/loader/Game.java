@@ -84,21 +84,24 @@ public final class Game {
 
     /** Відкрити вимір світу (поки що «end»): окрема тека <світ>/dimensions/<вимір>/ із власним WorldInfo; створюється при першому відкритті. */
     public World openDimension(String worldName, String dimension) throws IOException {
-        if (!dimension.equals("end")) throw new IllegalArgumentException("невідомий вимір: " + dimension);
+        WorldInfo.Type type = voxelin.core.Dimensions.type(dimension);
+        if (type == null) throw new IllegalArgumentException("невідомий вимір: " + dimension);
         File base = worldDir(worldName), d = new File(base, "dimensions/" + dimension);
         WorldInfo info;
         if (WorldInfo.exists(d)) info = WorldInfo.load(d);
         else {
             WorldInfo over = WorldInfo.load(base);
-            info = WorldInfo.create(d, worldName, over.seed, WorldInfo.Type.END);
+            info = WorldInfo.create(d, worldName, over.seed, type);
         }
         return openAt(d, info);
     }
 
     private World openAt(File d, WorldInfo info) throws IOException {
-        voxelin.core.gen.Generator gen = info.type == WorldInfo.Type.END
-                ? new voxelin.core.gen.EndGenerator(info.seed, blocks)
-                : new TerrainGenerator(info.seed, info.type, blocks, structures.templates());
+        voxelin.core.gen.Generator gen = switch (info.type) {
+            case END -> new voxelin.core.gen.EndGenerator(info.seed, blocks);
+            case BETWEEN -> new voxelin.core.gen.BetweenGenerator(info.seed, blocks);
+            default -> new TerrainGenerator(info.seed, info.type, blocks, structures.templates());
+        };
         return new World(d, info, blocks, items, recipes, mobTypes, loot, records, events, gen);
     }
 }

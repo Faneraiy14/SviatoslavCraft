@@ -88,6 +88,7 @@ final class PlayScreen {
         };
         world.setPlayerTarget(playerTarget);
         if (world.dimension().equals("end")) { world.populateEnd(); world.unlockRecord("voxelin:end_arrival"); }
+        if (world.dimension().equals(Dimensions.BETWEEN)) world.unlockRecord("voxelin:between");
         icons = new IconAtlas(v.textures, world);
         java.util.function.Consumer<Inventory.Stack> dropper = st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); };
         invScreen = InventoryScreen.craft("ІНВЕНТАР", new CraftMenu(world.itemTypes, v.game.recipes, inv, 2), inv, world, icons, dropper);
@@ -144,6 +145,13 @@ final class PlayScreen {
     private ItemType held() { Inventory.Stack st = inv.selectedStack(); return st == null ? null : world.itemTypes.get(st.item); }
 
     /** Місце появи над землею в колонці (bx,bz): перший вільний прохід на 2 блоки вгору від поверхні. */
+    /** Небо міжсвіття: сіро-фіолетове; темніше, поки у світі триває зараження, світліше після Ритуалу. */
+    private float[] betweenSky() {
+        if (world.info.overInf == WorldInfo.InfState.ACTIVE) return new float[]{0.20f, 0.17f, 0.25f};
+        if (world.info.ritualStage >= 2) return new float[]{0.62f, 0.60f, 0.70f};
+        return new float[]{0.42f, 0.40f, 0.48f};
+    }
+
     private Pos findSpawn(long bx, long bz) {
         int y = Math.max(1, world.surfaceY(bx, bz) + 1);
         while (y < Chunk.HEIGHT - 3 && (world.isSolid(bx, y, bz) || world.isSolid(bx, y + 1, bz))) y++;
@@ -173,9 +181,9 @@ final class PlayScreen {
         if (trade != null) trade.mob.talkTicks = 6; // житель слухає
         { // портал: ноги в блоці порталу -> перехід у інший вимір (після виходу з порталу замок знімається)
             BlockType feet = world.blocks.get(Math.max(0, world.blockId(player.pos.blockX(), (int) Math.floor(player.pos.y - PlayerEntity.EYE + 0.05), player.pos.blockZ())));
-            boolean inPortal = "portal".equals(feet.interact);
-            if (!inPortal) portalLock = false;
-            else if (!portalLock && !vt.dead() && !v.opts.freeze) { portalLock = true; v.requestTravel(world.dimension().equals("end") ? "overworld" : "end"); }
+            boolean inPortal = "portal".equals(feet.interact), inRift = "rift".equals(feet.interact);
+            if (!inPortal && !inRift) portalLock = false;
+            else if (!portalLock && !vt.dead() && !v.opts.freeze) { portalLock = true; v.requestTravel(inRift ? Dimensions.BETWEEN : Dimensions.portalTarget(world.dimension())); }
         }
         if (!vt.dead() && !v.opts.freeze) world.collectItems(bodyPos(), inv);
         if (vt.dead() && !deadHandled && !world.creative()) {
@@ -233,10 +241,10 @@ final class PlayScreen {
         }
         boolean under = world.isLiquid(cam.pos.blockX(), cam.pos.blockY(), cam.pos.blockZ());
         rend.underwater = under;
-        boolean endDim = world.dimension().equals("end");
-        double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : (endDim ? World.END_SKY : DayCycle.sky(phase));
+        boolean endDim = world.dimension().equals("end"), betweenDim = world.dimension().equals(Dimensions.BETWEEN);
+        double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : (endDim || betweenDim ? world.skyLevel() : DayCycle.sky(phase));
         rend.skyBrightness = (float) sky;
-        float[] horizon = endDim ? new float[]{0.10f, 0.05f, 0.16f} : DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
+        float[] horizon = endDim ? new float[]{0.10f, 0.05f, 0.16f} : betweenDim ? betweenSky() : DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
         if (under) { float k = (float) Math.max(0.25, sky); rend.fogColor = new float[]{UNDER_FOG[0] * k, UNDER_FOG[1] * k, UNDER_FOG[2] * k}; }
         else rend.fogColor = horizon;
         long dn = world.dayNumber();
@@ -325,6 +333,10 @@ final class PlayScreen {
             return;
         }
         BlockType target = hit == null ? null : world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
+        if (hit != null && !sneak) { // Ключ Порогу: розрив у міжсвіття
+            String msg = Rift.open(world, inv, hit.x(), hit.y(), hit.z(), world.creative());
+            if (msg != null) { say(msg); return; }
+        }
         if (target != null && target.name.equals(Infection.CORE)) { // ядро зараження: стан або зупинка (зілля, вогонь, лімініт)
             String msg = world.infection.use(inv, hit.x(), hit.y(), hit.z(), world.creative());
             if (msg != null) { say(msg); return; }

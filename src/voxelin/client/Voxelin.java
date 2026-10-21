@@ -196,9 +196,9 @@ public final class Voxelin {
     private void autoWorld() {
         try {
             if (!WorldInfo.exists(new File(opts.saves, opts.autoWorld))) game.createWorld(opts.autoWorld, opts.seed, opts.autoFlat ? WorldInfo.Type.FLAT : WorldInfo.Type.NORMAL);
-            if ("end".equals(opts.dimension)) {
-                World end = game.openDimension(opts.autoWorld, "end");
-                end.info.setPlayer(Pos.ofBlock(voxelin.core.gen.EndGenerator.PLATFORM_X, voxelin.core.gen.EndGenerator.TOP + 1 + voxelin.core.entity.PlayerEntity.EYE + 0.02, voxelin.core.gen.EndGenerator.ARRIVAL_Z), 0f, 0f);
+            if (voxelin.core.Dimensions.type(opts.dimension) != null) {
+                World end = game.openDimension(opts.autoWorld, opts.dimension);
+                end.info.setPlayer(voxelin.core.Dimensions.arrival(opts.dimension), 0f, 0f);
                 refreshTextures();
                 beginLoadingWorld(end);
             } else beginLoading(opts.autoWorld);
@@ -228,7 +228,7 @@ public final class Voxelin {
 
     private String pendingTravel;
 
-    /** Перехід між вимірами (portal): виконується між кадрами. to: "end" або "overworld". */
+    /** Перехід між вимірами (портал, розрив): виконується між кадрами. to: "end", "between" або "overworld". */
     void requestTravel(String to) { if (pendingTravel == null) pendingTravel = to; }
 
     private void doTravel() {
@@ -236,18 +236,18 @@ public final class Voxelin {
         pendingTravel = null;
         World cur = play.world;
         String base = cur.info.name;
-        boolean toEnd = to.equals("end");
+        boolean toEnd = voxelin.core.Dimensions.type(to) != null; // у вимір-теку (Енд, міжсвіття); інакше - додому
         long rx = play.player.pos.blockX(), rz = play.player.pos.blockZ();
         int ry = (int) Math.floor(play.player.pos.y - voxelin.core.entity.PlayerEntity.EYE + 0.05);
         WorldInfo curInfo = cur.info;
         play.close(); // зберігає поточний вимір (інвентар теж)
         play = null; loading = null;
         try {
-            World target = toEnd ? game.openDimension(base, "end") : game.openWorld(base);
+            World target = toEnd ? game.openDimension(base, to) : game.openWorld(base);
             target.info.copyPlayerFrom(curInfo);
             if (toEnd) {
                 target.info.hasReturn = true; target.info.returnX = rx; target.info.returnY = ry; target.info.returnZ = rz;
-                target.info.setPlayer(Pos.ofBlock(voxelin.core.gen.EndGenerator.PLATFORM_X, voxelin.core.gen.EndGenerator.TOP + 1 + voxelin.core.entity.PlayerEntity.EYE + 0.02, voxelin.core.gen.EndGenerator.ARRIVAL_Z), 0f, 0f);
+                target.info.setPlayer(voxelin.core.Dimensions.arrival(to), 0f, 0f);
             } else if (curInfo.hasReturn) {
                 target.info.setPlayer(Pos.ofBlock(curInfo.returnX, curInfo.returnY + voxelin.core.entity.PlayerEntity.EYE + 0.02, curInfo.returnZ), 0f, 0f);
             }

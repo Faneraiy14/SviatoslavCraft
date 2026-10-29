@@ -791,6 +791,7 @@ public final class World implements WorldAccess {
         arrows.tick();
         tickBlockEntities();
         tickMobs();
+        Herobrine.tick(this, target, mobRng, tick);
         infection.tick(tick, target);
         Rift.tick(this);
         budgets.clear();

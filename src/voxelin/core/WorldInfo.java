@@ -62,6 +62,8 @@ public final class WorldInfo {
     /** Правила гри, що відрізняються від типових (GameRules); зсув часу доби, коли зміну дня вимкнено. */
     public final java.util.Map<String, Boolean> rules = new java.util.TreeMap<>();
     public long dayShift;
+    /** Міф: коли можливий наступний слід (тік) і які «допомоги» вже були (кожна раз за світ); hbDark - скільки тіків гравець у темряві (не зберігається). */
+    public long hbNext; public final java.util.Set<String> hbUsed = new java.util.TreeSet<>(); public int hbDark;
 
     public boolean rule(String id) { Boolean v = rules.get(id); if (v != null) return v; GameRules.Rule r = GameRules.find(id); return r == null || r.def(); }
 
@@ -139,6 +141,8 @@ public final class WorldInfo {
         w.cheats = !"false".equals(p.getProperty("cheats"));
         for (GameRules.Rule r : GameRules.ALL) { String v = p.getProperty("rule." + r.id()); if (v != null) w.setRule(r.id(), "true".equals(v.trim())); }
         try { w.dayShift = Long.parseLong(p.getProperty("dayShift", "0").trim()); } catch (NumberFormatException e) { w.dayShift = 0; }
+        try { w.hbNext = Long.parseLong(p.getProperty("hbNext", "0").trim()); } catch (NumberFormatException e) { w.hbNext = 0; }
+        for (String h : p.getProperty("hbUsed", "").split(",")) if (!h.isBlank()) w.hbUsed.add(h.trim());
         try { w.cataclysms = Cataclysms.valueOf(p.getProperty("cataclysms", "ON").trim()); } catch (IllegalArgumentException e) { w.cataclysms = Cataclysms.ON; }
         try { w.infState = InfState.valueOf(p.getProperty("infState", "NONE").trim()); } catch (IllegalArgumentException e) { w.infState = InfState.NONE; }
         if (w.infState != InfState.NONE) {
@@ -193,6 +197,8 @@ public final class WorldInfo {
         p.setProperty("cheats", String.valueOf(cheats));
         for (java.util.Map.Entry<String, Boolean> e : rules.entrySet()) p.setProperty("rule." + e.getKey(), String.valueOf(e.getValue()));
         if (dayShift != 0) p.setProperty("dayShift", String.valueOf(dayShift));
+        if (hbNext != 0) p.setProperty("hbNext", String.valueOf(hbNext));
+        if (!hbUsed.isEmpty()) p.setProperty("hbUsed", String.join(",", hbUsed));
         if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); p.setProperty("infOwed", String.valueOf(infOwed));
             if (infVillage) { p.setProperty("infVx", String.valueOf(infVx)); p.setProperty("infVz", String.valueOf(infVz)); if (infFrontSeeded) p.setProperty("infFront", "true"); } }
         if (ritualKills != 0) p.setProperty("ritualKills", String.valueOf(ritualKills));

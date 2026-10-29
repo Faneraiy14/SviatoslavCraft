@@ -86,6 +86,7 @@ final class PlayScreen {
             public boolean alive() { return !vt.dead(); }
             public boolean creative() { return world.creative(); }
             public void notify(String message) { say(message); }
+            public double health() { return vt.health(); }
             public void hurt(double damage, double kx, double kz) { hurt(damage, kx, kz, 0); }
             public void hurt(double damage, double kx, double kz, double pierce) {
                 int pts = inv.armorPoints(world.itemTypes);
@@ -229,7 +230,8 @@ final class PlayScreen {
         sounds.tick(player, !vt.dead());
         if (vt.dead() && !deadHandled && !world.creative() && !world.rule(GameRules.KEEP_INVENTORY)) {
             Pos at = bodyPos();
-            for (Inventory.Stack st : inv.drain()) world.spawnItem(at, st.item, st.count, st.damage, true);
+            java.util.List<Inventory.Stack> drops = inv.drain();
+            if (!Herobrine.deathChest(world, at, drops, new java.util.Random())) for (Inventory.Stack st : drops) world.spawnItem(at, st.item, st.count, st.damage, true);
         }
         if (vt.dead() && !deadHandled) { deadHandled = true; hud = true; if (invOpen) closeInventory(); invOpen = false; chatOpen = false; v.input.endText(); grab(false); say("Ти загинув."); }
         if (player.pos.y < -20) { player.teleport(spawn); if (!vt.dead()) vt.damage(4); say("Ти впав за межі світу - повернено на спавн."); }

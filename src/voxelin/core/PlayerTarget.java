@@ -6,6 +6,8 @@ public interface PlayerTarget {
     Pos body();
     /** Очі (для променя). */
     boolean alive();
+    /** Здоров'я (0..20). */
+    default double health() { return 20; }
     /** У творчому режимі істоти не нападають. */
     boolean creative();
     /** Перенести гравця в точку (команда /tp): ноги на блоці (x,y,z). */

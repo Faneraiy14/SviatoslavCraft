@@ -39,6 +39,9 @@ public final class Mob {
     public Mob prey;
 
     /** Тікати від точки (житель бачить ворога). */
+    /** Налякати будь-яку істоту (і ворожу): тікає від from ticks тіків. */
+    public void scare(Pos from, int ticks) { scared = Math.max(scared, ticks); threat = from.copy(); }
+    public int scared;
     public void fleeFrom(Pos from, int ticks) { if (type.passive()) { fleeTicks = Math.max(fleeTicks, ticks); threat = from.copy(); } }
 
     public Mob(MobType type, Pos at) {
@@ -94,8 +97,8 @@ public final class Mob {
             pdist = Math.sqrt(pdx * pdx + pdz * pdz + dy * dy);
         }
         boolean night = w.skyLevel() < 0.5;
-        if (fleeTicks > 0 && type.passive()) {
-            fleeTicks--;
+        if ((fleeTicks > 0 && type.passive()) || scared > 0) {
+            if (scared > 0) scared--; else fleeTicks--;
             double fx = threat == null ? rng.nextDouble() - 0.5 : pos.x - threat.relX(pos.cx), fz = threat == null ? rng.nextDouble() - 0.5 : pos.z - threat.relZ(pos.cz);
             double l = Math.hypot(fx, fz);
             if (l > 1e-6) { dirX = fx / l; dirZ = fz / l; speed = type.speed * 1.6; }

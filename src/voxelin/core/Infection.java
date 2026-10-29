@@ -70,6 +70,23 @@ public final class Infection {
     /** Радіус зони від ядра: 64, після прориву (30-й день) - 128. */
     public int radius() { return breached() ? BREACH_RADIUS : RADIUS; }
 
+    /** Чи (x, z) у зоні, де зараження вже діє на істот: активна пора чи пізніше (тиха пора лише лишає сліди). */
+    public boolean affects(long x, long z) {
+        return w.info.infState == WorldInfo.InfState.ACTIVE && w.info.type != WorldInfo.Type.END && w.info.type != WorldInfo.Type.BETWEEN
+                && phase() != Phase.QUIET && inZone(x, z);
+    }
+
+    /** Ядро як точка (для втечі тварин). */
+    public Pos corePos() { WorldInfo i = w.info; return new Pos(0, 0, i.infX + 0.5, i.infY, i.infZ + 0.5); }
+
+    /** Наскільки темніє небо (0..1): попередження, що росте з порою, - тиха 0, активна 0.15, криза 0.35, прорив 0.5. */
+    public double gloom() {
+        WorldInfo i = w.info;
+        if (i.infState != WorldInfo.InfState.ACTIVE || i.type == WorldInfo.Type.END || i.type == WorldInfo.Type.BETWEEN) return 0;
+        Phase p = phase();
+        return breached() ? 0.5 : p == Phase.CRISIS ? 0.35 : p == Phase.ACTIVE ? 0.15 : 0;
+    }
+
     /** Поставлено яйце: чи це початок зараження (лише звичайний світ, вибір «Зараження», ще не почалось). */
     boolean shouldStart(BlockType placed) {
         WorldInfo i = w.info;
@@ -98,6 +115,12 @@ public final class Infection {
         if (i.infState == WorldInfo.InfState.CURED && !blight.isEmpty()) heal();
         if (i.infState == WorldInfo.InfState.CURED || i.infState == WorldInfo.InfState.BURNED) { if (!growth.isEmpty() && tick % 20 == 0) purge(); return; }
         if (i.infState != WorldInfo.InfState.ACTIVE) return;
+        if (tick % 100 == 0) { // попередження в журналі - на зміні пори (unlockRecord сам не повторює)
+            Phase p = phase();
+            if (p != Phase.QUIET) w.unlockRecord("voxelin:infection_active");
+            if (p == Phase.CRISIS) w.unlockRecord("voxelin:infection_crisis");
+            if (breached()) w.unlockRecord("voxelin:infection_breach");
+        }
         i.infOwed = Math.min(OWED_CAP, i.infOwed + rate());
         for (int b = 0; b < BUDGET && i.infOwed >= 1; b++) {
             if (step() == Step.DEFERRED) break; // ділянка не завантажена - чекаємо, борг лишається

@@ -105,7 +105,7 @@ public final class GameSounds implements SoundSink {
             else if (!open) { key = "voxelin:ambient.wind"; vol = 0.3f; } // під дахом - вітер ледь чути
             else if (night) key = "voxelin:ambient.night";
             else { key = "voxelin:ambient.wind"; vol = (float) Math.max(0.35, Math.min(1, (p.pos.y - 50) / 50)); } // вище - вітряніше
-            if (i.infState == WorldInfo.InfState.ACTIVE && open) vol *= 0.4f; // зараження: звуки світу стихають (попередження з DESIGN.md)
+            if (i.infState == WorldInfo.InfState.ACTIVE && open) vol *= (float) Math.max(0.1, 0.7 - world.infection.gloom() * 1.2); // зараження: звуки світу стихають з кожною порою (попередження з DESIGN.md)
         }
         if (ambientKey != null && !ambientKey.equals(key)) audio.loop("ambient", ambientKey, 0);
         ambientKey = key;

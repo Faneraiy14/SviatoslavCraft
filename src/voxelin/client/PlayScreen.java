@@ -290,6 +290,9 @@ final class PlayScreen {
         double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : (endDim || betweenDim ? world.skyLevel() : DayCycle.sky(phase));
         rend.skyBrightness = (float) sky;
         float[] horizon = endDim ? new float[]{0.10f, 0.05f, 0.16f} : betweenDim ? betweenSky() : DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
+        double gloom = world.infection.gloom(); // зараження: небо темніє й сивіє (попередження з DESIGN.md)
+        if (gloom > 0) { float k = (float) (1 - gloom), gr = (horizon[0] + horizon[1] + horizon[2]) / 3f;
+            horizon = new float[]{(horizon[0] * 0.5f + gr * 0.5f) * k + 0.04f * (float) gloom, (horizon[1] * 0.5f + gr * 0.5f) * k, (horizon[2] * 0.5f + gr * 0.5f) * k + 0.06f * (float) gloom}; }
         if (under) { float k = (float) Math.max(0.25, sky); rend.fogColor = new float[]{UNDER_FOG[0] * k, UNDER_FOG[1] * k, UNDER_FOG[2] * k}; }
         else rend.fogColor = horizon;
         long dn = world.dayNumber();

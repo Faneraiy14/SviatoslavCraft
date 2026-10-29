@@ -71,6 +71,8 @@ public final class Mob {
         if (dying) return;
 
         double dirX = 0, dirZ = 0, speed = 0;
+        boolean infected = w.infection != null && w.infection.affects(bx, bz);
+        if (infected && type.passive() && fleeTicks == 0 && rng.nextInt(40) == 0) { fleeTicks = 60; threat = w.infection.corePos(); } // тварини тікають від ядра
         boolean aggressive = type.hostile() || (type.behavior == voxelin.api.MobSettings.Behavior.NEUTRAL_DAY && (provoked || !daylight(w)));
         double tdx = 0, tdz = 0, tdist = Double.MAX_VALUE;
         if (target != null && target.alive() && !target.creative()) {
@@ -90,7 +92,7 @@ public final class Mob {
             speed = l > type.reach * 0.6 ? type.speed : 0;
             if (tdist <= type.reach + type.width / 2 && Math.abs(target.body().y - (pos.y + type.height / 2)) < 1.6 && attackCooldown == 0 && type.attackDamage > 0) {
                 attackCooldown = type.cooldownTicks;
-                target.hurt(type.attackDamage, dirX, dirZ, type.armorPierce);
+                target.hurt(type.attackDamage * (infected ? 1.5 : 1), dirX, dirZ, type.armorPierce); // у зараженій зоні вороги сильніші
             }
         } else {
             if (wanderTicks <= 0) { // нова мить блукання: пауза або іти в випадковому напрямі

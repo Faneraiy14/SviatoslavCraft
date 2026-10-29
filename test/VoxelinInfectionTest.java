@@ -1,6 +1,7 @@
 import voxelin.api.*;
 import voxelin.core.*;
 import voxelin.loader.*;
+import voxelin.core.entity.Mob;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -18,7 +19,8 @@ public class VoxelinInfectionTest {
         public Pos body() { return pos; }
         public boolean alive() { return true; }
         public boolean creative() { return false; }
-        public void hurt(double d, double kx, double kz) {}
+        double total;
+        public void hurt(double d, double kx, double kz) { total += d; }
     }
 
     static World open(String name, WorldInfo.EggChoice choice) throws Exception {
@@ -54,7 +56,7 @@ public class VoxelinInfectionTest {
     public static void main(String[] a) throws Exception {
         File root = Files.createTempDirectory("vx-inf").toFile();
         g = new Game(new File(root, "saves"), null);
-        content(); start(); phases(); cataclysms(); spread(); tame(); cure(); burn(); persistence(); blight();
+        content(); start(); phases(); cataclysms(); spread(); tame(); cure(); burn(); persistence(); blight(); warnings();
         System.out.println("VoxelinInfectionTest: " + n + " перевірок OK");
     }
 
@@ -316,5 +318,43 @@ public class VoxelinInfectionTest {
         for (int k = 0; k < 200; k++) s.tick();
         check(at(s, 8, sy, 0).equals(Infection.PETRIFIED) && s.infection.blightCount() == 0, "спалене: скам'яніле лишається назавжди");
         s.close();
+    }
+
+    static void warnings() throws Exception {
+        World w = open("w1", WorldInfo.EggChoice.INFECTION);
+        int y = placeEgg(w);
+        long d = w.dayTicks(), s = w.info.infStart;
+        check(w.infection.gloom() == 0 && !w.infection.affects(5, 5), "тиха пора: небо звичайне, істоти спокійні");
+        w.info.time = s + d * 10;
+        for (int k = 0; k < 100; k++) w.tick();
+        check(w.infection.gloom() > 0 && w.info.records.contains("voxelin:infection_active"), "активна: небо сіріє, запис «Жили»");
+        check(w.infection.affects(5, 5) && !w.infection.affects(Infection.RADIUS + 5, 0), "дія лише в зоні");
+        w.info.time = s + d * 20;
+        for (int k = 0; k < 100; k++) w.tick();
+        double crisis = w.infection.gloom();
+        check(crisis > 0.15 && w.info.records.contains("voxelin:infection_crisis") && !w.info.records.contains("voxelin:infection_breach"), "криза: темніше, запис «Криза»");
+        w.info.time = s + d * 31;
+        for (int k = 0; k < 100; k++) w.tick();
+        check(w.infection.gloom() > crisis && w.info.records.contains("voxelin:infection_breach"), "прорив: ще темніше, запис «Прорив»");
+        // тварина в зоні тікає від ядра
+        MobType cow = g.mobTypes.find("cow"), zombie = g.mobTypes.find("zombie");
+        Mob c = w.spawnMob(cow, new Pos(0, 0, 6.5, y, 0.5));
+        double d0 = 6;
+        for (int k = 0; k < 600; k++) w.tick();
+        double d1 = Math.hypot(c.pos.relX(0), c.pos.relZ(0));
+        check(d1 > d0 + 4, "корова відійшла від ядра: " + d0 + " -> " + d1);
+        // ворог у зоні б'є сильніше
+        double dmg = 0;
+        for (int zone = 0; zone < 2; zone++) {
+            long zx = 10;
+            if (zone == 1) w.info.infState = WorldInfo.InfState.TAMED; // те саме місце без дії зараження
+            Fake f = new Fake(new Pos(0, 0, zx + 1.5, y + 0.9, 0.5));
+            w.setPlayerTarget(f);
+            Mob z = w.spawnMob(zombie, new Pos(0, 0, zx + 0.5, y, 0.5));
+            for (int k = 0; k < 200 && f.total == 0; k++) w.tick();
+            z.health = 0; z.dying = true;
+            if (zone == 0) dmg = f.total; else check(f.total > 0 && dmg >= f.total * 1.49, "у зоні удар x1.5 (без зараження - звичайний): " + dmg + " vs " + f.total);
+        }
+        w.close();
     }
 }

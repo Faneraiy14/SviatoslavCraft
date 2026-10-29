@@ -52,7 +52,7 @@ public class VoxelinLookTest {
         Cosmetic.Cube q0 = hat.cubes.get(0), q1 = hat.cubes.get(1), q2 = hat.cubes.get(2);
         check(q0.boxUv != null && q0.boxUv[1] == 0 && q0.size[0] == 10 && q0.origin[0] == -5, "UV коробкою");
         check(q1.inflate == 0.25f && q1.mirror && q1.boxUv[1] == 11, "inflate і дзеркало");
-        check(q2.boxUv == null && q2.faces.size() == 2 && q2.faces.get("up")[3] == -1 && q2.rotation[2] == -30 && q2.pivot[0] == 1.5f, "UV по гранях (з від'ємним розміром), поворот кубоїда");
+        check(q2.boxUv == null && q2.faces.size() == 2 && q2.faces.get("up")[0] == 26 && q2.faces.get("up")[3] == 1 && q2.rotation[2] == -30 && q2.pivot[0] == 1.5f, "UV по гранях (з від'ємним розміром), поворот кубоїда");
         // старий формат 1.8
         Cosmetic old = Cosmetic.parse("o", "o", "body", "{\"format_version\":\"1.8.0\",\"geometry.old\":{\"bones\":[{\"name\":\"b\",\"cubes\":[{\"origin\":[0,0,0],\"size\":[1,1,1],\"uv\":[0,0]}]}]}}", 16, 16, new int[256]);
         check(old.cubeCount() == 1 && old.slot.equals("body"), "старий формат geometry.*");

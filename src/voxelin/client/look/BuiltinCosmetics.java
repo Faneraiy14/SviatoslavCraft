@@ -51,7 +51,11 @@ public final class BuiltinCosmetics {
             if (cubes.length() > 0) cubes.append(',');
             int u = (color % 8) * 4, v = (color / 8) * 4;
             StringBuilder faces = new StringBuilder();
-            for (String f : Cosmetic.FACES) { if (faces.length() > 0) faces.append(','); faces.append(String.format(Locale.ROOT, "\"%s\":{\"uv\":[%d,%d],\"uv_size\":[4,4]}", f, u, v)); }
+            for (String f : Cosmetic.FACES) { // up/down - з протилежного кута, як експортує Blockbench
+                boolean ud = f.equals("up") || f.equals("down");
+                if (faces.length() > 0) faces.append(',');
+                faces.append(String.format(Locale.ROOT, "\"%s\":{\"uv\":[%d,%d],\"uv_size\":[%d,%d]}", f, ud ? u + 4 : u, ud ? v + 4 : v, ud ? -4 : 4, ud ? -4 : 4));
+            }
             cubes.append(String.format(Locale.ROOT, "{\"origin\":[%s,%s,%s],\"size\":[%s,%s,%s]", f(-(x + w)), f(y), f(z), f(w), f(h), f(d)));
             if (rx != 0 || ry != 0 || rz != 0) cubes.append(String.format(Locale.ROOT, ",\"pivot\":[%s,%s,%s],\"rotation\":[%s,%s,%s]", f(-(x + w / 2)), f(y + h / 2), f(z + d / 2), f(-rx), f(-ry), f(rz)));
             cubes.append(",\"uv\":{").append(faces).append("}}");

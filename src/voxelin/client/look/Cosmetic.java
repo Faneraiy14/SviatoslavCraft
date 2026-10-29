@@ -47,6 +47,43 @@ public final class Cosmetic {
         this.id = id; this.title = title; this.slot = slot; this.texW = texW; this.texH = texH; this.texture = texture; this.bones = bones;
     }
 
+    /** Межа моделі для превʼю: {найбільша відстань від осі Y, найвища точка} у пікселях скіна - кути кубоїдів з усіма поворотами, як малює CosmeticRenderer. */
+    public float[] bounds() {
+        Map<String, Bone> byName = new HashMap<>();
+        for (Bone b : bones) byName.put(b.name, b);
+        float r = 0, top = 0;
+        for (Bone b : bones) for (Cube q : b.cubes) {
+            float inf = q.inflate, x0 = -(q.origin[0] + q.size[0]) - inf, x1 = -q.origin[0] + inf;
+            for (int i = 0; i < 8; i++) {
+                float[] p = {(i & 1) != 0 ? x1 : x0, q.origin[1] + ((i & 2) != 0 ? q.size[1] + inf : -inf), q.origin[2] + ((i & 4) != 0 ? q.size[2] + inf : -inf)};
+                if (q.rotation != null) turn(p, q.pivot != null ? q.pivot : new float[]{q.origin[0] + q.size[0] / 2, q.origin[1] + q.size[1] / 2, q.origin[2] + q.size[2] / 2}, q.rotation);
+                for (Bone o = b; o != null && depth(o, byName) >= 0; o = o.parent == null ? null : byName.get(o.parent)) { turn(p, o.pivot, o.rotation); if (o.parent != null && byName.get(o.parent) == o) break; }
+                r = Math.max(r, (float) Math.hypot(p[0], p[2]));
+                top = Math.max(top, p[1]);
+            }
+        }
+        return new float[]{r, top};
+    }
+
+    private static int depth(Bone b, Map<String, Bone> byName) {
+        int d = 0;
+        for (Bone o = b; o.parent != null && byName.containsKey(o.parent); o = byName.get(o.parent)) if (++d > 32) return -1; // цикл кісток - не рахуємо
+        return d;
+    }
+
+    /** Точка в просторі малювання (X уже віддзеркалений) після повороту навколо pivot - як CosmeticRenderer.rotate (Z, потім -Y, потім -X). */
+    private static void turn(float[] p, float[] pivot, float[] rot) {
+        if (rot == null || (rot[0] == 0 && rot[1] == 0 && rot[2] == 0)) return;
+        float cx = -pivot[0], cy = pivot[1], cz = pivot[2], x = p[0] - cx, y = p[1] - cy, z = p[2] - cz;
+        double a = Math.toRadians(-rot[0]), c = Math.cos(a), s = Math.sin(a); // glRotate застосовуються до вершини у зворотному порядку: X, Y, Z
+        float y1 = (float) (y * c - z * s), z1 = (float) (y * s + z * c); y = y1; z = z1;
+        a = Math.toRadians(-rot[1]); c = Math.cos(a); s = Math.sin(a);
+        float x1 = (float) (x * c + z * s); z1 = (float) (-x * s + z * c); x = x1; z = z1;
+        a = Math.toRadians(rot[2]); c = Math.cos(a); s = Math.sin(a);
+        x1 = (float) (x * c - y * s); y1 = (float) (x * s + y * c);
+        p[0] = x1 + cx; p[1] = y1 + cy; p[2] = z + cz;
+    }
+
     public int cubeCount() { int n = 0; for (Bone b : bones) n += b.cubes.size(); return n; }
 
     // ------------------------------------------------------------------ читання
@@ -122,7 +159,9 @@ public final class Cosmetic {
                 else if (uv instanceof Map<?, ?> fm) {
                     for (String f : FACES) if (fm.get(f) instanceof Map<?, ?> fu) {
                         float[] a = vec(fu.get("uv"), 0), sz = fu.containsKey("uv_size") ? vec(fu.get("uv_size"), 0) : new float[]{0, 0};
-                        c.faces.put(f, new float[]{a[0], a[1], sz[0], sz[1]});
+                        // up/down Blockbench експортує з протилежного кута (uv=[x2,y2], uv_size=[x1-x2,y1-y2]) - повертаємо як у редакторі
+                        if (f.equals("up") || f.equals("down")) c.faces.put(f, new float[]{a[0] + sz[0], a[1] + sz[1], -sz[0], -sz[1]});
+                        else c.faces.put(f, new float[]{a[0], a[1], sz[0], sz[1]});
                     }
                 } else c.boxUv = new float[]{0, 0};
                 b.cubes.add(c);

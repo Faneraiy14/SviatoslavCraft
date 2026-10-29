@@ -66,7 +66,14 @@ final class SkinScreen {
         v.playerModel.apply(edit);
         PlayerModel.Pose pose = new PlayerModel.Pose();
         pose.limbPhase = (float) (t * 4); pose.limbAmount = 0.35f; pose.headPitch = (float) Math.sin(t * 0.7) * 10; pose.capeLift = 8 + (float) Math.sin(t * 2) * 4;
-        model(px + pw / 2f, py + ph - 60, 11f, spin, pose);
+        // великі моделі (крила) зменшують превʼю, щоб уміститись у рамку при будь-якому повороті
+        float reach = 9, top = 33;
+        for (String slot : voxelin.client.look.Cosmetic.SLOTS) {
+            voxelin.client.look.Cosmetic c = v.cosmetics.get(edit.slot(slot));
+            if (c != null) { float[] b = c.bounds(); reach = Math.max(reach, b[0]); top = Math.max(top, b[1]); }
+        }
+        float feet = py + ph - 60, k = Math.min(11f, Math.min((pw / 2f - 14) / reach, (feet - py - 16) / top));
+        model(px + pw / 2f, feet, k, spin, pose);
         Gui.textCentered("тягни мишею - обернути", px + pw / 2f, py + ph - 22, 1.6f, 0.55f, 0.6f, 0.75f);
         // вибір
         float x = 580, w = 600, y = 96;

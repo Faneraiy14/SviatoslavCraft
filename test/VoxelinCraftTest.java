@@ -45,10 +45,11 @@ public class VoxelinCraftTest {
         check(craft(grid(2, "oak_planks*2,birch_planks*3", "spruce_planks*2,pale_planks*2"), 2).item.equals("voxelin:workbench"), "верстак із різних дощок (мітка)");
         check(craft(grid(2, "oak_planks,oak_planks*2", "oak_planks*2,oak_planks*2"), 2) == null, "в одній клітинці лише 1 дошка - не верстак");
         Inventory.Stack[] fg = grid(3, "cobblestone*2,cobblestone*2,cobblestone*2", "cobblestone*2,-,cobblestone*5", "cobblestone*2,cobblestone*2,cobblestone*2");
-        check(craft(fg, 3) != null && craft(fg, 3).item.equals("voxelin:furnace"), "піч: по 2 бруківки в кожній клітинці кільця");
-        check(craft(grid(3, "cobblestone,cobblestone,cobblestone", "cobblestone,-,cobblestone", "cobblestone,cobblestone,cobblestone"), 3) == null, "8 бруківки - ще не піч");
+        check(craft(grid(3, "cobblestone,cobblestone,cobblestone", "cobblestone,-,cobblestone", "cobblestone,cobblestone,cobblestone"), 3).item.equals("voxelin:furnace"), "піч: 8 бруківки кільцем, без вугілля");
         Crafting.Match fm = Crafting.matchFull(g.recipes, g.items, fg, 3);
-        check(fm.use()[0] == 2 && fm.use()[4] == 0 && fm.use()[5] == 2, "піч бере по 2 з клітинки (решта лишається)");
+        check(fm.use()[0] == 1 && fm.use()[4] == 0 && fm.use()[5] == 1, "піч бере по 1 з клітинки");
+        Crafting.Match wm = Crafting.matchFull(g.recipes, g.items, grid(2, "oak_planks*3,oak_planks*2", "oak_planks*2,oak_planks*2"), 2);
+        check(wm.use()[0] == 2 && wm.use()[3] == 2, "верстак бере по 2 з клітинки (решта лишається)");
         check(craft(grid(2, "coal,-", "stick,-"), 2).item.equals("voxelin:torch") && craft(grid(2, "coal,-", "stick,-"), 2).count == 4, "вугілля над палицею = 4 смолоскипи");
         check(craft(grid(2, "pale_log,-", "-,-"), 2).item.equals("voxelin:pale_planks"), "бліда колода -> бліді дошки");
         check(craft(grid(2, "brick,brick", "brick,brick"), 2).item.equals("voxelin:bricks"), "4 цеглини -> цегла");
@@ -102,13 +103,13 @@ public class VoxelinCraftTest {
         check(craft(wg, 3) == null, "цілі крила не лагодяться");
     }
 
-    /** Вікно крафту бере з клітинки стільки, скільки вимагає рецепт (піч - по 2 бруківки). */
+    /** Вікно крафту бере з клітинки стільки, скільки вимагає рецепт (піч - по 1 бруківці). */
     static void perCell() {
         Inventory inv = new Inventory(g.items);
         CraftMenu m = new CraftMenu(g.items, g.recipes, inv, 3);
         for (int k = 0; k < 9; k++) {
             if (k == 4) continue;
-            inv.set(0, new Inventory.Stack("voxelin:cobblestone", 3));
+            inv.set(0, new Inventory.Stack("voxelin:cobblestone", 2));
             m.click(0, 0, false); m.click(CraftMenu.GRID + k, 0, false);
         }
         check(m.result() != null && m.result().item.equals("voxelin:furnace"), "у вікні крафту склалась піч");
@@ -116,7 +117,7 @@ public class VoxelinCraftTest {
         check(m.cursor() != null && m.cursor().item.equals("voxelin:furnace"), "піч у курсорі");
         boolean left1 = true;
         for (int k = 0; k < 9; k++) if (k != 4 && (m.gridStack(k) == null || m.gridStack(k).count != 1)) left1 = false;
-        check(left1 && m.result() == null, "з кожної клітинки взято по 2, лишилось по 1, нової печі нема");
+        check(left1 && m.result() != null, "з кожної клітинки взято по 1, лишилось по 2 - можна ще піч");
     }
 
     static void menu() {

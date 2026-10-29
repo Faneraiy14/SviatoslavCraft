@@ -232,7 +232,7 @@ public final class VanillaContent implements VoxelinMod {
                 .entry("stick", 3, 8, 6).entry("iron_ingot", 1, 2, 3).entry("gold_ingot", 1, 1, 2).entry("leather", 1, 2, 4));
         r.loot("mine", new LootSettings().rolls(1, 3).entry("coal", 4, 9, 10).entry("raw_iron", 2, 4, 6).entry("raw_copper", 2, 5, 6).entry("stick", 3, 8, 8)
                 .entry("stone_pickaxe", 1, 1, 2).entry("apple", 1, 2, 4).entry("cooked_chicken", 1, 2, 3));
-        r.recipe("furnace", RecipeSettings.shaped("CCC", "C.C", "CCC").key('C', "cobblestone", 2).result("furnace", 1)); // куб: по 2 бруківки в кожній клітинці кільця, 16 разом
+        r.recipe("furnace", RecipeSettings.shaped("CCC", "C.C", "CCC").key('C', "cobblestone").result("furnace", 1)); // 8 бруківки кільцем, як у Minecraft (Святослав 29.10: 16 - забагато)
         r.recipe("smelt_iron", RecipeSettings.smelting("raw_iron", 10).result("iron_ingot", 1));
         r.recipe("smelt_copper", RecipeSettings.smelting("raw_copper", 10).result("copper_ingot", 1));
         r.recipe("smelt_gold", RecipeSettings.smelting("raw_gold", 10).result("gold_ingot", 1));

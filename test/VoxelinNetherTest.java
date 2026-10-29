@@ -17,7 +17,7 @@ public class VoxelinNetherTest {
 
     public static void main(String[] a) throws Exception {
         g = new Game(new File(Files.createTempDirectory("vx-nether").toFile(), "saves"), null);
-        gen(); portal(); arrive(); lava(); overworld();
+        gen(); fortress(); portal(); arrive(); lava(); overworld();
         System.out.println("VoxelinNetherTest: " + n + " перевірок OK");
     }
 
@@ -60,6 +60,36 @@ public class VoxelinNetherTest {
         check(same, "детерміновано");
         BlockType ore1 = g.blocks.byName("voxelin:ember_ore");
         check(ore1.minTier == 4 && Mining.drops(ore1, g.items.get("voxelin:diamond_pickaxe"), new Random(1)).get(0).item.equals("voxelin:ember_crystal"), "жаровий лімініт - лише алмазною киркою, дає кристал");
+    }
+
+    static void fortress() throws Exception {
+        g.createWorld("f", 11, WorldInfo.Type.NORMAL);
+        World w = g.openDimension("f", Dimensions.NETHER);
+        w.naturalSpawning = false;
+        long[] f = w.locate("nether_fortress", 0, 0);
+        check(f != null && f[1] == NetherGenerator.FORT_Y, "фортеця знаходиться");
+        long fx = f[0], fz = f[2];
+        load(w, Math.floorDiv(fx, 16L), Math.floorDiv(fz, 16L));
+        for (int i = 0; i < 40; i++) { w.tick(); Thread.sleep(5); }
+        int br = id("fortress_bricks");
+        check(w.blockId(fx, NetherGenerator.FORT_Y, fz) == br && w.blockId(fx, NetherGenerator.FORT_Y + 5, fz) == br, "зала: підлога й дах");
+        check(w.blockId(fx, NetherGenerator.FORT_Y + 2, fz) == 0, "у залі порожньо");
+        check(w.blockId(fx + 20, NetherGenerator.FORT_Y, fz) == br && w.blockId(fx + 20, NetherGenerator.FORT_Y + 2, fz) == 0 && w.blockId(fx + 20, NetherGenerator.FORT_Y + 1, fz + 2) == br, "міст: підлога, прохід, поручні");
+        check(w.blockId(fx, NetherGenerator.FORT_Y, fz - 25) == br, "міст на всі боки");
+        int chests = 0;
+        for (long x = fx - 5; x <= fx + 5; x++) for (long z = fz - 5; z <= fz + 5; z++) if (w.chestAt(x, NetherGenerator.FORT_Y + 1, z) != null) chests++;
+        check(chests == 2, "дві скрині з здобиччю: " + chests);
+        int wraiths = 0;
+        for (Mob m : w.mobs()) if (m.type.name.equals("voxelin:ember_wraith")) wraiths++;
+        check(wraiths >= 2, "Жарняки вартують залу: " + wraiths);
+        MobType wt = w.mobTypes.find("ember_wraith");
+        check(wt.fireproof && wt.hostile() && wt.dimension.equals(Dimensions.NETHER), "Жарняк: ворожий, не горить, лише в Незері");
+        Mob m = w.spawnMob(wt, Pos.ofBlock(fx + 3, NetherGenerator.FORT_Y + 1, fz));
+        w.setBlock(P, fx + 3, NetherGenerator.FORT_Y + 1, fz, w.blocks.byName(World.LAVA));
+        double hp = m.health;
+        for (int i = 0; i < 25; i++) w.tick();
+        check(m.health == hp, "у лаві не горить");
+        w.close();
     }
 
     static void frame(World w, BlockType obs, long x0, int y0, long z, int wdt, int hgt, boolean corners) {

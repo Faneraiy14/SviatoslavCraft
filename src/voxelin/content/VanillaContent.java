@@ -233,8 +233,14 @@ public final class VanillaContent implements VoxelinMod {
         r.recipe("end_eye", RecipeSettings.shapeless("liminite_shard", "diamond", "gold_ingot").result("end_eye", 1));
         r.item("threshold_key", new ItemSettings().color(0xC8C8D8).texture("threshold_key").title("Ключ Порогу"));
         r.recipe("threshold_key", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "liminite_shard", "liminite_shard", "end_eye").result("threshold_key", 1));
-        r.item("seam_anchor", new ItemSettings().color(0x7A4AD0).texture("seam_anchor").title("Якір Шву"));
+        // три якорі Ритуалу - по одному з кожного виміру (рішення Святослава 29.10): привід повернутися в Незер і в Край
+        r.item("seam_anchor", new ItemSettings().color(0x7A4AD0).texture("seam_anchor").title("Якір Світу"));
         r.recipe("seam_anchor", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "obsidian", "diamond").result("seam_anchor", 1));
+        tex("nether_anchor", ItemTextureGen.anchor(0xFFD06020, 0xFFFFC070)); tex("end_anchor", ItemTextureGen.anchor(0xFF6A8A5A, 0xFFE0F0B0));
+        r.item("nether_anchor", new ItemSettings().color(0xD06020).texture("nether_anchor").title("Якір Незеру"));
+        r.recipe("nether_anchor", RecipeSettings.shapeless("ember_crystal", "ember_crystal", "obsidian", "gold_ingot").result("nether_anchor", 1));
+        r.item("end_anchor", new ItemSettings().color(0x6A8A5A).texture("end_anchor").title("Якір Краю"));
+        r.recipe("end_anchor", RecipeSettings.shapeless("end_stone", "end_stone", "end_stone", "end_stone", "liminite_shard", "diamond").result("end_anchor", 1));
         r.item("seam_wings", new ItemSettings().armor(ArmorSlot.CHEST, 0, 0).durability(432).color(0xA890D8).texture("seam_wings").title("Крила Шву"));
         r.item("seam_heart", new ItemSettings().color(0xF0C0FF).texture("seam_heart").maxStack(1).title("Серце Шву"));
         r.item("seam_cure", new ItemSettings().color(0x50E0B0).texture("seam_cure").title("Зілля Шву"));
@@ -253,6 +259,8 @@ public final class VanillaContent implements VoxelinMod {
                 .entry("string", 2, 4, 5).entry("raw_gold", 2, 4, 6).entry("steak", 1, 3, 5).entry("iron_pickaxe", 1, 1, 1));
         r.loot("fortress", new LootSettings().rolls(3, 5).entry("iron_ingot", 2, 5, 9).entry("gold_ingot", 1, 3, 6).entry("diamond", 1, 3, 4).entry("iron_sword", 1, 1, 3)
                 .entry("steak", 2, 5, 7).entry("coal", 4, 10, 7).entry("raw_iron", 3, 6, 6).entry("diamond_pickaxe", 1, 1, 1).entry("cooked_chicken", 2, 4, 5));
+        r.loot("nether_fortress", new LootSettings().rolls(3, 5).entry("ember", 2, 6, 10).entry("ember_crystal", 1, 2, 3).entry("gold_ingot", 2, 5, 7).entry("iron_ingot", 2, 4, 6)
+                .entry("diamond", 1, 2, 3).entry("obsidian", 2, 4, 4).entry("flint_and_steel", 1, 1, 3).entry("arrow", 4, 12, 5));
         r.loot("village", new LootSettings().rolls(1, 3).entry("apple", 1, 3, 8).entry("cooked_chicken", 1, 2, 6).entry("steak", 1, 2, 5).entry("coal", 2, 5, 6)
                 .entry("stick", 3, 8, 6).entry("iron_ingot", 1, 2, 3).entry("gold_ingot", 1, 1, 2).entry("leather", 1, 2, 4));
         r.loot("mine", new LootSettings().rolls(1, 3).entry("coal", 4, 9, 10).entry("raw_iron", 2, 4, 6).entry("raw_copper", 2, 5, 6).entry("stick", 3, 8, 8)
@@ -327,6 +335,13 @@ public final class VanillaContent implements VoxelinMod {
                 .legPart(-0.14f, 0, 0, 0.22f, 0.85f, 0.22f, 0x9A9AA8, false).legPart(0.14f, 0, 0, 0.22f, 0.85f, 0.22f, 0x9A9AA8, true)
                 .part(0, 0.85f, 0, 0.48f, 0.7f, 0.24f, 0xB0B0BE).part(-0.34f, 1.0f, 0, 0.16f, 0.65f, 0.16f, 0xA4A4B2).part(0.34f, 1.0f, 0, 0.16f, 0.65f, 0.16f, 0xA4A4B2)
                 .part(0, 1.55f, 0, 0.46f, 0.46f, 0.46f, 0xC4C4D0).part(-0.1f, 1.6f, -0.24f, 0.08f, 0.06f, 0.02f, 0x2A2A3A).part(0.1f, 1.6f, -0.24f, 0.08f, 0.06f, 0.02f, 0x2A2A3A));
+        // Жарняк - істота Незеру: не горить у лаві, вартує фортеці; з нього жарини й зрідка жаровий кристал
+        r.mob("ember_wraith", new MobSettings().health(22).speed(2.6f).size(0.6f, 1.9f).behavior(MobSettings.Behavior.HOSTILE).attack(5, 1.2f, 1.1f).detect(20).dimension("nether").fireproof().title("Жарняк")
+                .drops("ember", 1, 3, 1f).drops("ember_crystal", 1, 1, 0.1f)
+                .legPart(-0.14f, 0, 0, 0.24f, 0.85f, 0.24f, 0x3A1A16, false).legPart(0.14f, 0, 0, 0.24f, 0.85f, 0.24f, 0x3A1A16, true)
+                .part(0, 0.85f, 0, 0.52f, 0.72f, 0.28f, 0x4A201A).part(0, 1.05f, -0.15f, 0.2f, 0.3f, 0.02f, 0xF08020)
+                .part(-0.36f, 1.0f, 0, 0.18f, 0.68f, 0.18f, 0x3A1A16).part(0.36f, 1.0f, 0, 0.18f, 0.68f, 0.18f, 0x3A1A16)
+                .part(0, 1.58f, 0, 0.46f, 0.46f, 0.46f, 0x2A1210).part(-0.1f, 1.62f, -0.24f, 0.09f, 0.06f, 0.02f, 0xFFB030).part(0.1f, 1.62f, -0.24f, 0.09f, 0.06f, 0.02f, 0xFFB030));
         MobSettings spider = new MobSettings().health(16).speed(3.2f).size(1.0f, 0.6f).behavior(MobSettings.Behavior.NEUTRAL_DAY).attack(2, 1.3f, 0.8f).detect(12).title("Павук")
                 .drops("string", 0, 2, 1f)
                 .part(0, 0.25f, 0.15f, 0.6f, 0.35f, 0.6f, 0x2A2420).part(0, 0.28f, -0.4f, 0.4f, 0.3f, 0.35f, 0x3A302A)
@@ -412,6 +427,7 @@ public final class VanillaContent implements VoxelinMod {
         r.structure("temple", Structures.TEMPLE);
         r.structure("seam_gate", Structures.SEAM_GATE);
         r.structure("keeper_home", Structures.KEEPER_HOME);
+        r.structure("nether_fortress", Structures.NETHER_FORTRESS);
         r.loot("keeper_home", new LootSettings().rolls(3, 5).entry("liminite_shard", 2, 5, 10).entry("threshold_bloom", 1, 2, 6).entry("echo_dust", 1, 3, 6).entry("diamond", 1, 2, 3).entry("lamp", 1, 2, 4).entry("apple", 1, 3, 5));
         r.structure("fortress", Structures.FORTRESS);
         r.structure("village_house_small", Structures.VILLAGE_HOUSE_SMALL);

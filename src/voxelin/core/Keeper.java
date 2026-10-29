@@ -13,7 +13,16 @@ public final class Keeper {
     public record Choice(String action, String label, boolean enabled) {}
     public record Dialog(String text, List<Choice> choices) {}
 
-    public static final String ANCHOR = "voxelin:seam_anchor";
+    public static final String ANCHOR = "voxelin:seam_anchor", ANCHOR_NETHER = "voxelin:nether_anchor", ANCHOR_END = "voxelin:end_anchor";
+    /** Три якорі Ритуалу - по одному з кожного виміру. */
+    public static final java.util.List<String> ANCHORS = java.util.List.of(ANCHOR, ANCHOR_NETHER, ANCHOR_END);
+
+    /** Чи є в інвентарі по якорю кожного виміру. */
+    public static boolean hasAnchors(World w, Inventory inv) {
+        if (inv == null) return false;
+        for (String a : ANCHORS) if (Trading.count(inv, w.itemTypes, a) < 1) return false;
+        return true;
+    }
 
     public static Dialog dialog(World w, Inventory inv) {
         WorldInfo i = w.info;
@@ -35,9 +44,10 @@ public final class Keeper {
                         + "Обидва шляхи чесні. Вибір остаточний.", c);
             case RITUAL:
                 if (i.ritualStage == 0) {
-                    boolean has = inv != null && Trading.count(inv, w.itemTypes, ANCHOR) >= 3;
-                    c.add(new Choice("give_anchors", "Віддати три якорі Шву", has));
-                    return new Dialog("Ти обрав Ритуал. Принеси мені три якорі Шву: кожен - два уламки лімініту, обсидіан і алмаз. Коли віддаси їх, Край відкриє тих, хто тримав Дракона. Здолай обох - і Шов запечатається заново.", c);
+                    c.add(new Choice("give_anchors", "Віддати три якорі Шву", hasAnchors(w, inv)));
+                    return new Dialog("Ти обрав Ритуал. Шов тримається на трьох світах - принеси мені по якорю з кожного. Якір Світу: два уламки лімініту, обсидіан і алмаз. "
+                            + "Якір Незеру: два жарові кристали (лімініт, перегрітий біля лавового моря), обсидіан і золото. Якір Краю: чотири камені Краю, уламок лімініту й алмаз. "
+                            + "Коли віддаси їх, Край відкриє тих, хто тримав Дракона. Здолай обох - і Шов запечатається заново.", c);
                 }
                 if (i.ritualStage == 1) return new Dialog("Ткач і Розплітач у Краї. Тримай їх у рівновазі: коли падає один, другий лютує. Здолай обох.", c);
                 return new Dialog("Ритуал звершено. Шов запечатано. Дякую, мандрівнику. Край тепер твій, а світ - цілий.", c);
@@ -63,13 +73,13 @@ public final class Keeper {
                 w.unlockRecord("voxelin:keeper"); w.unlockRecord("voxelin:choice_infection");
                 return "Ти обрав Зараження. Забери яйце.";
             case "give_anchors":
-                if (i.eggChoice != WorldInfo.EggChoice.RITUAL || i.ritualStage != 0 || inv == null || Trading.count(inv, w.itemTypes, ANCHOR) < 3) return null;
-                int left = 3;
-                for (int k = 0; k < Inventory.SIZE && left > 0; k++) {
+                if (i.eggChoice != WorldInfo.EggChoice.RITUAL || i.ritualStage != 0 || !hasAnchors(w, inv)) return null;
+                for (String a : ANCHORS) for (int k = 0; k < Inventory.SIZE; k++) { // по одному кожного
                     Inventory.Stack s = inv.get(k);
-                    if (s == null || !s.item.equals(ANCHOR)) continue;
-                    int m = Math.min(left, s.count); s.count -= m; left -= m;
+                    if (s == null || !s.item.equals(a)) continue;
+                    s.count--;
                     if (s.count <= 0) inv.set(k, null);
+                    break;
                 }
                 i.ritualStage = 1;
                 w.unlockRecord("voxelin:ritual_twins");

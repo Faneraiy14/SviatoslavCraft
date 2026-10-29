@@ -973,6 +973,89 @@ BBBBBBBBBBB
 BBBBBBBBBBB
 """;
 
+    /** Зала фортеці Незеру (ставить генератор Незеру в центрі хреста мостів; двері на всі чотири боки). */
+    public static final String NETHER_FORTRESS = """
+place: manual
+legend:
+  B = fortress_bricks
+  E = ember_vein
+  K = chest loot=nether_fortress
+  M = mob ember_wraith
+  _ = air
+layers:
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+---
+BBBB___BBBB
+B_________B
+B_K_______B
+B____M____B
+___________
+___________
+___________
+B____M____B
+B_______K_B
+B_________B
+BBBB___BBBB
+---
+BBBB___BBBB
+B_________B
+B_________B
+B_________B
+___________
+___________
+___________
+B_________B
+B_________B
+B_________B
+BBBB___BBBB
+---
+BBBB___BBBB
+BE_______EB
+B_________B
+B_________B
+___________
+___________
+___________
+B_________B
+B_________B
+BE_______EB
+BBBB___BBBB
+---
+BBBBBBBBBBB
+B_________B
+B_________B
+B_________B
+B_________B
+B_________B
+B_________B
+B_________B
+B_________B
+B_________B
+BBBBBBBBBBB
+---
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+BBBBBBBBBBB
+""";
+
     /** Дім Сторожа в міжсвітті (ставить генератор міжсвіття біля острова прибуття; у звичайному світі не з'являється - роль). Двері на +z. */
     public static final String KEEPER_HOME = """
 place: manual

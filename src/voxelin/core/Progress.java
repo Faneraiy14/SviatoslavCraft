@@ -51,8 +51,8 @@ public final class Progress {
         g("choice", "Поговори зі Сторожем Шва", "Він з'явиться біля яйця. ПКМ по ньому - і обери: Ритуал чи Зараження. Наслідки він назве наперед.",
                 (w, inv) -> w.info.eggChoice != WorldInfo.EggChoice.NONE);
         // --- гілка Ритуалу
-        g(Branch.RITUAL, "anchors", "Три якорі Шву", "Якір: два уламки лімініту, обсидіан і алмаз. Обсидіан - у вежах Краю, береться лише алмазною киркою.",
-                (w, inv) -> w.info.ritualStage >= 1 || inv != null && Trading.count(inv, w.itemTypes, Keeper.ANCHOR) >= 3);
+        g(Branch.RITUAL, "anchors", "Три якорі Шву", "По одному з кожного виміру. Світу: 2 лімініту, обсидіан, алмаз. Незеру: 2 жарові кристали, обсидіан, золото. Краю: 4 камені Краю, лімініт, алмаз.",
+                (w, inv) -> w.info.ritualStage >= 1 || Keeper.hasAnchors(w, inv));
         g(Branch.RITUAL, "ritual", "Віддай якорі Сторожу", "ПКМ по Сторожу в Краї - «Віддати три якорі Шву».", (w, inv) -> w.info.ritualStage >= 1);
         g(Branch.RITUAL, RITUAL_END, "Здолай Ткача й Розплітача", "Обидва в Краї. Коли падає один, другий лютує - знижуй їм здоров'я порівну.", (w, inv) -> w.info.ritualStage >= 2);
         // --- гілка Зараження

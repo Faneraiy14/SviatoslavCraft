@@ -11,15 +11,26 @@ import voxelin.core.Chunk;
  */
 public final class NetherGenerator implements Generator {
     public static final int CEIL = 127, LAVA = 31, ORE_MAX_Y = 26;
+    /** Фортеці: одна на клітинку 128x128 з імовірністю 0.5; зала на висоті FORT_Y, від неї хрест мостів по BRIDGE блоків. */
+    public static final int FORT_CELL = 128, FORT_Y = 64, BRIDGE = 36, HALL = 11;
 
     private final long seed;
-    private final int bedrock, cinder, ash, lava, emberVein, emberOre, scar;
+    private final int bedrock, cinder, ash, lava, emberVein, emberOre, scar, bricks;
     private final Noise big, small, dress;
+    private final StructureTemplate hall;
+    private final StructurePlacer stamper;
 
-    public NetherGenerator(long seed, BlockRegistry reg) {
+    public NetherGenerator(long seed, BlockRegistry reg) { this(seed, reg, java.util.List.of()); }
+
+    public NetherGenerator(long seed, BlockRegistry reg, java.util.List<StructureTemplate> templates) {
         this.seed = seed;
         bedrock = id(reg, "bedrock"); cinder = id(reg, "cinder"); ash = id(reg, "ash"); lava = id(reg, "lava");
         emberVein = id(reg, "ember_vein"); emberOre = id(reg, "ember_ore"); scar = id(reg, "seam_scar");
+        bricks = id(reg, "fortress_bricks");
+        StructureTemplate h = null;
+        for (StructureTemplate t : templates) if (t.name.endsWith("nether_fortress")) h = t;
+        hall = h;
+        stamper = new StructurePlacer(seed, java.util.List.of(), (x, z) -> 0, 0);
         big = new Noise(seed ^ 0x4E7E1L); small = new Noise(seed ^ 0x4E7E2L); dress = new Noise(seed ^ 0x4E7E3L);
     }
 
@@ -28,6 +39,28 @@ public final class NetherGenerator implements Generator {
     @Override public int surfaceY(long x, long z) { return 64; }
     @Override public String biomeAt(long x, long z) { return "Незер"; }
     @Override public int seaLevel() { return LAVA; }
+    @Override public java.util.List<String> structureNames() { return java.util.List.of("nether_fortress"); }
+
+    /** Центр фортеці клітинки або null. */
+    public long[] fortress(long cx, long cz) {
+        long hh = h(seed ^ 0xF0E7L, cx, 0, cz);
+        if (frac(hh) >= 0.5) return null;
+        return new long[]{cx * FORT_CELL + 40 + (hh >>> 8) % 48, cz * FORT_CELL + 40 + (hh >>> 20) % 48};
+    }
+
+    @Override public long[] locate(String name, long x, long z) {
+        if (!name.endsWith("nether_fortress")) return null;
+        long ccx = Math.floorDiv(x, (long) FORT_CELL), ccz = Math.floorDiv(z, (long) FORT_CELL);
+        long[] best = null; double bd = Double.MAX_VALUE;
+        for (int r = 0; r <= 8; r++) for (long cx = ccx - r; cx <= ccx + r; cx++) for (long cz = ccz - r; cz <= ccz + r; cz++) {
+            if (Math.max(Math.abs(cx - ccx), Math.abs(cz - ccz)) != r) continue;
+            long[] f = fortress(cx, cz);
+            if (f == null) continue;
+            double d = Math.hypot(f[0] - x, f[1] - z);
+            if (d < bd) { bd = d; best = new long[]{f[0], FORT_Y, f[1], (long) d}; }
+        }
+        return best;
+    }
 
     /** Щільність у точці: > 0 - камінь. Зали найширші на висоті ~70, до підлоги й стелі камінь густішає. */
     private double density(long x, int y, long z) {
@@ -71,6 +104,31 @@ public final class NetherGenerator implements Generator {
                 if (open && frac(hh) < 0.025) { c.set(x, y, z, emberVein); continue; }
                 if (y <= ORE_MAX_Y && frac(hh) > 0.996) c.set(x, y, z, emberOre);
             }
+        }
+        fortresses(c, bx, bz);
+    }
+
+    /** Фортеці, що зачіпають чанк: мости (підлога, поручні, прорубаний прохід, опори до лави) і зала з шаблона. */
+    private void fortresses(Chunk c, long bx, long bz) {
+        if (bricks <= 0) return;
+        long ccx = Math.floorDiv(bx, (long) FORT_CELL), ccz = Math.floorDiv(bz, (long) FORT_CELL);
+        for (long cx = ccx - 1; cx <= ccx + 1; cx++) for (long cz = ccz - 1; cz <= ccz + 1; cz++) {
+            long[] f = fortress(cx, cz);
+            if (f == null) continue;
+            long fx = f[0], fz = f[1];
+            int reach = HALL / 2 + BRIDGE;
+            if (fx + reach < bx || fx - reach >= bx + 16 || fz + reach < bz || fz - reach >= bz + 16) continue;
+            for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
+                long wx = bx + x, wz = bz + z, dx = wx - fx, dz = wz - fz;
+                boolean alongX = Math.abs(dz) <= 2 && Math.abs(dx) <= reach, alongZ = Math.abs(dx) <= 2 && Math.abs(dz) <= reach;
+                if (!alongX && !alongZ) continue;
+                long side = alongX ? Math.abs(dz) : Math.abs(dx), along = alongX ? Math.abs(dx) : Math.abs(dz);
+                if (alongX && alongZ) side = Math.min(Math.abs(dx), Math.abs(dz));
+                c.set(x, FORT_Y, z, bricks);
+                for (int y = FORT_Y + 1; y <= FORT_Y + 4; y++) c.set(x, y, z, side == 2 && y == FORT_Y + 1 ? bricks : 0); // поручні по краях, прохід прорубано
+                if (side == 0 && along % 8 == 4) for (int y = FORT_Y - 1; y > 1 && c.get(x, y, z) != cinder && c.get(x, y, z) != bedrock; y--) c.set(x, y, z, bricks); // опора
+            }
+            if (hall != null) stamper.stampAt(c, hall, fx - hall.sx / 2, FORT_Y, fz - hall.sz / 2, 0, seed ^ (cx * 31 + cz));
         }
     }
 

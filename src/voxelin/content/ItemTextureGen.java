@@ -527,8 +527,11 @@ public final class ItemTextureGen {
     }
 
     /** Якір Шву: фіолетовий якір із сяйвом. */
-    public static int[] anchor() {
-        int[] a = new int[256]; int c = 0xFF7A4AD0, l = 0xFFC8A0FF;
+    public static int[] anchor() { return anchor(0xFF7A4AD0, 0xFFC8A0FF); }
+
+    /** Якір свого кольору (Незер - жаровий, Край - блідо-зелений). */
+    public static int[] anchor(int c, int l) {
+        int[] a = new int[256];
         for (int y = 2; y <= 12; y++) px(a, 7, y, c);
         for (int y = 2; y <= 12; y++) px(a, 8, y, l);
         for (int x = 4; x <= 11; x++) px(a, x, 5, c);

@@ -85,19 +85,22 @@ public class VoxelinStoryTest {
     static Mob find(World w, String id) { for (Mob m : w.mobs()) if (m.type.name.equals(id) && !m.dying) return m; return null; }
 
     static void ritual() throws Exception {
-        check(g.items.get(Keeper.ANCHOR) != null && g.items.get("voxelin:seam_heart") != null, "якір і серце існують");
+        for (String an : Keeper.ANCHORS) check(g.items.get(an) != null, "якір існує: " + an);
+        check(g.items.get("voxelin:seam_heart") != null, "серце існує");
         World w = end("r1");
         w.info.dragonDead = true;
         Inventory inv = new Inventory(w.itemTypes);
         check(Keeper.act(w, inv, "give_anchors") == null, "без вибору Ритуалу якорі не беруться");
         Keeper.act(w, inv, "ritual");
-        inv.add(Keeper.ANCHOR, 2);
-        check(Keeper.act(w, inv, "give_anchors") == null && w.info.ritualStage == 0, "двох якорів замало");
+        inv.add(Keeper.ANCHOR, 3);
+        check(Keeper.act(w, inv, "give_anchors") == null && w.info.ritualStage == 0, "три якорі Світу - не те: треба з кожного виміру");
+        inv.add(Keeper.ANCHOR_NETHER, 1);
+        check(!Keeper.dialog(w, inv).choices().get(0).enabled() && Keeper.act(w, inv, "give_anchors") == null, "без якоря Краю - ні");
         check(w.spawnRitualBossesIfNeeded() == 0, "до віддачі якорів босів нема");
-        inv.add(Keeper.ANCHOR, 2);
-        check(Keeper.dialog(w, inv).choices().get(0).enabled(), "з 4 якорями кнопка активна");
+        inv.add(Keeper.ANCHOR_END, 2);
+        check(Keeper.dialog(w, inv).choices().get(0).enabled(), "по якорю з кожного виміру - кнопка активна");
         check(Keeper.act(w, inv, "give_anchors") != null && w.info.ritualStage == 1, "якорі віддано");
-        check(Trading.count(inv, w.itemTypes, Keeper.ANCHOR) == 1, "забрано рівно 3");
+        check(Trading.count(inv, w.itemTypes, Keeper.ANCHOR) == 2 && Trading.count(inv, w.itemTypes, Keeper.ANCHOR_NETHER) == 0 && Trading.count(inv, w.itemTypes, Keeper.ANCHOR_END) == 1, "забрано по одному кожного");
         Mob a = find(w, World.WEAVER), b = find(w, World.UNRAVELER);
         check(a != null && b != null && a.type.boss && a.type.flying && b.keep, "Ткач і Розплітач прилетіли");
         check(w.spawnRitualBossesIfNeeded() == 0, "удруге не створюються");
@@ -122,7 +125,7 @@ public class VoxelinStoryTest {
         w.info.dragonDead = true;
         Inventory inv = new Inventory(w.itemTypes);
         Keeper.act(w, inv, "ritual");
-        inv.add(Keeper.ANCHOR, 3);
+        for (String an : Keeper.ANCHORS) inv.add(an, 1);
         Keeper.act(w, inv, "give_anchors");
         Mob a = find(w, World.WEAVER);
         w.hurtMob(a, 10_000, 0, 0, a.pos);

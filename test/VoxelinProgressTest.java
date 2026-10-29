@@ -82,7 +82,10 @@ public class VoxelinProgressTest {
         check(Progress.current(w.info).id().equals("anchors"), "далі якорі");
         inv.add(Keeper.ANCHOR, 3);
         Progress.update(w, inv);
-        check(Progress.current(w.info).id().equals("ritual"), "три якорі є - віддати");
+        check(Progress.current(w.info).id().equals("anchors"), "три якорі Світу - ще не все");
+        inv.add(Keeper.ANCHOR_NETHER, 1); inv.add(Keeper.ANCHOR_END, 1);
+        Progress.update(w, inv);
+        check(Progress.current(w.info).id().equals("ritual"), "по якорю з кожного виміру - віддати");
         w.info.ritualStage = 2;
         Progress.update(w, inv);
         check(Progress.finished(w.info) && Progress.current(w.info) == null, "Ритуал звершено - гру пройдено");
@@ -170,7 +173,7 @@ public class VoxelinProgressTest {
 
     /** Блоки, які гравець знаходить у звичайному світі (генератор, структури). */
     static final String[] OVERWORLD = {"oak_log", "birch_log", "spruce_log", "dirt", "grass", "sand", "gravel", "stone", "deep_stone", "sandstone",
-            "coal_ore", "iron_ore", "copper_ore", "gold_ore", "diamond_ore", "liminite_ore"};
+            "coal_ore", "iron_ore", "copper_ore", "gold_ore", "diamond_ore", "liminite_ore", "obsidian"};
 
     static int toolTier(Set<String> have, ToolKind kind) {
         int t = 0;
@@ -211,6 +214,10 @@ public class VoxelinProgressTest {
                 for (String boss : List.of("ender_dragon", "seam_weaver", "seam_unraveler")) for (BlockSettings.Drop d : g.mobTypes.get("voxelin:" + boss).drops) have.add("voxelin:" + d.item.replace("voxelin:", ""));
             }
             if (have.contains("voxelin:threshold_key")) { mine(have, "threshold_bloom"); mobs(have, "between"); }
+            if (have.contains("voxelin:flint_and_steel") && have.contains("voxelin:obsidian")) { // портал у Незер (обсидіан - з берегів лави в глибоких печерах)
+                for (String b : List.of("cinder", "ash", "ember_vein", "ember_ore", "fortress_bricks")) mine(have, b);
+                mobs(have, "nether");
+            }
             boolean bench = have.contains("voxelin:workbench"), furnace = have.contains("voxelin:furnace");
             for (RecipeRegistry.Recipe r : g.recipes.all()) {
                 if ((r.w > 2 || r.h > 2) && !bench) continue;
@@ -229,7 +236,7 @@ public class VoxelinProgressTest {
         Set<String> have = obtainable();
         for (String need : List.of("workbench", "furnace", "stone_pickaxe", "iron_ingot", "iron_pickaxe", "diamond", "diamond_pickaxe", "liminite_shard",
                 "diamond_helmet", "diamond_chestplate", "diamond_leggings", "diamond_boots", "end_eye", "gold_ingot", "obsidian",
-                "seam_anchor", "threshold_key", "threshold_bloom", "seam_cure", "seam_fire", "dragon_egg", "bed"))
+                "seam_anchor", "flint_and_steel", "ember", "ember_crystal", "nether_anchor", "end_anchor", "bow", "arrow", "threshold_key", "threshold_bloom", "seam_cure", "seam_fire", "dragon_egg", "bed"))
             check(have.contains("voxelin:" + need), "з нуля можна здобути " + need);
     }
 }

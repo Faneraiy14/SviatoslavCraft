@@ -57,6 +57,11 @@ public final class BlockSettings {
     /** Скільки ламати (етап «Виживання»); від'ємне - незламний (корінна порода). */
     public BlockSettings hardness(float h) { hardness = h < 0 ? -1f : h; return this; }
 
+    String shape;
+    /** Форма замість повного куба: "torch" - тонкий стовпчик 2x10 пікселів посередині клітинки (текстуру беруть ті самі пікселі). */
+    public BlockSettings shape(String s) { shape = s; return this; }
+    public String shapeValue() { return shape; }
+
     String sound;
     /** Матеріал для звуків (stone, wood, dirt, grass, sand, glass, metal, snow); без нього - здогадка з інструмента й назви. */
     public BlockSettings sound(String material) { sound = material; return this; }
@@ -65,7 +70,7 @@ public final class BlockSettings {
     /** Копія, де назви текстур без простору імен ("stone") отримують префікс мода ("voxelin:stone"). Викликає завантажувач. */
     public BlockSettings qualified(String modId) {
         BlockSettings b = new BlockSettings();
-        b.color = color; b.solid = solid; b.opaque = opaque; b.liquid = liquid; b.translucent = translucent; b.light = light; b.hardness = hardness; b.absorb = absorb; b.title = title; b.interact = interact; b.tool = tool; b.minTier = minTier; b.noItem = noItem; b.noDrops = noDrops; b.sound = sound;
+        b.color = color; b.solid = solid; b.opaque = opaque; b.liquid = liquid; b.translucent = translucent; b.light = light; b.hardness = hardness; b.absorb = absorb; b.title = title; b.interact = interact; b.tool = tool; b.minTier = minTier; b.noItem = noItem; b.noDrops = noDrops; b.sound = sound; b.shape = shape;
         if (drops != null) { b.drops = new java.util.ArrayList<>(); for (Drop d : drops) b.drops.add(new Drop(d.item.indexOf(':') >= 0 ? d.item : modId + ":" + d.item, d.min, d.max, d.chance)); }
         b.texTop = q(texTop, modId); b.texSide = q(texSide, modId); b.texBottom = q(texBottom, modId);
         return b;

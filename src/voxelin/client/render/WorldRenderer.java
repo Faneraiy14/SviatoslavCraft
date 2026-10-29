@@ -125,6 +125,7 @@ public final class WorldRenderer implements World.Listener {
         props = new ChunkMesher.Props(opaque, trans, air, color, lTop, lSide, lBot);
         props.emit = new int[all.length];
         for (BlockType t : all) props.emit[t.id] = t.light;
+        for (BlockType t : all) if ("torch".equals(t.shape)) { if (props.box == null) props.box = new float[all.length][]; props.box[t.id] = new float[]{7 / 16f, 0, 7 / 16f, 9 / 16f, 10 / 16f, 9 / 16f}; }
         // потоків мешингу не більше половини ядер: решта - головному потоку (малювання) і робочому столу; -Dvoxelin.meshThreads=N перевизначає
         poolSize = Integer.getInteger("voxelin.meshThreads", Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
         pool = Executors.newFixedThreadPool(poolSize, r -> { Thread t = new Thread(r, "voxelin-mesh"); t.setDaemon(true); t.setPriority(Thread.NORM_PRIORITY - 1); return t; });

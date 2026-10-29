@@ -217,6 +217,20 @@ public final class TextureGen {
 
     public static int[] oakPlanks() { return planks(173, 138, 84); }
     public static int[] birchPlanks() { return planks(216, 196, 140); }
+    public static int[] palePlanks() { return planks(176, 170, 158); }
+
+    /** Смолоскип: у мешері це стовпчик 2x10 посередині, тож малюємо лише ці пікселі - полум'я в рядках 6-8, далі палиця. */
+    public static int[] torch() { return make((x, y) -> {
+        if (y >= 6 && y <= 8) return y == 6 ? rgb(255, 236, 140) : rgb(255, 170 + (x == 7 ? 30 : 0), 60);
+        return speck(rgb(120, 88, 48), 6, 53, x, y);
+    }); }
+
+    /** Цегла: червоні цеглини з сірим розчином. */
+    public static int[] bricks() { return make((x, y) -> {
+        boolean mortar = y % 4 == 3 || ((y / 4) % 2 == 0 ? x % 8 == 7 : x % 8 == 3);
+        if (mortar) return speck(rgb(170, 160, 150), 6, 54, x, y);
+        return speck(rgb(150, 74, 56), 10, 55, x / 2, y);
+    }); }
     public static int[] sprucePlanks() { return planks(112, 84, 50); }
 
     private static int[] leaves(int r, int g, int b, double holes) { return make((x, y) -> {

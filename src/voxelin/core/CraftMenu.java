@@ -10,6 +10,8 @@ public final class CraftMenu extends Menu {
     private final Inventory.Stack[] grid;
     private final RecipeRegistry recipes;
     private Inventory.Stack result;
+    /** Скільки взяти з кожної клітинки при крафті (рецепти з кількома предметами на клітинку). */
+    private int[] use;
     private boolean took;
 
     public CraftMenu(ItemRegistry items, RecipeRegistry recipes, Inventory inv, int n) {
@@ -57,11 +59,11 @@ public final class CraftMenu extends Menu {
 
     private void consume() {
         took = true;
-        for (int k = 0; k < grid.length; k++) if (grid[k] != null && --grid[k].count <= 0) grid[k] = null;
+        for (int k = 0; k < grid.length; k++) if (grid[k] != null && (grid[k].count -= use == null ? 1 : Math.max(1, use[k])) <= 0) grid[k] = null;
         refresh();
     }
 
-    public void refresh() { result = Crafting.match(recipes, items, grid, n); }
+    public void refresh() { Crafting.Match m = Crafting.matchFull(recipes, items, grid, n); result = m == null ? null : m.result(); use = m == null ? null : m.use(); }
 
     @Override public void click(int i, int button, boolean shift) {
         if (i == RESULT && shift) { // shift по результату - крафтимо, доки є з чого й куди класти

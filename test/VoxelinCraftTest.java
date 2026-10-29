@@ -10,7 +10,10 @@ public class VoxelinCraftTest {
     static int n;
     static void check(boolean ok, String what) { n++; if (!ok) { System.out.println("FAIL: " + what); System.exit(1); } }
     static Game g;
-    static Inventory.Stack s(String item) { return new Inventory.Stack("voxelin:" + item, 1); }
+    static Inventory.Stack s(String item) { // "oak_planks*2" - стос із двох
+        int k = item.indexOf('*');
+        return k < 0 ? new Inventory.Stack("voxelin:" + item, 1) : new Inventory.Stack("voxelin:" + item.substring(0, k), Integer.parseInt(item.substring(k + 1)));
+    }
 
     static Inventory.Stack[] grid(int size, String... rows) { // кожен рядок - ширина size, комірки через кому, '-' порожньо
         Inventory.Stack[] a = new Inventory.Stack[size * size];
@@ -22,7 +25,7 @@ public class VoxelinCraftTest {
 
     public static void main(String[] a) throws Exception {
         g = new Game(new File("nope"), null);
-        recipes(); matching(); repair(); menu(); hotkeys(); validation(); ambiguity();
+        recipes(); matching(); repair(); menu(); perCell(); hotkeys(); validation(); ambiguity();
         System.out.println("VoxelinCraftTest: " + n + " перевірок OK");
     }
 
@@ -38,8 +41,17 @@ public class VoxelinCraftTest {
         check(craft(grid(2, "-,-", "-,oak_log"), 2).item.equals("voxelin:oak_planks"), "безформний у куті");
         check(craft(grid(3, "-,-,-", "-,birch_log,-", "-,-,-"), 3).item.equals("voxelin:birch_planks"), "береза -> березові дошки на 3x3 по центру");
         check(craft(grid(2, "spruce_planks,-", "-,-"), 2).item.equals("voxelin:stick") && craft(grid(2, "spruce_planks,-", "-,-"), 2).count == 2, "дошка -> 2 палиці (будь-яка мітка #planks)");
-        check(craft(grid(2, "oak_planks,oak_planks", "oak_planks,oak_planks"), 2).item.equals("voxelin:workbench"), "верстак з 4 дощок");
-        check(craft(grid(2, "oak_planks,birch_planks", "spruce_planks,oak_planks"), 2).item.equals("voxelin:workbench"), "верстак із різних дощок (мітка)");
+        check(craft(grid(2, "oak_planks*2,oak_planks*2", "oak_planks*2,oak_planks*2"), 2).item.equals("voxelin:workbench"), "верстак з 8 дощок (по 2 в клітинці)");
+        check(craft(grid(2, "oak_planks*2,birch_planks*3", "spruce_planks*2,pale_planks*2"), 2).item.equals("voxelin:workbench"), "верстак із різних дощок (мітка)");
+        check(craft(grid(2, "oak_planks,oak_planks*2", "oak_planks*2,oak_planks*2"), 2) == null, "в одній клітинці лише 1 дошка - не верстак");
+        Inventory.Stack[] fg = grid(3, "cobblestone*2,cobblestone*2,cobblestone*2", "cobblestone*2,-,cobblestone*5", "cobblestone*2,cobblestone*2,cobblestone*2");
+        check(craft(fg, 3) != null && craft(fg, 3).item.equals("voxelin:furnace"), "піч: по 2 бруківки в кожній клітинці кільця");
+        check(craft(grid(3, "cobblestone,cobblestone,cobblestone", "cobblestone,-,cobblestone", "cobblestone,cobblestone,cobblestone"), 3) == null, "8 бруківки - ще не піч");
+        Crafting.Match fm = Crafting.matchFull(g.recipes, g.items, fg, 3);
+        check(fm.use()[0] == 2 && fm.use()[4] == 0 && fm.use()[5] == 2, "піч бере по 2 з клітинки (решта лишається)");
+        check(craft(grid(2, "coal,-", "stick,-"), 2).item.equals("voxelin:torch") && craft(grid(2, "coal,-", "stick,-"), 2).count == 4, "вугілля над палицею = 4 смолоскипи");
+        check(craft(grid(2, "pale_log,-", "-,-"), 2).item.equals("voxelin:pale_planks"), "бліда колода -> бліді дошки");
+        check(craft(grid(2, "brick,brick", "brick,brick"), 2).item.equals("voxelin:bricks"), "4 цеглини -> цегла");
         check(craft(grid(2, "oak_planks,oak_planks", "oak_planks,-"), 2) == null, "3 дошки - не верстак");
         check(craft(grid(2, "stone,stone", "stone,stone"), 2).count == 4, "камінь 2x2 -> 4 цегли");
         // кирка в різних положеннях і дзеркально
@@ -88,6 +100,23 @@ public class VoxelinCraftTest {
         check(craft(wg, 3) == null, "чужий предмет - нічого");
         wg = new Inventory.Stack[9]; wg[4] = new Inventory.Stack(Inventory.WINGS, 1, 0); wg[0] = new Inventory.Stack(Infection.SHARD, 1);
         check(craft(wg, 3) == null, "цілі крила не лагодяться");
+    }
+
+    /** Вікно крафту бере з клітинки стільки, скільки вимагає рецепт (піч - по 2 бруківки). */
+    static void perCell() {
+        Inventory inv = new Inventory(g.items);
+        CraftMenu m = new CraftMenu(g.items, g.recipes, inv, 3);
+        for (int k = 0; k < 9; k++) {
+            if (k == 4) continue;
+            inv.set(0, new Inventory.Stack("voxelin:cobblestone", 3));
+            m.click(0, 0, false); m.click(CraftMenu.GRID + k, 0, false);
+        }
+        check(m.result() != null && m.result().item.equals("voxelin:furnace"), "у вікні крафту склалась піч");
+        m.click(CraftMenu.RESULT, 0, false);
+        check(m.cursor() != null && m.cursor().item.equals("voxelin:furnace"), "піч у курсорі");
+        boolean left1 = true;
+        for (int k = 0; k < 9; k++) if (k != 4 && (m.gridStack(k) == null || m.gridStack(k).count != 1)) left1 = false;
+        check(left1 && m.result() == null, "з кожної клітинки взято по 2, лишилось по 1, нової печі нема");
     }
 
     static void menu() {
@@ -213,7 +242,7 @@ public class VoxelinCraftTest {
             int size = r.shaped ? Math.max(r.w, r.h) : 3;
             if (size < 2) size = 2;
             Inventory.Stack[] gr = new Inventory.Stack[size * size];
-            if (r.shaped) { int k = 0; for (int y = 0; y < r.h; y++) for (int x = 0; x < r.w; x++) { String ing = null; try { var f = r.getClass().getDeclaredField("cells"); f.setAccessible(true); ing = ((String[]) f.get(r))[x + y * r.w]; } catch (Exception e) { check(false, "рефлексія"); } if (ing != null) gr[x + y * size] = new Inventory.Stack(canon(ing), 1); } }
+            if (r.shaped) { int k = 0; for (int y = 0; y < r.h; y++) for (int x = 0; x < r.w; x++) { String ing = null; try { var f = r.getClass().getDeclaredField("cells"); f.setAccessible(true); ing = ((String[]) f.get(r))[x + y * r.w]; } catch (Exception e) { check(false, "рефлексія"); } if (ing != null) gr[x + y * size] = new Inventory.Stack(canon(ing), r.need(x, y)); } }
             else { int i = 0; for (String ing : r.allIngredients()) gr[i++] = new Inventory.Stack(canon(ing), 1); }
             List<RecipeRegistry.Recipe> hit = Crafting.matchAll(g.recipes, g.items, gr, size);
             check(hit.size() == 1 && hit.get(0) == r, "рецепт " + r.id + " однозначний: підходять " + hit.size());

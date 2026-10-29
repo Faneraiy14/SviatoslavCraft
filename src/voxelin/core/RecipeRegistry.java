@@ -12,31 +12,39 @@ public final class RecipeRegistry {
         public final boolean shaped, mirror;
         /** Форма: w*h клітинок (null - порожня). */
         final String[] cells;
+        /** Скільки предметів потрібно в кожній клітинці форми (паралельно cells). */
+        final int[] need;
         final List<String> ingredients;
 
         Recipe(String id, RecipeSettings s) {
             this.id = id; result = s.resultItem(); count = s.resultCount(); shaped = s.isShaped(); mirror = s.mirrorAllowed();
             if (shaped) {
                 String[] rows = s.rows();
-                h = rows.length; w = rows[0].length(); cells = new String[w * h]; ingredients = null;
+                h = rows.length; w = rows[0].length(); cells = new String[w * h]; need = new int[w * h]; ingredients = null;
                 for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
                     char c = rows[y].charAt(x);
                     if (c == '.' || c == ' ') continue;
                     String ing = s.keys().get(c);
                     if (ing == null) throw new IllegalArgumentException("рецепт " + id + ": нема ключа для '" + c + "'");
-                    cells[x + y * w] = ing;
+                    cells[x + y * w] = ing; need[x + y * w] = s.perCell(c);
                 }
                 boolean any = false; for (String c : cells) if (c != null) any = true;
                 if (!any) throw new IllegalArgumentException("рецепт " + id + ": порожня форма");
-            } else { w = h = 0; cells = null; ingredients = List.copyOf(s.ingredients()); }
+            } else { w = h = 0; cells = null; need = null; ingredients = List.copyOf(s.ingredients()); }
             if (result == null) throw new IllegalArgumentException("рецепт " + id + ": не задано результат");
         }
 
+        /** Усі інгредієнти з повторами (клітинка з потребою 2 дає два записи). */
         public List<String> allIngredients() {
             List<String> r = new ArrayList<>();
-            if (shaped) { for (String c : cells) if (c != null) r.add(c); } else r.addAll(ingredients);
+            if (shaped) { for (int i = 0; i < cells.length; i++) if (cells[i] != null) for (int k = 0; k < need[i]; k++) r.add(cells[i]); } else r.addAll(ingredients);
             return r;
         }
+
+        /** Інгредієнт у клітинці форми (x, y) або null. */
+        public String cell(int x, int y) { return shaped ? cells[x + y * w] : null; }
+        /** Скільки предметів потрібно в клітинці форми (x, y). */
+        public int need(int x, int y) { return shaped && cells[x + y * w] != null ? need[x + y * w] : 0; }
     }
 
     /** Плавка: вхід (предмет або #мітка) -> результат за seconds секунд. */

@@ -15,12 +15,43 @@ public final class Crafting {
         return ing.startsWith("#") ? items.inTag(ing.substring(1), item) : ing.equals(item);
     }
 
+    /** Результат крафту і скільки взяти з кожної клітинки сітки (use[i] - для grid[i]). */
+    public record Match(Inventory.Stack result, int[] use) {}
+
     /** Результат крафту для сітки n x n (grid - n*n стеків, null - порожньо), або null. */
     public static Inventory.Stack match(RecipeRegistry recipes, ItemRegistry items, Inventory.Stack[] grid, int n) {
+        Match m = matchFull(recipes, items, grid, n);
+        return m == null ? null : m.result;
+    }
+
+    public static Match matchFull(RecipeRegistry recipes, ItemRegistry items, Inventory.Stack[] grid, int n) {
         List<RecipeRegistry.Recipe> all = matchAll(recipes, items, grid, n);
-        if (!all.isEmpty()) return new Inventory.Stack(all.get(0).result, all.get(0).count);
+        int[] use = new int[grid.length];
+        if (!all.isEmpty()) {
+            RecipeRegistry.Recipe r = all.get(0);
+            if (r.shaped) {
+                int minX = n, minY = n;
+                for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) if (grid[x + y * n] != null) { minX = Math.min(minX, x); minY = Math.min(minY, y); }
+                boolean mirror = !fitsGrid(items, r, grid, n, minX, minY, false);
+                for (int y = 0; y < r.h; y++) for (int x = 0; x < r.w; x++) use[(minX + x) + (minY + y) * n] = r.need(mirror ? r.w - 1 - x : x, y);
+            } else for (int i = 0; i < grid.length; i++) use[i] = grid[i] == null ? 0 : 1;
+            return new Match(new Inventory.Stack(r.result, r.count), use);
+        }
         Inventory.Stack w = repairWings(items, grid);
-        return w != null ? w : repair(items, grid);
+        if (w == null) w = repair(items, grid);
+        if (w == null) return null;
+        for (int i = 0; i < grid.length; i++) use[i] = grid[i] == null ? 0 : 1;
+        return new Match(w, use);
+    }
+
+    private static boolean fitsGrid(ItemRegistry items, RecipeRegistry.Recipe r, Inventory.Stack[] grid, int n, int minX, int minY, boolean mirror) {
+        for (int y = 0; y < r.h; y++) for (int x = 0; x < r.w; x++) {
+            Inventory.Stack s = grid[(minX + x) + (minY + y) * n];
+            String ing = r.cell(mirror ? r.w - 1 - x : x, y);
+            if ((ing == null) != (s == null)) return false;
+            if (ing != null && (!ingredientMatches(items, ing, s.item) || s.count < r.need(mirror ? r.w - 1 - x : x, y))) return false;
+        }
+        return true;
     }
 
     /** Усі рецепти, що підходять до сітки (для перевірки на неоднозначність). */
@@ -35,7 +66,7 @@ public final class Crafting {
         for (RecipeRegistry.Recipe r : recipes.all()) {
             if (r.shaped) {
                 if (r.w != gw || r.h != gh) continue;
-                if (fits(items, r, cells, false) || (r.mirror && fits(items, r, cells, true))) out.add(r);
+                if (fitsGrid(items, r, grid, n, minX, minY, false) || (r.mirror && fitsGrid(items, r, grid, n, minX, minY, true))) out.add(r);
             } else if (r.ingredients.size() == filled) {
                 List<String> have = new ArrayList<>();
                 for (String c : cells) if (c != null) have.add(c);
@@ -43,15 +74,6 @@ public final class Crafting {
             }
         }
         return out;
-    }
-
-    private static boolean fits(ItemRegistry items, RecipeRegistry.Recipe r, String[] cells, boolean mirror) {
-        for (int y = 0; y < r.h; y++) for (int x = 0; x < r.w; x++) {
-            String ing = r.cells[(mirror ? r.w - 1 - x : x) + y * r.w], have = cells[x + y * r.w];
-            if ((ing == null) != (have == null)) return false;
-            if (ing != null && !ingredientMatches(items, ing, have)) return false;
-        }
-        return true;
     }
 
     private static boolean assign(ItemRegistry items, List<String> ing, List<String> have, int i, boolean[] used) {

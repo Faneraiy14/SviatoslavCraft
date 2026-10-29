@@ -27,6 +27,8 @@ public final class BlockType implements BlockRef {
     public final String interact;
     /** Матеріал звуку (кроки, ламання, ставлення). */
     public final String sound;
+    /** Форма (null - повний куб): "torch". */
+    public final String shape;
 
     BlockType(int id, String name, BlockSettings s) {
         this.id = id; this.name = name;
@@ -37,6 +39,7 @@ public final class BlockType implements BlockRef {
         drops = s.hasNoDrops() ? List.of() : (s.dropList() != null ? List.copyOf(s.dropList()) : (hasItem ? List.of(new BlockSettings.Drop(name, 1, 1, 1f)) : List.of()));
         texTop = s.textureTop(); texSide = s.textureSide(); texBottom = s.textureBottom();
         sound = s.soundValue() != null ? s.soundValue() : guessSound(name, s);
+        shape = s.shapeValue();
     }
 
     /** Здогадка матеріалу звуку за назвою й інструментом (моди можуть задати явно: BlockSettings.sound). */

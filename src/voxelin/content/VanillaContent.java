@@ -61,7 +61,8 @@ public final class VanillaContent implements VoxelinMod {
         tex("oak_log_top", TextureGen.oakLogTop()); tex("birch_log_top", TextureGen.birchLogTop()); tex("spruce_log_top", TextureGen.spruceLogTop()); tex("pale_log_top", TextureGen.paleLogTop());
         tex("cactus_top", TextureGen.cactusTop());
         tex("dragon_egg", ItemTextureGen.dragonEgg());
-        tex("iron_block", TextureGen.ironBlock());
+        tex("iron_block", TextureGen.ironBlock()); tex("pale_planks", TextureGen.palePlanks()); tex("torch", TextureGen.torch()); tex("bricks", TextureGen.bricks());
+        tex("brick", ItemTextureGen.ingot(0xB0583E));
         tex("petrified_log", TextureGen.petrifiedLog()); tex("petrified_log_top", TextureGen.petrifiedLogTop()); tex("seam_mud", TextureGen.seamMud());
         tex("seam_core", ItemTextureGen.seamCore()); tex("seam_growth", ItemTextureGen.seamGrowth()); tex("seam_scar", ItemTextureGen.seamScar());
         tex("threshold_stone", ItemTextureGen.thresholdStone()); tex("seam_thread", ItemTextureGen.seamThread()); tex("seam_rift", ItemTextureGen.rift());
@@ -107,6 +108,9 @@ public final class VanillaContent implements VoxelinMod {
         block("pale_log", new BlockSettings().textures("pale_log_top", "pale_log", "pale_log_top").color(cPaleLog).tool(ToolKind.AXE).title("Бліда колода").hardness(2f));
         block("cactus", new BlockSettings().textures("cactus_top", "cactus_side", "cactus_top").color(cCactus).tool(ToolKind.AXE).title("Кактус").hardness(0.4f));
         block("coal_ore", new BlockSettings().texture("coal_ore").color(cCoal).tool(ToolKind.PICKAXE).minTier(1).drops("coal").title("Вугільна руда").hardness(3f));
+        block("pale_planks", new BlockSettings().texture("pale_planks").color(0xB0AA9E).tool(ToolKind.AXE).title("Бліді дошки").hardness(2f));
+        block("torch", new BlockSettings().texture("torch").color(0xFFB040).shape("torch").solid(false).opaque(false).light(14).sound("wood").title("Смолоскип").hardness(0f));
+        block("bricks", new BlockSettings().texture("bricks").color(0x96503A).tool(ToolKind.PICKAXE).minTier(1).title("Цегла").hardness(2f));
         block("iron_block", new BlockSettings().texture("iron_block").color(0xD6D6DA).tool(ToolKind.PICKAXE).minTier(2).sound("metal").title("Залізний блок").hardness(5f));
         block("iron_ore", new BlockSettings().texture("iron_ore").color(cIron).tool(ToolKind.PICKAXE).minTier(2).drops("raw_iron").title("Залізна руда").hardness(3f));
         block("copper_ore", new BlockSettings().texture("copper_ore").color(cCopper).tool(ToolKind.PICKAXE).minTier(2).drops("raw_copper", 2, 3, 1f).title("Мідна руда").hardness(3f));
@@ -165,13 +169,18 @@ public final class VanillaContent implements VoxelinMod {
         r.item("gold_ingot", new ItemSettings().color(0xF5D13A).texture("gold_ingot").title("Золотий злиток"));
 
         // --- мітки й рецепти крафту (перша версія - чернетка, правимо разом зі Святославом; усе - дані)
-        r.tag("planks", "oak_planks", "birch_planks", "spruce_planks");
+        r.tag("planks", "oak_planks", "birch_planks", "spruce_planks", "pale_planks");
+        r.recipe("pale_planks", RecipeSettings.shapeless("pale_log").result("pale_planks", 3));
+        r.recipe("torch", RecipeSettings.shaped("C", "S").key('C', "coal").key('S', "stick").result("torch", 4));
+        r.item("brick", new ItemSettings().color(0xB0583E).texture("brick").title("Цеглина"));
+        r.recipe("smelt_brick", RecipeSettings.smelting("clay", 10).result("brick", 1));
+        r.recipe("bricks", RecipeSettings.shaped("BB", "BB").key('B', "brick").result("bricks", 1));
         r.tag("logs", "oak_log", "birch_log", "spruce_log", "pale_log");
         r.recipe("oak_planks", RecipeSettings.shapeless("oak_log").result("oak_planks", 3));
         r.recipe("birch_planks", RecipeSettings.shapeless("birch_log").result("birch_planks", 3));
         r.recipe("spruce_planks", RecipeSettings.shapeless("spruce_log").result("spruce_planks", 3));
         r.recipe("sticks", RecipeSettings.shapeless("#planks").result("stick", 2));
-        r.recipe("workbench", RecipeSettings.shaped("PP", "PP").key('P', "#planks").result("workbench", 1));
+        r.recipe("workbench", RecipeSettings.shaped("PP", "PP").key('P', "#planks", 2).result("workbench", 1)); // об'ємний блок: по 2 дошки в клітинці (рішення Святослава)
         r.recipe("stone_bricks", RecipeSettings.shaped("SS", "SS").key('S', "stone").result("stone_bricks", 4));
         r.recipe("lamp", RecipeSettings.shaped(".G.", "GCG", ".G.").key('G', "glass").key('C', "coal").result("lamp", 2));
         // --- броня: шкіра, залізо, алмаз (очки захисту: сума комплекту 20 = -80% шкоди; рівень матеріалу 4 - алмаз, потрібен для Енду)
@@ -223,7 +232,7 @@ public final class VanillaContent implements VoxelinMod {
                 .entry("stick", 3, 8, 6).entry("iron_ingot", 1, 2, 3).entry("gold_ingot", 1, 1, 2).entry("leather", 1, 2, 4));
         r.loot("mine", new LootSettings().rolls(1, 3).entry("coal", 4, 9, 10).entry("raw_iron", 2, 4, 6).entry("raw_copper", 2, 5, 6).entry("stick", 3, 8, 8)
                 .entry("stone_pickaxe", 1, 1, 2).entry("apple", 1, 2, 4).entry("cooked_chicken", 1, 2, 3));
-        r.recipe("furnace", RecipeSettings.shaped("C.C", "CKC", "CCC").key('C', "cobblestone").key('K', "coal").result("furnace", 1));
+        r.recipe("furnace", RecipeSettings.shaped("CCC", "C.C", "CCC").key('C', "cobblestone", 2).result("furnace", 1)); // куб: по 2 бруківки в кожній клітинці кільця, 16 разом
         r.recipe("smelt_iron", RecipeSettings.smelting("raw_iron", 10).result("iron_ingot", 1));
         r.recipe("smelt_copper", RecipeSettings.smelting("raw_copper", 10).result("copper_ingot", 1));
         r.recipe("smelt_gold", RecipeSettings.smelting("raw_gold", 10).result("gold_ingot", 1));

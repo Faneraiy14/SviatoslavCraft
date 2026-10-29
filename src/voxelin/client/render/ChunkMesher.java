@@ -20,6 +20,8 @@ public final class ChunkMesher {
         public boolean[] air() { return air; }
         /** Власне світло блока (0..15) - лампа сяє й сама; null - ні в кого. */
         public int[] emit;
+        /** Блоки не-куби: коробка {x0,y0,z0,x1,y1,z1} у частках блока (null - повний куб); null - таких нема. */
+        public float[][] box;
         final int[] color, layerTop, layerSide, layerBottom;
         /** color - множник кольору (білий для блоків із текстурою); layer* - шар масиву текстур для верху/боків/низу (0 - біла плитка). */
         public Props(boolean[] opaque, boolean[] translucent, boolean[] air, int[] color, int[] layerTop, int[] layerSide, int[] layerBottom) {
@@ -57,7 +59,7 @@ public final class ChunkMesher {
                     pos[axis] = s; pos[u] = a; pos[v] = b;
                     int id = padded[index(pos[0], pos[1], pos[2])];
                     int m = 0;
-                    if (id > 0 && !props.air[id]) {
+                    if (id > 0 && !props.air[id] && (props.box == null || props.box[id] == null)) {
                         pos[axis] += positive ? 1 : -1;
                         int nb = padded[index(pos[0], pos[1], pos[2])];
                         boolean visible = nb <= 0 || props.air[nb] || (!props.opaque[nb] && nb != id);
@@ -88,10 +90,41 @@ public final class ChunkMesher {
                 }
             }
         }
+        if (props.box != null) boxes(padded, light, props);
         Mesh r = new Mesh();
         r.solid = solid.toArray(); r.solidQuads = r.solid.length / (4 * FLOATS_PER_VERTEX);
         r.translucent = trans.toArray(); r.translucentQuads = r.translucent.length / (4 * FLOATS_PER_VERTEX);
         return r;
+    }
+
+    /** Блоки-коробки (смолоскип): по шість граней на блок, без злиття; світло - своєї клітинки. */
+    private void boxes(short[] padded, byte[] light, Props props) {
+        for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+            int idx = index(x, y, z), id = padded[idx];
+            if (id <= 0 || props.box[id] == null) continue;
+            float[] b = props.box[id];
+            int lv = light == null ? 0xF0 : light[idx] & 0xFF;
+            if (props.emit != null && props.emit[id] > (lv & 15)) lv = (lv & 0xF0) | props.emit[id];
+            FloatList out = props.translucent[id] ? trans : solid;
+            float[] lo = {x + b[0], y + b[1], z + b[2]}, hi = {x + b[3], y + b[4], z + b[5]};
+            for (int face = 0; face < 6; face++) {
+                int axis = face >> 1, u = (axis + 1) % 3, v = (axis + 2) % 3;
+                boolean positive = (face & 1) == 0;
+                quadF(out, face, axis, u, v, positive ? hi[axis] : lo[axis], lo[u], lo[v], hi[u], hi[v], color(props, id, face), layer(props, id, face), face + 8 * (lv >> 4) + 128 * (lv & 15));
+            }
+        }
+    }
+
+    private static void quadF(FloatList out, int face, int axis, int u, int v, float plane, float u0, float v0, float u1, float v1, int rgba, int layer, int faceLight) {
+        float[][] corners = (face & 1) == 0
+                ? new float[][]{{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}}
+                : new float[][]{{u0, v0}, {u0, v1}, {u1, v1}, {u1, v0}};
+        float colorBits = Float.intBitsToFloat(rgba);
+        float[] p = new float[3];
+        for (float[] c : corners) {
+            p[axis] = plane; p[u] = c[0]; p[v] = c[1];
+            out.add(p[0]); out.add(p[1]); out.add(p[2]); out.add(colorBits); out.add(faceLight); out.add(layer);
+        }
     }
 
     private static int color(Props p, int id, int face) {

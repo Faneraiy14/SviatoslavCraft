@@ -65,12 +65,7 @@ public final class ItemEntity {
 
     /** Коробка предмета (центр px,py,pz у координатах відносно чанка предмета) перетинає суцільний блок. */
     private boolean collides(PlayerEntity.Solid solid, double px, double py, double pz) {
-        long baseX = pos.cx * 16, baseZ = pos.cz * 16;
-        int x0 = (int) Math.floor(px - HALF), x1 = (int) Math.floor(px + HALF - 1e-6), y0 = (int) Math.floor(py - HALF), y1 = (int) Math.floor(py + HALF - 1e-6),
-                z0 = (int) Math.floor(pz - HALF), z1 = (int) Math.floor(pz + HALF - 1e-6);
-        for (int bx = x0; bx <= x1; bx++) for (int by = y0; by <= y1; by++) for (int bz = z0; bz <= z1; bz++)
-            if (solid.at(baseX + bx, by, baseZ + bz)) return true;
-        return false;
+        return PlayerEntity.Solid.hits(solid, pos.cx * 16, pos.cz * 16, px - HALF, py - HALF, pz - HALF, px + HALF, py + HALF, pz + HALF);
     }
 
     /** Чи лежать два предмети достатньо близько й однакові, щоб злитись. */

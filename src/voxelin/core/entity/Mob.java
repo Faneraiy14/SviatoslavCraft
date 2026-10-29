@@ -254,11 +254,6 @@ public final class Mob {
     /** Коробка (підніжжя px,py,pz у координатах відносно чанка істоти) перетинає суцільний блок. */
     private boolean collides(World w, double px, double py, double pz) {
         double hw = type.width / 2;
-        long baseX = pos.cx * 16, baseZ = pos.cz * 16;
-        int x0 = (int) Math.floor(px - hw), x1 = (int) Math.floor(px + hw - 1e-6), y0 = (int) Math.floor(py), y1 = (int) Math.floor(py + type.height - 1e-6),
-                z0 = (int) Math.floor(pz - hw), z1 = (int) Math.floor(pz + hw - 1e-6);
-        for (int bx = x0; bx <= x1; bx++) for (int by = y0; by <= y1; by++) for (int bz = z0; bz <= z1; bz++)
-            if (w.isSolid(baseX + bx, by, baseZ + bz)) return true;
-        return false;
+        return PlayerEntity.Solid.hits(w.solidView, pos.cx * 16, pos.cz * 16, px - hw, py, pz - hw, px + hw, py + type.height, pz + hw);
     }
 }

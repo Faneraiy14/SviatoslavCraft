@@ -24,5 +24,12 @@ public final class LocalActions implements PlayerActions {
         return world.setBlock(player, x, y, z, t);
     }
 
+    @Override public boolean breakBoard(long x, int y, long z, int bit, boolean drops) { return world.harvestBoard(player, x, y, z, bit, drops); }
+
+    @Override public boolean placeBoard(long x, int y, long z, String block, int axis, int sx, int sy, int sz) {
+        BlockType t = world.blocks.byName(block);
+        return t != null && world.boards.place(player, x, y, z, t, axis, sx, sy, sz);
+    }
+
     @Override public List<String> command(String line, long[] origin) { return commands.execute(player, world, origin, line); }
 }

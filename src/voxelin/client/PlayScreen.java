@@ -107,7 +107,7 @@ final class PlayScreen {
         prevHealth = vt.health();
         long[] land = world.findLand(0, 0); // не з'являтись у морі
         spawn = findSpawn(land[0], land[1]);
-        player = new PlayerEntity(world::isSolid, world::isLiquid, spawn);
+        player = new PlayerEntity(world.solidView, world::isLiquid, spawn);
         WorldInfo i = world.info;
         if (i.hasPlayer) {
             player.teleport(i.playerPos()); player.yaw = i.playerYaw; player.pitch = i.playerPitch;
@@ -304,7 +304,7 @@ final class PlayScreen {
         hurtFlash = Math.max(0, hurtFlash - 0.03);
         cam.update(v.window.fbWidth(), v.window.fbHeight(), (rend.renderDistance + 1) * 16 * Units.BLOCK_SIZE);
 
-        hit = play || bench != null || v.opts.showProgress >= 0 ? Raycast.cast(cam.pos, yaw, pitch, Raycast.MAX_REACH, this::solidAt) : null;
+        hit = play || bench != null || v.opts.showProgress >= 0 ? Raycast.cast(cam.pos, yaw, pitch, Raycast.MAX_REACH, aimView) : null;
         long nowNs = System.nanoTime();
         double dt = Math.min(0.1, (nowNs - lastFrameNs) / 1e9);
         lastFrameNs = nowNs;
@@ -355,13 +355,17 @@ final class PlayScreen {
         if (secs == Double.POSITIVE_INFINITY) return;
         breakProgress = secs <= 0 ? 1 : breakProgress + dt / secs;
         if (breakProgress < 1) { if (hitSoundCd <= 0) { hitSoundCd = 0.25; sounds.block(bt, breakX, breakY, breakZ, "hit"); } return; }
-        boolean ok = actions.breakBlock(breakX, breakY, breakZ, tool == null ? null : tool.name, !world.creative());
+        int bit = world.boards.isBoards(bt) ? Boards.partAt(world.boards.mask(breakX, breakY, breakZ), hit.fx() - faceIn(0), hit.fy() - faceIn(1), hit.fz() - faceIn(2)) : -1;
+        boolean ok = bit >= 0 ? actions.breakBoard(breakX, breakY, breakZ, bit, !world.creative()) : actions.breakBlock(breakX, breakY, breakZ, tool == null ? null : tool.name, !world.creative());
         breaking = false; breakProgress = 0; breakCooldown = 0.2;
         if (!ok) return;
         sounds.block(bt, breakX, breakY, breakZ, "break");
         vt.exhaust(0.005);
         if (!world.creative() && tool != null) inv.wearSelected(tool.durability);
     }
+
+    /** Крок усередину від грані влучання по осі a (щоб точка на межі дошки потрапила в саму дошку). */
+    private double faceIn(int a) { return hit.face() / 2 != a ? 0 : hit.face() % 2 == 0 ? 0.01 : -0.01; }
 
     /** Удар по істоті: шкода від предмета в руці (рука - 1), відкидання, зношення зброї, кулдаун 0.4 с. */
     private void attackMob(Mob m) {
@@ -435,6 +439,8 @@ final class PlayScreen {
         if (t.name.equals(EndPortal.EYE) && eyeCompass()) return; // Око Енду в повітря - напрям до Брами (не витрачається)
         if (t.food > 0) {
             if (vt.hunger() < Vitals.MAX && !vt.dead()) { vt.feed(t.food); sounds.self("voxelin:player.eat", 0.9f); if (!world.creative()) inv.takeSelected(); }
+        } else if (hit != null && t.placesBlock != null && world.boards.isBoards(world.blocks.byName(t.placesBlock))) {
+            if (placeBoard(t.placesBlock) && !world.creative()) inv.takeSelected();
         } else if (hit != null && t.placesBlock != null && !player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
             sounds.block(world.blocks.get(Math.max(0, world.blockId(hit.px(), hit.py(), hit.pz()))), hit.px(), hit.py(), hit.pz(), "place");
             if (!world.creative()) inv.takeSelected();
@@ -442,6 +448,34 @@ final class PlayScreen {
     }
 
     private boolean solidAt(long x, int y, long z) { int id = world.blockId(x, y, z); return id > 0 && world.blocks.get(id).solid; }
+
+    /** Що ловить приціл: усе, крім повітря, рідин і незламних прозорих (портал, розрив); неповні блоки - своїми коробками. */
+    private final Raycast.Solid aimView = new Raycast.Solid() {
+        public boolean at(long x, int y, long z) { int id = world.blockId(x, y, z); if (id <= 0) return false; BlockType b = world.blocks.get(id); return !b.liquid && (b.solid || b.hardness >= 0); }
+        public double[] boxes(long x, int y, long z) { return world.boxes(x, y, z); }
+    };
+
+    /**
+     * Поставити дошку: точка влучання трохи назовні від грані дає клітинку й чверть-клітинку сітки 4x4x4. Присід - стоячи (Y);
+     * на верх/низ - уздовж того, куди дивишся (X чи Z); на бічну грань - уздовж цієї грані.
+     */
+    private boolean placeBoard(String block) {
+        if (hit.face() < 0) return false;
+        double[] n = {0, 0, 0}; n[hit.face() / 2] = hit.face() % 2 == 0 ? 1 : -1;
+        double px = hit.fx() + n[0] * 0.01, py = hit.fy() + n[1] * 0.01, pz = hit.fz() + n[2] * 0.01;
+        long cx = hit.x() + (long) Math.floor(px), cz = hit.z() + (long) Math.floor(pz); int cy = hit.y() + (int) Math.floor(py);
+        int sx = (int) ((px - Math.floor(px)) * 4), sy = (int) ((py - Math.floor(py)) * 4), sz = (int) ((pz - Math.floor(pz)) * 4);
+        boolean sneak = v.input.down(GLFW_KEY_LEFT_SHIFT) || v.input.down(GLFW_KEY_RIGHT_SHIFT);
+        int axis;
+        if (sneak) axis = Boards.Y;
+        else if (hit.face() / 2 == 1) { double[] d = Raycast.dir(player.yaw, player.pitch); axis = Math.abs(d[0]) > Math.abs(d[2]) ? Boards.X : Boards.Z; }
+        else axis = hit.face() / 2 == 0 ? Boards.Z : Boards.X;
+        double[] b = Boards.boxes(1L << Boards.bitThrough(axis, sx, sy, sz));
+        if (player.overlapsBox(cx, cy, cz, b[0], b[1], b[2], b[3], b[4], b[5])) return false;
+        if (!actions.placeBoard(cx, cy, cz, block, axis, sx, sy, sz)) return false;
+        sounds.block(world.blocks.byName(block), cx, cy, cz, "place");
+        return true;
+    }
     private static double lerp(double a, double b, double t) { return a + (b - a) * t; }
 
     // ------------------------------------------------------------------ контур цілі й тіло гравця (фіксований конвеєр поверх шейдерного світу)

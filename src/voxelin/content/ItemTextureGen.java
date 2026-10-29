@@ -59,6 +59,22 @@ public final class ItemTextureGen {
         line(a, x0, y0, x1, y1, HANDLE);
     }
 
+    /** Дошка: товстий скісний брусок кольору породи зі світлою гранню й волокнами. */
+    public static int[] board(int base) {
+        int[] a = new int[256];
+        int c = 0xFF000000 | base, hi = 0xFF000000 | mix(base, 0xFFFFFF, 0.3), lo = 0xFF000000 | mix(base, 0, 0.3);
+        for (int k = 0; k < 3; k++) line(a, 2 + k, 12, 12, 2 + k, c);
+        line(a, 2, 11, 11, 2, hi);
+        line(a, 4, 13, 13, 4, lo);
+        px(a, 6, 9, lo); px(a, 9, 6, lo);
+        return outlined(a);
+    }
+
+    private static int mix(int a, int b, double t) {
+        int r = (int) (((a >> 16) & 255) * (1 - t) + ((b >> 16) & 255) * t), g = (int) (((a >> 8) & 255) * (1 - t) + ((b >> 8) & 255) * t), bl = (int) ((a & 255) * (1 - t) + (b & 255) * t);
+        return r << 16 | g << 8 | bl;
+    }
+
     public static int[] stick() { int[] a = new int[256]; handle(a, 3, 13, 12, 4); return outlined(a); }
 
     public static int[] coal() {

@@ -9,7 +9,27 @@ import voxelin.core.Pos;
  * Колізії рахуються в локальних координатах відносно чанка гравця, блоки перевіряються за абсолютними long.
  */
 public final class PlayerEntity {
-    public interface Solid { boolean at(long x, int y, long z); }
+    public interface Solid {
+        boolean at(long x, int y, long z);
+        /** Коробки неповного блока в частках (по 6 чисел) або null - повний куб. */
+        default double[] boxes(long x, int y, long z) { return null; }
+
+        /** Чи перетинає коробка (абсолютні межі в блоках відносно baseX/baseZ) щось суцільне. */
+        static boolean hits(Solid s, long baseX, long baseZ, double x0, double y0, double z0, double x1, double y1, double z1) {
+            int bx0 = (int) Math.floor(x0), bx1 = (int) Math.floor(x1 - 1e-6), by0 = (int) Math.floor(y0), by1 = (int) Math.floor(y1 - 1e-6),
+                    bz0 = (int) Math.floor(z0), bz1 = (int) Math.floor(z1 - 1e-6);
+            for (int bx = bx0; bx <= bx1; bx++) for (int by = by0; by <= by1; by++) for (int bz = bz0; bz <= bz1; bz++) {
+                if (!s.at(baseX + bx, by, baseZ + bz)) continue;
+                double[] b = s.boxes(baseX + bx, by, baseZ + bz);
+                if (b == null) return true;
+                for (int k = 0; k + 5 < b.length; k += 6)
+                    if (x0 < bx + b[k + 3] && x1 > bx + b[k] && y0 < by + b[k + 4] && y1 > by + b[k + 1] && z0 < bz + b[k + 5] && z1 > bz + b[k + 2]) return true;
+            }
+            return false;
+        }
+    }
+    /** Найвищий уступ, на який гравець заходить без стрибка (дошка - 0.25, дві - 0.5). */
+    public static final double STEP_UP = 0.5;
     /** Рідина (вода) в точці: гравець у ній пливе. */
     public interface Liquid { boolean at(long x, int y, long z); }
 
@@ -139,9 +159,17 @@ public final class PlayerEntity {
         if (n == 0) return;
         double sx = dx / n, sz = dz / n;
         for (int i = 0; i < n; i++) {
+            if (sx != 0 && collides(pos.x + sx, pos.y, pos.z) && onGround) stepUp(sx, 0); // невисокий уступ (дошки) - заходимо
+            if (sz != 0 && collides(pos.x, pos.y, pos.z + sz) && onGround) stepUp(0, sz);
             if (sx != 0 && !collides(pos.x + sx, pos.y, pos.z) && !(edgeGuard && onGround && !grounded(pos.x + sx, pos.z))) pos.x += sx; else { sx = 0; vx = 0; }
             if (sz != 0 && !collides(pos.x, pos.y, pos.z + sz) && !(edgeGuard && onGround && !grounded(pos.x, pos.z + sz))) pos.z += sz; else { sz = 0; vz = 0; }
         }
+    }
+
+    /** Піднятись на найменшу висоту (кроком 1/16, до STEP_UP), з якої рух уже вільний. Повна стіна (1 блок) лишається стіною. */
+    private void stepUp(double sx, double sz) {
+        for (double h = 1 / 16.0; h <= STEP_UP + 1e-9; h += 1 / 16.0)
+            if (!collides(pos.x, pos.y + h, pos.z) && !collides(pos.x + sx, pos.y + h, pos.z + sz)) { pos.y += h; return; }
     }
 
     private boolean grounded(double px, double pz) {
@@ -153,19 +181,17 @@ public final class PlayerEntity {
 
     /** Коробка (центр, ширина, висота) у координатах відносно чанка гравця (x,z можуть виходити за 0..16 - це нормально). */
     private boolean collidesBox(double cx, double cy, double cz, double w, double h) {
-        long baseX = pos.cx * 16, baseZ = pos.cz * 16;
-        int x0 = (int) Math.floor(cx - w / 2), x1 = (int) Math.floor(cx + w / 2 - 1e-6), y0 = (int) Math.floor(cy - h / 2), y1 = (int) Math.floor(cy + h / 2 - 1e-6),
-                z0 = (int) Math.floor(cz - w / 2), z1 = (int) Math.floor(cz + w / 2 - 1e-6);
-        for (int bx = x0; bx <= x1; bx++) for (int by = y0; by <= y1; by++) for (int bz = z0; bz <= z1; bz++)
-            if (world.at(baseX + bx, by, baseZ + bz)) return true;
-        return false;
+        return Solid.hits(world, pos.cx * 16, pos.cz * 16, cx - w / 2, cy - h / 2, cz - w / 2, cx + w / 2, cy + h / 2, cz + w / 2);
     }
 
     /** Чи перетне гравця блок, поставлений у (bx,by,bz) - щоб не замурувати себе. */
-    public boolean overlapsBlock(long bx, int by, long bz) {
+    public boolean overlapsBlock(long bx, int by, long bz) { return overlapsBox(bx, by, bz, 0, 0, 0, 1, 1, 1); }
+
+    /** Чи перетинає тіло коробку (x0..x1 у частках) клітинки (bx,by,bz) - наприклад, дошку. */
+    public boolean overlapsBox(long bx, int by, long bz, double x0, double y0, double z0, double x1, double y1, double z1) {
         double lx = (double) (bx - pos.cx * 16), lz = (double) (bz - pos.cz * 16);
         double cy = pos.y + EYE_OFFSET;
-        return pos.x - WIDTH / 2 < lx + 1 && pos.x + WIDTH / 2 > lx && cy - HEIGHT / 2 < by + 1 && cy + HEIGHT / 2 > by && pos.z - WIDTH / 2 < lz + 1 && pos.z + WIDTH / 2 > lz;
+        return pos.x - WIDTH / 2 < lx + x1 && pos.x + WIDTH / 2 > lx + x0 && cy - HEIGHT / 2 < by + y1 && cy + HEIGHT / 2 > by + y0 && pos.z - WIDTH / 2 < lz + z1 && pos.z + WIDTH / 2 > lz + z0;
     }
 
     public boolean onGround() { return onGround; }

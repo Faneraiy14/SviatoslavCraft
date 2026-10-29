@@ -125,7 +125,16 @@ public final class WorldRenderer implements World.Listener {
         props = new ChunkMesher.Props(opaque, trans, air, color, lTop, lSide, lBot);
         props.emit = new int[all.length];
         for (BlockType t : all) props.emit[t.id] = t.light;
-        for (BlockType t : all) if ("torch".equals(t.shape)) { if (props.box == null) props.box = new float[all.length][]; props.box[t.id] = new float[]{7 / 16f, 0, 7 / 16f, 9 / 16f, 10 / 16f, 9 / 16f}; }
+        for (BlockType t : all) { // фігурні блоки: коробки з World.SHAPES; дошки - з маски клітинки
+            if (t.shape == null) continue;
+            double[] d = World.SHAPES.get(t.shape);
+            boolean cell = world.boards.isBoards(t);
+            if (d == null && !cell) continue;
+            if (props.box == null) { props.box = new float[all.length][]; props.perCell = new boolean[all.length]; }
+            props.box[t.id] = new float[0];
+            if (d != null) { props.box[t.id] = new float[d.length]; for (int k = 0; k < d.length; k++) props.box[t.id][k] = (float) d[k]; }
+            props.perCell[t.id] = cell;
+        }
         // потоків мешингу не більше половини ядер: решта - головному потоку (малювання) і робочому столу; -Dvoxelin.meshThreads=N перевизначає
         poolSize = Integer.getInteger("voxelin.meshThreads", Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
         pool = Executors.newFixedThreadPool(poolSize, r -> { Thread t = new Thread(r, "voxelin-mesh"); t.setDaemon(true); t.setPriority(Thread.NORM_PRIORITY - 1); return t; });
@@ -208,7 +217,8 @@ public final class WorldRenderer implements World.Listener {
                 lp[ChunkMesher.index(x, y, z)] = (byte) (c == null ? 0xF0 : c.lightAt(x & 15, wy, z & 15));
             }
         }
-        return mesher.get().build(p, lp, props);
+        long bx = cx * 16, bz = cz * 16;
+        return mesher.get().build(p, lp, props, (x, y, z) -> { long m = world.boards.mask(bx + x, baseY + y, bz + z); return m == 0 ? null : Boards.boxes(m); });
     }
 
     /** Квадрат відстані між чанками; дуже далекі вважаються нескінченно далекими (без переповнення long). */

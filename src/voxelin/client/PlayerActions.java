@@ -11,6 +11,10 @@ public interface PlayerActions {
     boolean breakBlock(long x, int y, long z, String tool, boolean drops);
     /** Поставити блок за назвою з вибраного слота. */
     boolean placeBlock(long x, int y, long z, String block);
+    /** Зламати одну дошку (біт маски клітинки дошок). */
+    boolean breakBoard(long x, int y, long z, int bit, boolean drops);
+    /** Поставити дошку з вибраного слота: блок-клітинка дошок, вісь і клітинка сітки 4x4x4. */
+    boolean placeBoard(long x, int y, long z, String block, int axis, int sx, int sy, int sz);
     /** Виконати команду; відповіді для показу в чаті. */
     List<String> command(String line, long[] origin);
 }

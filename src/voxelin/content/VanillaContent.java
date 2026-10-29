@@ -97,18 +97,18 @@ public final class VanillaContent implements VoxelinMod {
         block("glass", new BlockSettings().texture("glass").color(cGlass).translucent(true).noDrops().title("Скло").hardness(0.3f));
         block("dune_glass", new BlockSettings().texture("dune_glass").color(cDune).translucent(true).noDrops().title("Скло дюн").hardness(0.4f));
         block("oak_log", new BlockSettings().textures("oak_log_top", "oak_log", "oak_log_top").color(cOakLog).tool(ToolKind.AXE).title("Дубова колода").hardness(2f));
-        block("oak_planks", new BlockSettings().texture("oak_planks").color(cOakPlanks).tool(ToolKind.AXE).title("Дубові дошки").hardness(2f));
+        block("oak_planks", new BlockSettings().texture("oak_planks").color(cOakPlanks).tool(ToolKind.AXE).title("Блок дубових дощок").hardness(2f));
         block("oak_leaves", new BlockSettings().texture("oak_leaves").color(cOakLeaves).opaque(false).drops("apple", 1, 1, 0.05f).drops("stick", 1, 2, 0.1f).title("Дубове листя").hardness(0.2f));
         block("birch_log", new BlockSettings().textures("birch_log_top", "birch_log", "birch_log_top").color(cBirchLog).tool(ToolKind.AXE).title("Березова колода").hardness(2f));
-        block("birch_planks", new BlockSettings().texture("birch_planks").color(cBirchPlanks).tool(ToolKind.AXE).title("Березові дошки").hardness(2f));
+        block("birch_planks", new BlockSettings().texture("birch_planks").color(cBirchPlanks).tool(ToolKind.AXE).title("Блок березових дощок").hardness(2f));
         block("birch_leaves", new BlockSettings().texture("birch_leaves").color(cBirchLeaves).opaque(false).drops("stick", 1, 2, 0.1f).title("Березове листя").hardness(0.2f));
         block("spruce_log", new BlockSettings().textures("spruce_log_top", "spruce_log", "spruce_log_top").color(cSpruceLog).tool(ToolKind.AXE).title("Ялинова колода").hardness(2f));
-        block("spruce_planks", new BlockSettings().texture("spruce_planks").color(cSprucePlanks).tool(ToolKind.AXE).title("Ялинові дошки").hardness(2f));
+        block("spruce_planks", new BlockSettings().texture("spruce_planks").color(cSprucePlanks).tool(ToolKind.AXE).title("Блок ялинових дощок").hardness(2f));
         block("spruce_leaves", new BlockSettings().texture("spruce_leaves").color(cSpruceLeaves).opaque(false).drops("stick", 1, 2, 0.1f).title("Ялинове листя").hardness(0.2f));
         block("pale_log", new BlockSettings().textures("pale_log_top", "pale_log", "pale_log_top").color(cPaleLog).tool(ToolKind.AXE).title("Бліда колода").hardness(2f));
         block("cactus", new BlockSettings().textures("cactus_top", "cactus_side", "cactus_top").color(cCactus).tool(ToolKind.AXE).title("Кактус").hardness(0.4f));
         block("coal_ore", new BlockSettings().texture("coal_ore").color(cCoal).tool(ToolKind.PICKAXE).minTier(1).drops("coal").title("Вугільна руда").hardness(3f));
-        block("pale_planks", new BlockSettings().texture("pale_planks").color(0xB0AA9E).tool(ToolKind.AXE).title("Бліді дошки").hardness(2f));
+        block("pale_planks", new BlockSettings().texture("pale_planks").color(0xB0AA9E).tool(ToolKind.AXE).title("Блок блідих дощок").hardness(2f));
         block("torch", new BlockSettings().texture("torch").color(0xFFB040).shape("torch").solid(false).opaque(false).light(14).sound("wood").title("Смолоскип").hardness(0f));
         block("bricks", new BlockSettings().texture("bricks").color(0x96503A).tool(ToolKind.PICKAXE).minTier(1).title("Цегла").hardness(2f));
         block("iron_block", new BlockSettings().texture("iron_block").color(0xD6D6DA).tool(ToolKind.PICKAXE).minTier(2).sound("metal").title("Залізний блок").hardness(5f));
@@ -119,7 +119,16 @@ public final class VanillaContent implements VoxelinMod {
         block("liminite_ore", new BlockSettings().texture("liminite_ore").color(cLim).light(4).tool(ToolKind.PICKAXE).minTier(4).drops("liminite_shard", 1, 2, 1f).title("Лімінітова руда").hardness(4f));
         block("monolith", new BlockSettings().texture("monolith").color(cMono).light(3).tool(ToolKind.PICKAXE).minTier(2).title("Моноліт").hardness(6f));
         block("lamp", new BlockSettings().texture("lamp").color(cLamp).light(15).tool(ToolKind.PICKAXE).title("Лампа").hardness(0.5f));
-        block("workbench", new BlockSettings().textures("workbench_top", "workbench_side", "oak_planks").color(0xB08850).tool(ToolKind.AXE).interact("workbench").title("Верстак").hardness(2f));
+        block("workbench", new BlockSettings().textures("workbench_top", "oak_planks", "oak_planks").color(0xB08850).shape("table").opaque(false).tool(ToolKind.AXE).interact("workbench").title("Верстак").hardness(2f)); // стіл: стільниця й 4 ніжки
+        // справжні дошки (рішення Святослава 29.10): брусок 16x4x4, до 16 у блоці в будь-якому з трьох напрямків; клітинка - блок «*_boards», вміст - World.boards
+        String[][] boards = {{"oak", "Дубов", "oak_planks"}, {"birch", "Березов", "birch_planks"}, {"spruce", "Ялинов", "spruce_planks"}, {"pale", "Бліда", "pale_planks"}};
+        int[] boardCol = {0xB8925A, 0xD8C08A, 0x7A5A36, 0xB0AA9E};
+        for (int i = 0; i < boards.length; i++) {
+            String w = boards[i][0], title = boards[i][1].equals("Бліда") ? "Бліда дошка" : boards[i][1] + "а дошка";
+            block(w + "_boards", new BlockSettings().texture(boards[i][2]).color(boardCol[i]).shape("boards").opaque(false).noItem().noDrops().tool(ToolKind.AXE).sound("wood").title(title).hardness(0.4f));
+            tex(w + "_board", ItemTextureGen.board(boardCol[i]));
+            r.item(w + "_board", new ItemSettings().color(boardCol[i]).texture(w + "_board").placesBlock(w + "_boards").title(title));
+        }
         block("furnace", new BlockSettings().textures("furnace_top", "furnace_side", "furnace_top").color(0x777777).tool(ToolKind.PICKAXE).minTier(1).interact("furnace").title("Піч").hardness(3.5f));
         block("chest", new BlockSettings().textures("chest_top", "chest_side", "chest_top").color(0xA0763C).tool(ToolKind.AXE).interact("chest").title("Скриня").hardness(2.5f));
         block("bed", new BlockSettings().textures("bed_top", "bed_side", "oak_planks").color(0xB82C2C).tool(ToolKind.AXE).interact("bed").title("Ліжко").hardness(0.6f));
@@ -179,8 +188,14 @@ public final class VanillaContent implements VoxelinMod {
         r.recipe("oak_planks", RecipeSettings.shapeless("oak_log").result("oak_planks", 3));
         r.recipe("birch_planks", RecipeSettings.shapeless("birch_log").result("birch_planks", 3));
         r.recipe("spruce_planks", RecipeSettings.shapeless("spruce_log").result("spruce_planks", 3));
-        r.recipe("sticks", RecipeSettings.shapeless("#planks").result("stick", 2));
-        r.recipe("workbench", RecipeSettings.shaped("PP", "PP").key('P', "#planks", 2).result("workbench", 1)); // об'ємний блок: по 2 дошки в клітинці (рішення Святослава)
+        r.recipe("workbench", RecipeSettings.shaped("BB", "SS").key('B', "#boards", 2).key('S', "stick").result("workbench", 1)); // стіл: стільниця з 4 дощок + 2 ніжки-палиці (рішення Святослава)
+        r.tag("boards", "oak_board", "birch_board", "spruce_board", "pale_board");
+        for (String w : new String[]{"oak", "birch", "spruce", "pale"}) { // блок дощок <-> 16 дошок
+            r.recipe(w + "_boards_from_planks", RecipeSettings.shapeless(w + "_planks").result(w + "_board", 16));
+            r.recipe(w + "_planks_from_boards", RecipeSettings.shaped("BB", "BB").key('B', w + "_board", 4).result(w + "_planks", 1));
+            r.fuel(w + "_board", 1);
+        }
+        r.recipe("sticks", RecipeSettings.shapeless("#boards").result("stick", 2)); // палиці - з дошки (з блока дощок спершу 16 дошок)
         r.recipe("stone_bricks", RecipeSettings.shaped("SS", "SS").key('S', "stone").result("stone_bricks", 4));
         r.recipe("lamp", RecipeSettings.shaped(".G.", "GCG", ".G.").key('G', "glass").key('C', "coal").result("lamp", 2));
         // --- броня: шкіра, залізо, алмаз (очки захисту: сума комплекту 20 = -80% шкоди; рівень матеріалу 4 - алмаз, потрібен для Енду)

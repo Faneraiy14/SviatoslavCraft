@@ -78,6 +78,7 @@ public final class World implements WorldAccess {
         loadBlockEntities();
         loadMobs();
         infection = new Infection(this);
+        boards = new Boards(this);
         loadMarks();
         if (info.type == WorldInfo.Type.END) naturalSpawning = false;
         // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
@@ -184,7 +185,9 @@ public final class World implements WorldAccess {
         int id = blockId(x, y, z);
         if (id <= 0 || blocks.get(id).hardness < 0) return false;
         BlockType b = blocks.get(id);
+        int boardCount = boards.isBoards(b) ? Long.bitCount(boards.mask(x, y, z)) : 0;
         if (!setBlock(src, x, y, z, blocks.air())) return false;
+        if (dropItems && boardCount > 0) spawnItem(Pos.ofBlock(x, y + 0.5, z), boardItem(b), boardCount, 0, true); // уся клітинка дошок - усі дошки
         if (dropItems) for (Inventory.Stack st : Mining.drops(b, tool, itemRng)) spawnItem(Pos.ofBlock(x, y + 0.5, z), st.item, st.count, st.damage, true);
         return true;
     }
@@ -193,7 +196,7 @@ public final class World implements WorldAccess {
         for (Iterator<ItemEntity> it = items.iterator(); it.hasNext(); ) {
             ItemEntity e = it.next();
             if (e.expired()) { it.remove(); continue; }
-            e.tick(this::isSolid, this::isLiquid);
+            e.tick(solidView, this::isLiquid);
             if (e.pos.y < -30) it.remove(); // випав за межі світу
         }
         if (tick % 10 == 0 && items.size() > 1) { // злиття (раз на півсекунди)
@@ -232,6 +235,48 @@ public final class World implements WorldAccess {
     private PlayerTarget target;
     /** Зараження (гілка розвилки яйця). */
     public Infection infection;
+    /** Справжні дошки: що саме зайнято в клітинках «*_boards». */
+    public Boards boards;
+
+    /** Суцільність для фізики (гравець, істоти, предмети): клітинки й коробки неповних блоків. */
+    public final voxelin.core.entity.PlayerEntity.Solid solidView = new voxelin.core.entity.PlayerEntity.Solid() {
+        public boolean at(long x, int y, long z) { return isSolid(x, y, z); }
+        public double[] boxes(long x, int y, long z) { return World.this.boxes(x, y, z); }
+    };
+
+    /** Колізійні коробки клітинки в частках блока (по 6 чисел) або null - повний куб (якщо блок суцільний). */
+    public double[] boxes(long x, int y, long z) {
+        int id = blockId(x, y, z);
+        if (id <= 0) return null;
+        BlockType b = blocks.get(id);
+        if (b.shape == null) return null;
+        if (boards != null && boards.isBoards(b)) return Boards.boxes(boards.mask(x, y, z));
+        return SHAPES.get(b.shape);
+    }
+
+    /** Коробки фігурних блоків (частки блока): смолоскип - паличка, стіл - стільниця й чотири ніжки. */
+    public static final Map<String, double[]> SHAPES = Map.of(
+            "torch", new double[]{7 / 16.0, 0, 7 / 16.0, 9 / 16.0, 10 / 16.0, 9 / 16.0},
+            "table", new double[]{0, 12 / 16.0, 0, 1, 1, 1,
+                    1 / 16.0, 0, 1 / 16.0, 4 / 16.0, 12 / 16.0, 4 / 16.0, 12 / 16.0, 0, 1 / 16.0, 15 / 16.0, 12 / 16.0, 4 / 16.0,
+                    1 / 16.0, 0, 12 / 16.0, 4 / 16.0, 12 / 16.0, 15 / 16.0, 12 / 16.0, 0, 12 / 16.0, 15 / 16.0, 12 / 16.0, 15 / 16.0});
+
+    /** Вміст клітинки змінився без зміни блока (дошки): перебудувати геометрію. */
+    void changed(long x, int y, long z) { Chunk c = chunks.get(new ChunkPos(x >> 4, z >> 4)); if (c != null) c.modified = true; if (listener != null) listener.blockChanged(x, y, z); }
+
+    /** Предмет дошки для блока-клітинки дошок: voxelin:oak_boards -> voxelin:oak_board. */
+    public static String boardItem(BlockType b) { return b.name.endsWith("_boards") ? b.name.substring(0, b.name.length() - 1) : b.name; }
+
+    /** Зламати одну дошку (біт маски) і, якщо треба, кинути її предметом. */
+    public boolean harvestBoard(Source src, long x, int y, long z, int bit, boolean dropItems) {
+        int id = blockId(x, y, z);
+        if (id <= 0 || !boards.isBoards(blocks.get(id))) return false;
+        BlockType b = blocks.get(id);
+        double[] bx = Boards.boxes(boards.mask(x, y, z) & 1L << bit);
+        if (bx.length == 0 || !boards.remove(src, x, y, z, bit)) return false;
+        if (dropItems) spawnItem(new Pos(0, 0, x + (bx[0] + bx[3]) / 2, y + (bx[1] + bx[4]) / 2, z + (bx[2] + bx[5]) / 2), boardItem(b), 1, 0, true);
+        return true;
+    }
     /** Вимкнути природний спавн (тести, /gamerule пізніше). */
     public boolean naturalSpawning = true;
     /** Куди йдуть звукові події (клієнт ставить свій рушій; на сервері й у тестах - тиша). */
@@ -645,6 +690,7 @@ public final class World implements WorldAccess {
         if (!blockEntities.isEmpty()) blockEntityRemovedCheck(x, y, z, nb);
         if (batchDepth > 0) batchChunks.add(c); else light.blockChanged(c, (int) (x & 15), y, (int) (z & 15), old, nb.id);
         if (listener != null) listener.blockChanged(x, y, z);
+        if (boards != null && old != nb.id && boards.isBoards(blocks.get(old))) boards.cleared(x, y, z);
         if (infect) infection.start(x, y, z);
         if (nb.name.equals(Guard.HEAD) || nb.name.equals(Guard.IRON)) Guard.tryBuild(this, x, y, z); // Т із залізних блоків + лампа = Вартовий
         return true;
@@ -768,6 +814,7 @@ public final class World implements WorldAccess {
         saveMobs();
         saveMarks();
         infection.save();
+        boards.save();
         try { info.save(dir); } catch (IOException e) { System.out.println("[Voxelin] ⚠️ " + e); }
     }
 

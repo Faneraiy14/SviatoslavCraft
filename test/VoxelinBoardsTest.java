@@ -23,7 +23,7 @@ public class VoxelinBoardsTest {
         g.createWorld(name, 3, WorldInfo.Type.FLAT);
         World w = g.openWorld(name);
         w.naturalSpawning = false;
-        for (int i = 0; i < 900 && w.chunk(0, 0) == null; i++) { w.update(0, 0, 2); Thread.sleep(10); }
+        for (int i = 0; i < 900; i++) { w.update(0, 0, 3); boolean all = true; for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) if (w.chunk(dx, dz) == null) all = false; if (all) break; Thread.sleep(10); }
         return w;
     }
 
@@ -95,10 +95,10 @@ public class VoxelinBoardsTest {
         p.teleport(new Pos(0, 0, 3.5, y + PlayerEntity.EYE + 0.05, 0.5));
         p.yaw = -90; // дивиться на -X
         for (int i = 0; i < 20; i++) p.tick(0.05, false, false, false, false, false, false, false);
-        for (int i = 0; i < 40; i++) p.tick(0.05, true, false, false, false, false, false, false);
+        for (int i = 0; i < 60 && p.pos.relX(0) > 0.5; i++) p.tick(0.05, true, false, false, false, false, false, false);
         double px = p.pos.relX(0);
         feet = p.pos.y - PlayerEntity.EYE;
-        check(px < 1.5 && feet > y + 0.2, "зайшов на настил без стрибка: x=" + px + " ноги=" + feet);
+        check(px <= 0.5 && feet > y + 0.2, "зайшов на настил без стрибка: x=" + px + " ноги=" + feet);
     }
 
     static void aim() throws Exception {
@@ -121,12 +121,12 @@ public class VoxelinBoardsTest {
         World w = open("s");
         BlockType oak = w.blocks.byName("voxelin:spruce_boards");
         int y = surface(w, 0, 0) + 1;
-        w.boards.place(P, 5, y, -7, oak, Boards.Y, 1, 0, 1);
-        w.boards.place(P, 5, y, -7, oak, Boards.Z, 3, 2, 0);
+        check(w.boards.place(P, 5, y, -7, oak, Boards.Y, 1, 0, 1) && w.boards.place(P, 5, y, -7, oak, Boards.Z, 3, 2, 0), "поставлено: " + w.blocks.get(Math.max(0, w.blockId(5, y, -7))).name);
         long m = w.boards.mask(5, y, -7);
         w.close();
         World w2 = g.openWorld("s");
         for (int i = 0; i < 900 && w2.chunk(0, -1) == null; i++) { w2.update(0, -1, 2); Thread.sleep(10); }
-        check(w2.boards.mask(5, y, -7) == m && w2.blockId(5, y, -7) == oak.id, "дошки збереглись");
+        check(w2.boards.mask(5, y, -7) == m, "маска збереглась: " + Long.toHexString(w2.boards.mask(5, y, -7)) + " замість " + Long.toHexString(m));
+        check(w2.blockId(5, y, -7) == oak.id, "клітинка дощок збереглась: " + w2.blockId(5, y, -7));
     }
 }

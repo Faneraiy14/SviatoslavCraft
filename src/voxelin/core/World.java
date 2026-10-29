@@ -79,6 +79,7 @@ public final class World implements WorldAccess {
         loadMobs();
         infection = new Infection(this);
         boards = new Boards(this);
+        arrows = new Arrows(this);
         loadMarks();
         if (info.type == WorldInfo.Type.END) naturalSpawning = false;
         // генерація детермінована й швидка (~2 мс/чанк): вистачає кількох потоків; -Dvoxelin.genThreads=N перевизначає
@@ -235,6 +236,8 @@ public final class World implements WorldAccess {
     private PlayerTarget target;
     /** Зараження (гілка розвилки яйця). */
     public Infection infection;
+    /** Стріли в польоті й застряглі. */
+    public Arrows arrows;
     /** Справжні дошки: що саме зайнято в клітинках «*_boards». */
     public Boards boards;
 
@@ -783,6 +786,7 @@ public final class World implements WorldAccess {
         info.time++;
         if (!info.rule(GameRules.DAYLIGHT)) info.dayShift--;
         tickItems();
+        arrows.tick();
         tickBlockEntities();
         tickMobs();
         infection.tick(tick, target);

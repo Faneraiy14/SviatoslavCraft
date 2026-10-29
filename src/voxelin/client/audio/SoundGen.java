@@ -125,6 +125,8 @@ public final class SoundGen {
         { float[] a = buf(0.5); tone(a, 0, a.length, 120, 220, 1, 0.5f); noise(a, r, 0.15f); lowpass(a, 900); env(a, 0.05, 0.2); b.register("voxelin:chest.open", s(norm(a, 0.6f))); }
         { float[] a = buf(0.18); noise(a, r, 1); band(a, 300, 2500); env(a, 0.005, 0.05); float[] t = buf(0.18); tone(t, 0, t.length, 110, 60, 0, 1); env(t, 0.002, 0.05); add(a, t, 0, 1); b.register("voxelin:player.attack", s(norm(a, 0.7f))); }
         { float[] a = buf(0.25); noise(a, r, 1); band(a, 400, 3000); env(a, 0.06, 0.06); b.register("voxelin:player.swing", s(norm(a, 0.35f))); }
+        { float[] a = buf(0.3); tone(a, 0, a.length, 260, 90, 1, 0.6f); noise(a, r, 0.4f); band(a, 150, 2500); env(a, 0.004, 0.12); b.register("voxelin:bow.shoot", s(norm(a, 0.6f))); } // тятива
+        { float[] a = buf(0.12); noise(a, r, 1); band(a, 200, 1800); env(a, 0.001, 0.03); float[] t = buf(0.12); tone(t, 0, t.length, 380, 300, 0, 1); env(t, 0.001, 0.04); add(a, t, 0, 0.7f); b.register("voxelin:arrow.hit", s(norm(a, 0.55f))); } // стріла в дерево/камінь
         // істоти
         b.register("voxelin:mob.chicken.idle", s(norm(voice(r, 0.12, 1500, 1900, 2, 4000, 0f), 0.4f)), s(norm(voice(r, 0.1, 1700, 1500, 2, 4000, 0f), 0.4f)));
         b.register("voxelin:mob.chicken.hurt", s(norm(voice(r, 0.15, 2000, 1300, 2, 4500, 0.1f), 0.5f)));

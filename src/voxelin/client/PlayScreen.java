@@ -59,6 +59,8 @@ final class PlayScreen {
     private long openedX, openedZ; private int openedY; private boolean openedBlock; private String openedKind; // відкрите вікно блока (піч)
     // ламання блока: ціль, прогрес 0..1, пауза між блоками
     private long breakX, breakZ; private int breakY; private boolean breaking;
+    /** Натяг лука, секунди (-1 - не натягнуто). */
+    private double bowCharge = -1;
     private double breakProgress, breakCooldown;
     private long lastFrameNs = System.nanoTime();
     private double prevHealth = 20, hurtFlash;
@@ -211,7 +213,7 @@ final class PlayScreen {
             if (!inPortal && !inRift) portalLock = false;
             else if (!portalLock && !vt.dead() && !v.opts.freeze) { portalLock = true; sounds.ui("voxelin:portal.travel"); v.requestTravel(inRift ? Dimensions.BETWEEN : Dimensions.portalTarget(world.dimension())); }
         }
-        if (!vt.dead() && !v.opts.freeze && world.collectItems(bodyPos(), inv) > 0) sounds.self("voxelin:item.pickup", 0.6f);
+        if (!vt.dead() && !v.opts.freeze && world.collectItems(bodyPos(), inv) + world.arrows.collect(bodyPos(), inv) > 0) sounds.self("voxelin:item.pickup", 0.6f);
         sounds.tick(player, !vt.dead());
         if (vt.dead() && !deadHandled && !world.creative() && !world.rule(GameRules.KEEP_INVENTORY)) {
             Pos at = bodyPos();
@@ -318,6 +320,7 @@ final class PlayScreen {
         else { breaking = false; breakProgress = 0; }
         if (play && in.clicked(GLFW_MOUSE_BUTTON_RIGHT)) useItem();
         else if (!play) { in.clicked(GLFW_MOUSE_BUTTON_RIGHT); }
+        updateBow(in, play, dt);
 
         // світ
         glViewport(0, 0, v.window.fbWidth(), v.window.fbHeight());
@@ -339,6 +342,22 @@ final class PlayScreen {
         guiNs = System.nanoTime() - t2;
         devHooks();
         return true;
+    }
+
+    /** Лук: утримання ПКМ натягує (до 1 с), відпускання стріляє; потрібна стріла в інвентарі (у творчому - ні). */
+    private void updateBow(Input in, boolean play, double dt) {
+        ItemType h = held();
+        boolean bow = play && h != null && h.name.equals(Arrows.BOW) && !vt.dead() && (world.creative() || Arrows.hasArrow(inv));
+        if (bow && in.buttonDown(GLFW_MOUSE_BUTTON_RIGHT)) { bowCharge = Math.max(0, bowCharge) + dt; return; }
+        if (bow && bowCharge >= 0.1) {
+            double speed = Arrows.FULL_SPEED * Arrows.power(bowCharge);
+            if (world.creative() || Arrows.takeArrow(inv)) {
+                world.arrows.shoot(player.pos, player.yaw, player.pitch, speed, !world.creative());
+                sounds.self("voxelin:bow.shoot", 0.8f);
+                if (!world.creative()) inv.wearSelected(h.durability);
+            }
+        }
+        bowCharge = -1;
     }
 
     /** Утримання лівої кнопки: прогрес ламання цілі; скидається при зміні блока чи відпусканні. */
@@ -488,7 +507,9 @@ final class PlayScreen {
         final long rcx = cam.eye.cx * 16, rcz = cam.eye.cz * 16; // начало малювання - чанк камери
         final float s = Units.BLOCK_SIZE;
         if (hit != null) {
-            float e = 0.012f, x0 = (hit.x() - rcx - e) * s, y0 = (hit.y() - e) * s, z0 = (hit.z() - rcz - e) * s, x1 = (hit.x() - rcx + 1 + e) * s, y1 = (hit.y() + 1 + e) * s, z1 = (hit.z() - rcz + 1 + e) * s;
+            double[] ob = outlineBox();
+            float e = 0.012f, x0 = (float) (hit.x() - rcx + ob[0] - e) * s, y0 = (float) (hit.y() + ob[1] - e) * s, z0 = (float) (hit.z() - rcz + ob[2] - e) * s,
+                    x1 = (float) (hit.x() - rcx + ob[3] + e) * s, y1 = (float) (hit.y() + ob[4] + e) * s, z1 = (float) (hit.z() - rcz + ob[5] + e) * s;
             glColor4f(1f, 1f, 1f, 1f); glLineWidth(2f);
             glBegin(GL_LINES);
             float[][] c = {{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}, {x0, y1, z0}, {x1, y1, z0}, {x1, y1, z1}, {x0, y1, z1}};
@@ -498,6 +519,7 @@ final class PlayScreen {
         }
         drawCracks(rcx, rcz, s);
         drawItems(rcx, rcz, s);
+        drawArrows(s);
         drawMobs(s);
         if (cam.mode != Camera.Mode.FIRST && !vt.dead()) drawPlayer(s);
         glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix();
@@ -635,6 +657,40 @@ final class PlayScreen {
         glEnd();
     }
 
+    /** Контур цілі: для дошок - сама влучена дошка, для фігурних блоків - охоплення їхніх коробок, інакше - куб. */
+    private double[] outlineBox() {
+        double[] b = world.boxes(hit.x(), hit.y(), hit.z());
+        if (b == null || b.length < 6) return new double[]{0, 0, 0, 1, 1, 1};
+        int id = world.blockId(hit.x(), hit.y(), hit.z());
+        if (id > 0 && world.boards.isBoards(world.blocks.get(id))) {
+            int bit = Boards.partAt(world.boards.mask(hit.x(), hit.y(), hit.z()), hit.fx() - faceIn(0), hit.fy() - faceIn(1), hit.fz() - faceIn(2));
+            if (bit >= 0) return Boards.boxes(1L << bit);
+        }
+        double[] r = {1, 1, 1, 0, 0, 0};
+        for (int k = 0; k + 5 < b.length; k += 6) for (int a = 0; a < 3; a++) { r[a] = Math.min(r[a], b[k + a]); r[a + 3] = Math.max(r[a + 3], b[k + 3 + a]); }
+        return r;
+    }
+
+    /** Стріли: древко вздовж руху (застряглі - вздовж останнього руху) і мідне вістря. */
+    private void drawArrows(float s) {
+        java.util.List<Arrows.Arrow> list = world.arrows.all();
+        if (list.isEmpty()) return;
+        float light = (float) Math.max(0.3, rend.skyBrightness);
+        glLineWidth(3f);
+        glBegin(GL_LINES);
+        for (Arrows.Arrow a : list) {
+            double sp = a.speed();
+            if (sp < 1e-6) continue;
+            double dx = a.vx / sp * 0.6, dy = a.vy / sp * 0.6, dz = a.vz / sp * 0.6;
+            float px = (float) (a.pos.relX(cam.eye.cx) * s), py = (float) (a.pos.y * s), pz = (float) (a.pos.relZ(cam.eye.cz) * s);
+            glColor3f(0.55f * light, 0.4f * light, 0.22f * light);
+            glVertex3f(px - (float) (dx * s), py - (float) (dy * s), pz - (float) (dz * s)); glVertex3f(px - (float) (dx * 0.2 * s), py - (float) (dy * 0.2 * s), pz - (float) (dz * 0.2 * s));
+            glColor3f(0.85f * light, 0.5f * light, 0.25f * light);
+            glVertex3f(px - (float) (dx * 0.2 * s), py - (float) (dy * 0.2 * s), pz - (float) (dz * 0.2 * s)); glVertex3f(px, py, pz);
+        }
+        glEnd();
+    }
+
     /** Предмети на землі: маленькі кольорові кубики, що крутяться й погойдуються (кольори - з предмета, затемнені вночі). */
     private void drawItems(long rcx, long rcz, float s) {
         java.util.List<voxelin.core.entity.ItemEntity> list = world.itemEntities();
@@ -705,6 +761,11 @@ final class PlayScreen {
             Gui.rect(Gui.W / 2f - 2, Gui.H / 2f - 13, 4, 26, 0, 0, 0, 0.45f);
             Gui.rect(Gui.W / 2f - 12, Gui.H / 2f - 1, 24, 2, 1, 1, 1, 0.9f);
             Gui.rect(Gui.W / 2f - 1, Gui.H / 2f - 12, 2, 24, 1, 1, 1, 0.9f);
+            if (bowCharge >= 0) { // натяг лука під прицілом
+                float k = (float) Math.min(1, bowCharge);
+                Gui.rect(Gui.W / 2f - 20, Gui.H / 2f + 20, 40, 5, 0, 0, 0, 0.5f);
+                Gui.rect(Gui.W / 2f - 19, Gui.H / 2f + 21, 38 * k, 3, k >= 1 ? 1f : 0.9f, k >= 1 ? 0.85f : 0.9f, k >= 1 ? 0.3f : 0.9f, 0.9f);
+            }
         }
         hotbar(g);
         vitalsHud();

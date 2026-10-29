@@ -75,6 +75,26 @@ public final class ItemTextureGen {
         return r << 16 | g << 8 | bl;
     }
 
+    /** Лук: дерев'яна дуга зліва-вгорі до справа-внизу, тятива по діагоналі. */
+    public static int[] bow() {
+        int[] a = new int[256];
+        int[][] arc = {{3, 2}, {4, 2}, {5, 2}, {6, 3}, {7, 3}, {8, 4}, {9, 5}, {10, 6}, {11, 7}, {12, 8}, {12, 9}, {13, 10}, {13, 11}, {13, 12}};
+        for (int[] p : arc) { px(a, p[0], p[1], HANDLE); px(a, p[0], p[1] + 1, HANDLE_HI); }
+        px(a, 7, 4, 0xFF5A3E1E); px(a, 8, 5, 0xFF5A3E1E); px(a, 9, 6, 0xFF5A3E1E); // обмотка руків'я
+        line(a, 3, 3, 13, 13, 0xFFE8E8DC);
+        return outlined(a);
+    }
+
+    /** Стріла: мідне вістря, древко, біле оперення. */
+    public static int[] arrow() {
+        int[] a = new int[256];
+        line(a, 4, 11, 11, 4, HANDLE);
+        px(a, 12, 3, 0xFFE0803F); px(a, 11, 3, 0xFFC8764A); px(a, 12, 4, 0xFFC8764A); px(a, 13, 2, 0xFFF0A060);
+        int f = 0xFFF0F0F0, f2 = 0xFFC8C8C8;
+        px(a, 3, 11, f); px(a, 2, 11, f2); px(a, 4, 12, f); px(a, 4, 13, f2); px(a, 3, 12, f); px(a, 2, 13, f2);
+        return outlined(a);
+    }
+
     public static int[] stick() { int[] a = new int[256]; handle(a, 3, 13, 12, 4); return outlined(a); }
 
     public static int[] coal() {

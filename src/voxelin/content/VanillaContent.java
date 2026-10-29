@@ -275,6 +275,12 @@ public final class VanillaContent implements VoxelinMod {
         r.item("leather", new ItemSettings().color(0x8A5A32).texture("leather").title("Шкіра"));
         r.item("feather", new ItemSettings().color(0xF0F0F0).texture("feather").title("Пір'я"));
         r.item("string", new ItemSettings().color(0xDDDDCC).texture("string").title("Нитка"));
+        // лук і стріли (рішення Святослава 29.10): натяг ПКМ до 1 с, стріли з міді (є рано, з шахти), палиці й пір'я курки
+        tex("bow", ItemTextureGen.bow()); tex("arrow", ItemTextureGen.arrow());
+        r.item("bow", new ItemSettings().color(0x9C7A48).texture("bow").durability(384).title("Лук"));
+        r.item("arrow", new ItemSettings().color(0xC8764A).texture("arrow").title("Стріла"));
+        r.recipe("bow", RecipeSettings.shaped(".SN", "S.N", ".SN").key('S', "stick").key('N', "string").result("bow", 1));
+        r.recipe("arrow", RecipeSettings.shaped("C", "S", "F").key('C', "copper_ingot").key('S', "stick").key('F', "feather").result("arrow", 4));
         r.recipe("cook_chicken", RecipeSettings.smelting("raw_chicken", 10).result("cooked_chicken", 1));
         r.recipe("cook_beef", RecipeSettings.smelting("raw_beef", 10).result("steak", 1));
 

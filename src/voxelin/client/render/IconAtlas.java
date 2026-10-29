@@ -52,7 +52,7 @@ public final class IconAtlas {
             if (t == null) return new int[]{2, 0, 0};
             if (t.placesBlock != null) {
                 BlockType b = world.blocks.byName(t.placesBlock);
-                if (b != null) {
+                if (b != null && !(b.shape != null && !"table".equals(b.shape) && t.texture != null)) { // дошка, смолоскип - пласка іконка; стіл - кубиком
                     String top = b.texTop != null ? b.texTop : b.texSide, side = b.texSide != null ? b.texSide : b.texTop;
                     if (top != null) return new int[]{1, tex.layer(top), tex.layer(side)};
                 }

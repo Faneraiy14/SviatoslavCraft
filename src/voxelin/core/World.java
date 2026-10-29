@@ -257,6 +257,8 @@ public final class World implements WorldAccess {
     }
 
     /** Відкрити запис журналу (повна назва, напр. voxelin:dragon). true - щойно відкрито (гравець бачить повідомлення). */
+    public void notifyPlayer(String message) { if (target != null) target.notify(message); }
+
     public boolean unlockRecord(String id) {
         RecordRegistry.Record r = records.get(id);
         if (r == null || !info.records.add(id)) return false;
@@ -382,6 +384,7 @@ public final class World implements WorldAccess {
         Pos pc = target == null ? null : target.body();
         for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
             Mob m = it.next();
+            if (Math.floorMod(tick + m.hashCode(), 10) == 0) pickPrey(m);
             m.tick(this, target, mobRng);
             if (!m.dying && mobRng.nextInt(m.type.boss ? 160 : 480) == 0) mobSound(m, "idle", m.type.boss ? 1.5f : 0.8f); // голоси - зрідка, у випадковий момент
             if (!m.dying && m.type.flying && Math.floorMod(tick + m.hashCode(), 30) == 0) mobSound(m, "flap", 1f);
@@ -393,6 +396,27 @@ public final class World implements WorldAccess {
             }
         }
         if (keeperPending) { keeperPending = false; spawnKeeperIfNeeded(); }
+    }
+
+    /**
+     * Цілі між істотами: Вартовий - найближчий ворог у 16 блоках; ворог - житель чи Вартовий у межах виявлення; житель бачить ворога
+     * в 8 блоках - тікає. Бос і літуни в цьому не беруть участі.
+     */
+    private void pickPrey(Mob m) {
+        if (m.dying || m.type.boss || m.type.flying) return;
+        boolean guard = m.type.guard(), hostile = m.type.hostile(), villager = m.type.villager();
+        if (!guard && !hostile && !villager) return;
+        double range = guard ? 16 : villager ? 8 : m.type.detect, best = range * range;
+        Mob pick = null;
+        for (Mob o : mobs) {
+            if (o == m || o.dying || o.type.boss || o.type.flying) continue;
+            boolean fit = guard || villager ? o.type.hostile() : o.type.villager() || o.type.guard();
+            if (!fit) continue;
+            double dx = o.pos.relX(m.pos.cx) - m.pos.x, dz = o.pos.relZ(m.pos.cz) - m.pos.z, dy = o.pos.y - m.pos.y, d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 < best) { best = d2; pick = o; }
+        }
+        if (villager) { if (pick != null) m.fleeFrom(pick.pos, 40); }
+        else m.prey = pick;
     }
 
     /** Відмітки вже створених мобів зі структур (щоб повторна генерація чанка не відроджувала жителів). */
@@ -619,6 +643,7 @@ public final class World implements WorldAccess {
         if (batchDepth > 0) batchChunks.add(c); else light.blockChanged(c, (int) (x & 15), y, (int) (z & 15), old, nb.id);
         if (listener != null) listener.blockChanged(x, y, z);
         if (infect) infection.start(x, y, z);
+        if (nb.name.equals(Guard.HEAD) || nb.name.equals(Guard.IRON)) Guard.tryBuild(this, x, y, z); // Т із залізних блоків + лампа = Вартовий
         return true;
     }
 

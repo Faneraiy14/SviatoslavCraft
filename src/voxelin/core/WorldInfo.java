@@ -63,6 +63,9 @@ public final class WorldInfo {
     public long infX, infZ, infStart; public int infY;
     /** Накопичені спроби росту зараження (виконуються, коли ділянка ядра завантажена). */
     public double infOwed;
+    /** Криза: село, на яке пішов Шов (центр), і чи вже посіяно там наріст. */
+    public boolean infVillage, infFrontSeeded;
+    public long infVx, infVz;
     /** Міжсвіття: стан зараження звичайного світу, з якого прийшов гравець (настрій виміру). */
     public InfState overInf = InfState.NONE;
     /** Відкриті розриви Шву: {x, y (нижній блок), z, час закриття}. */
@@ -126,6 +129,8 @@ public final class WorldInfo {
             try { w.infX = Long.parseLong(p.getProperty("infX").trim()); w.infY = Integer.parseInt(p.getProperty("infY").trim()); w.infZ = Long.parseLong(p.getProperty("infZ").trim()); w.infStart = Long.parseLong(p.getProperty("infStart").trim()); }
             catch (RuntimeException e) { w.infState = InfState.NONE; }
             if (w.infY < 0 || w.infY >= Chunk.HEIGHT) w.infState = InfState.NONE;
+            try { w.infVx = Long.parseLong(p.getProperty("infVx").trim()); w.infVz = Long.parseLong(p.getProperty("infVz").trim()); w.infVillage = true; w.infFrontSeeded = "true".equals(p.getProperty("infFront")); }
+            catch (RuntimeException e) { w.infVillage = false; }
             try { double o = Double.parseDouble(p.getProperty("infOwed", "0").trim()); w.infOwed = Double.isNaN(o) || o < 0 ? 0 : Math.min(Infection.OWED_CAP, o); } catch (NumberFormatException e) { w.infOwed = 0; }
         }
         try { w.ritualKills = Math.max(0, Math.min(3, Integer.parseInt(p.getProperty("ritualKills", "0").trim()))); } catch (NumberFormatException e) { w.ritualKills = 0; }
@@ -169,7 +174,8 @@ public final class WorldInfo {
         if (hasBed) { p.setProperty("bedX", String.valueOf(bedX)); p.setProperty("bedY", String.valueOf(bedY)); p.setProperty("bedZ", String.valueOf(bedZ)); }
         if (eggChoice != EggChoice.NONE) p.setProperty("eggChoice", eggChoice.name());
         if (cataclysms != Cataclysms.ON) p.setProperty("cataclysms", cataclysms.name());
-        if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); p.setProperty("infOwed", String.valueOf(infOwed)); }
+        if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); p.setProperty("infOwed", String.valueOf(infOwed));
+            if (infVillage) { p.setProperty("infVx", String.valueOf(infVx)); p.setProperty("infVz", String.valueOf(infVz)); if (infFrontSeeded) p.setProperty("infFront", "true"); } }
         if (ritualKills != 0) p.setProperty("ritualKills", String.valueOf(ritualKills));
         if (overInf != InfState.NONE) p.setProperty("overInf", overInf.name());
         if (!rifts.isEmpty()) { StringBuilder sb = new StringBuilder(); for (long[] r : rifts) { if (sb.length() > 0) sb.append(';'); sb.append(r[0]).append(',').append(r[1]).append(',').append(r[2]).append(',').append(r[3]); } p.setProperty("rifts", sb.toString()); }

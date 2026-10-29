@@ -39,6 +39,8 @@ public final class Infection {
     /** Мутовані блоки: {x, y, z, id оригіналу, id мутації}. */
     final List<long[]> blight = new ArrayList<>();
     public static final int BLIGHT_CAP = 60_000, BLIGHT_REACH = 4, HEAL_DAYS = 2;
+    /** Криза: Шов іде на найближче село не далі VILLAGE_REACH від ядра; там своя зона радіусом FRONT_RADIUS і нічні напади. */
+    public static final int VILLAGE_REACH = 320, FRONT_RADIUS = 36, FRONT_OFFSET = 20, RAID_MAX = 6;
     public static final String PETRIFIED = "voxelin:petrified_log", SEAM_MUD = "voxelin:seam_mud";
     private double healOwed, healRate;
     private final Random rng;
@@ -120,7 +122,9 @@ public final class Infection {
             if (p != Phase.QUIET) w.unlockRecord("voxelin:infection_active");
             if (p == Phase.CRISIS) w.unlockRecord("voxelin:infection_crisis");
             if (breached()) w.unlockRecord("voxelin:infection_breach");
+            if (p == Phase.CRISIS) front();
         }
+        if (tick % 600 == 0 && w.naturalSpawning && w.skyLevel() < 0.5) raid();
         i.infOwed = Math.min(OWED_CAP, i.infOwed + rate());
         for (int b = 0; b < BUDGET && i.infOwed >= 1; b++) {
             if (step() == Step.DEFERRED) break; // ділянка не завантажена - чекаємо, борг лишається
@@ -128,7 +132,67 @@ public final class Infection {
         }
     }
 
-    private boolean inZone(long x, long z) { WorldInfo i = w.info; int r = radius(); return Math.abs(x - i.infX) <= r && Math.abs(z - i.infZ) <= r; }
+    private boolean inZone(long x, long z) {
+        WorldInfo i = w.info; int r = radius();
+        if (Math.abs(x - i.infX) <= r && Math.abs(z - i.infZ) <= r) return true;
+        return i.infVillage && i.infFrontSeeded && Math.abs(x - i.infVx) <= FRONT_RADIUS && Math.abs(z - i.infVz) <= FRONT_RADIUS; // фронт біля села
+    }
+
+    /**
+     * Криза наступає на поселення: один раз знайти найближче село (не далі VILLAGE_REACH), записати в журнал напрям і посіяти наріст
+     * на його краю з боку ядра (коли ділянка завантажена). Далі звідти росте своя зона, а вночі підходять вороги (raid).
+     */
+    public void front() {
+        WorldInfo i = w.info;
+        if (mild() || i.infState != WorldInfo.InfState.ACTIVE || phase() != Phase.CRISIS) return;
+        if (!i.infVillage) {
+            long[] v = w.locate("village", i.infX, i.infZ);
+            if (v == null || v[3] > VILLAGE_REACH) return;
+            i.infVillage = true; i.infVx = v[0]; i.infVz = v[2];
+            w.unlockRecord("voxelin:infection_village");
+            w.notifyPlayer("Шов іде на село: " + direction(i.infVx - i.infX, i.infVz - i.infZ) + " від ядра, " + v[3] + " блоків");
+        }
+        if (i.infFrontSeeded) return;
+        double dx = i.infX - i.infVx, dz = i.infZ - i.infVz, l = Math.max(1e-6, Math.hypot(dx, dz));
+        long sx = i.infVx + Math.round(dx / l * FRONT_OFFSET), sz = i.infVz + Math.round(dz / l * FRONT_OFFSET);
+        if (w.blockId(sx, 0, sz) < 0) return; // не завантажено - спробуємо пізніше
+        int y = Chunk.HEIGHT - 1;
+        while (y > 0 && (w.blockId(sx, y, sz) <= 0 || !w.blocks.get(w.blockId(sx, y, sz)).solid)) y--; // верхній суцільний блок
+        BlockType gt = w.blocks.byName(GROWTH);
+        if (gt == null || y <= 0 || !consumable(sx, y, sz) || !w.setBlock(SRC, sx, y, sz, gt)) return;
+        growth.add(new long[]{sx, y, sz});
+        i.infFrontSeeded = true;
+    }
+
+    static String direction(long dx, long dz) {
+        String[] n = {"на схід", "на південний схід", "на південь", "на південний захід", "на захід", "на північний захід", "на північ", "на північний схід"};
+        double a = Math.toDegrees(Math.atan2(dz, dx)); // +x - схід, +z - південь
+        return n[(int) Math.floorMod(Math.round(a / 45), 8)];
+    }
+
+    /** Нічний напад на село під час кризи: зомбі з боку ядра, поки біля села їх менше RAID_MAX. Повертає, скільки з'явилось. */
+    public int raid() {
+        WorldInfo i = w.info;
+        if (!i.infVillage || !i.infFrontSeeded || i.infState != WorldInfo.InfState.ACTIVE || phase() != Phase.CRISIS) return 0;
+        MobType z = w.mobTypes.find("zombie");
+        if (z == null) return 0;
+        int near = 0;
+        for (voxelin.core.entity.Mob m : w.mobs()) {
+            if (!m.type.hostile() || m.dying) continue;
+            double dx = m.pos.relX(0) - i.infVx, dz = m.pos.relZ(0) - i.infVz;
+            if (dx * dx + dz * dz < 48 * 48) near++;
+        }
+        double dx = i.infX - i.infVx, dz = i.infZ - i.infVz, l = Math.max(1e-6, Math.hypot(dx, dz));
+        int made = 0;
+        for (int k = 0; k < 3 && near + made < RAID_MAX; k++) {
+            long sx = i.infVx + Math.round(dx / l * (FRONT_OFFSET + 6)) + rng.nextInt(7) - 3, sz = i.infVz + Math.round(dz / l * (FRONT_OFFSET + 6)) + rng.nextInt(7) - 3;
+            if (w.blockId(sx, 0, sz) < 0) break;
+            int y = Chunk.HEIGHT - 2;
+            while (y > 1 && w.blockId(sx, y, sz) == 0) y--;
+            if (w.spawnMob(z, Pos.ofBlock(sx, y + 1, sz)) != null) made++;
+        }
+        return made;
+    }
 
     /** Одна спроба росту (для тестів і звіту). true - виросло. */
     public boolean spread() { return step() == Step.GREW; }

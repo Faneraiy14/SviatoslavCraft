@@ -36,6 +36,9 @@ public final class MobType implements MobRef {
     public boolean talkable() { return !trades.isEmpty() || !greetings.isEmpty() || dialog != null; }
     public boolean hostile() { return behavior == MobSettings.Behavior.HOSTILE; }
     public boolean passive() { return behavior == MobSettings.Behavior.PASSIVE; }
+    public boolean guard() { return behavior == MobSettings.Behavior.GUARD; }
+    /** Житель (мирний, з домом): його захищає Вартовий, на нього полюють вороги. */
+    public boolean villager() { return passive() && homeRadius > 0 && persistent; }
     @Override public String name() { return name; }
     @Override public String toString() { return name; }
 }

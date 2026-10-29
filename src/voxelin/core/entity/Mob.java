@@ -35,6 +35,11 @@ public final class Mob {
     private double wanderDx, wanderDz;
     private int burnTimer;
     private Pos threat; // звідки вдарили (для втечі)
+    /** Ціль-істота (вибирає World раз на 10 тіків): ворог - житель чи Вартовий, Вартовий - ворог. */
+    public Mob prey;
+
+    /** Тікати від точки (житель бачить ворога). */
+    public void fleeFrom(Pos from, int ticks) { if (type.passive()) { fleeTicks = Math.max(fleeTicks, ticks); threat = from.copy(); } }
 
     public Mob(MobType type, Pos at) {
         this.type = type; this.pos = at.copy(); this.health = type.health;
@@ -81,11 +86,27 @@ public final class Mob {
             double dy = tb.y - (pos.y + type.height / 2);
             tdist = Math.sqrt(tdx * tdx + tdz * tdz + dy * dy);
         }
+        if (prey != null && (!prey.alive() || prey.removable())) prey = null;
+        double pdx = 0, pdz = 0, pdist = Double.MAX_VALUE;
+        if (prey != null) {
+            pdx = prey.pos.relX(pos.cx) - pos.x; pdz = prey.pos.relZ(pos.cz) - pos.z;
+            double dy = prey.pos.y - pos.y;
+            pdist = Math.sqrt(pdx * pdx + pdz * pdz + dy * dy);
+        }
+        boolean night = w.skyLevel() < 0.5;
         if (fleeTicks > 0 && type.passive()) {
             fleeTicks--;
             double fx = threat == null ? rng.nextDouble() - 0.5 : pos.x - threat.relX(pos.cx), fz = threat == null ? rng.nextDouble() - 0.5 : pos.z - threat.relZ(pos.cz);
             double l = Math.hypot(fx, fz);
             if (l > 1e-6) { dirX = fx / l; dirZ = fz / l; speed = type.speed * 1.6; }
+        } else if (prey != null && pdist <= type.detect && (!aggressive || pdist < tdist)) { // істота-ціль ближча за гравця
+            double l = Math.hypot(pdx, pdz);
+            if (l > 1e-6) { dirX = pdx / l; dirZ = pdz / l; }
+            speed = l > type.reach * 0.6 ? type.speed : 0;
+            if (pdist <= type.reach + (type.width + prey.type.width) / 2 && attackCooldown == 0 && type.attackDamage > 0) {
+                attackCooldown = type.cooldownTicks;
+                prey.damage(type.attackDamage * (infected ? 1.5 : 1), dirX, dirZ, pos);
+            }
         } else if (aggressive && tdist <= type.detect) {
             double l = Math.hypot(tdx, tdz);
             if (l > 1e-6) { dirX = tdx / l; dirZ = tdz / l; }
@@ -94,6 +115,9 @@ public final class Mob {
                 attackCooldown = type.cooldownTicks;
                 target.hurt(type.attackDamage * (infected ? 1.5 : 1), dirX, dirZ, type.armorPierce); // у зараженій зоні вороги сильніші
             }
+        } else if (night && type.villager() && home != null) { // вночі житель іде додому й стоїть там
+            double hx = home.relX(pos.cx) - pos.x, hz = home.relZ(pos.cz) - pos.z, hd = Math.hypot(hx, hz);
+            if (hd > 0.8) { dirX = hx / hd; dirZ = hz / hd; speed = type.speed * 0.8; }
         } else {
             if (wanderTicks <= 0) { // нова мить блукання: пауза або іти в випадковому напрямі
                 if (rng.nextInt(10) < 4) { wanderDx = wanderDz = 0; wanderTicks = 40 + rng.nextInt(60); }

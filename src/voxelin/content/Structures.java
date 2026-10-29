@@ -395,6 +395,7 @@ legend:
   W = water
   L = oak_log
   R = oak_planks
+  G = mob village_guard
   _ = air
 layers:
 CCCCC
@@ -410,7 +411,7 @@ CWWWC
 CCCCC
 ---
 L...L
-.___.
+G___.
 .___.
 .___.
 L...L

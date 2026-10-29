@@ -61,6 +61,7 @@ public final class VanillaContent implements VoxelinMod {
         tex("oak_log_top", TextureGen.oakLogTop()); tex("birch_log_top", TextureGen.birchLogTop()); tex("spruce_log_top", TextureGen.spruceLogTop()); tex("pale_log_top", TextureGen.paleLogTop());
         tex("cactus_top", TextureGen.cactusTop());
         tex("dragon_egg", ItemTextureGen.dragonEgg());
+        tex("iron_block", TextureGen.ironBlock());
         tex("petrified_log", TextureGen.petrifiedLog()); tex("petrified_log_top", TextureGen.petrifiedLogTop()); tex("seam_mud", TextureGen.seamMud());
         tex("seam_core", ItemTextureGen.seamCore()); tex("seam_growth", ItemTextureGen.seamGrowth()); tex("seam_scar", ItemTextureGen.seamScar());
         tex("threshold_stone", ItemTextureGen.thresholdStone()); tex("seam_thread", ItemTextureGen.seamThread()); tex("seam_rift", ItemTextureGen.rift());
@@ -106,6 +107,7 @@ public final class VanillaContent implements VoxelinMod {
         block("pale_log", new BlockSettings().textures("pale_log_top", "pale_log", "pale_log_top").color(cPaleLog).tool(ToolKind.AXE).title("Бліда колода").hardness(2f));
         block("cactus", new BlockSettings().textures("cactus_top", "cactus_side", "cactus_top").color(cCactus).tool(ToolKind.AXE).title("Кактус").hardness(0.4f));
         block("coal_ore", new BlockSettings().texture("coal_ore").color(cCoal).tool(ToolKind.PICKAXE).minTier(1).drops("coal").title("Вугільна руда").hardness(3f));
+        block("iron_block", new BlockSettings().texture("iron_block").color(0xD6D6DA).tool(ToolKind.PICKAXE).minTier(2).sound("metal").title("Залізний блок").hardness(5f));
         block("iron_ore", new BlockSettings().texture("iron_ore").color(cIron).tool(ToolKind.PICKAXE).minTier(2).drops("raw_iron").title("Залізна руда").hardness(3f));
         block("copper_ore", new BlockSettings().texture("copper_ore").color(cCopper).tool(ToolKind.PICKAXE).minTier(2).drops("raw_copper", 2, 3, 1f).title("Мідна руда").hardness(3f));
         block("gold_ore", new BlockSettings().texture("gold_ore").color(cGold).tool(ToolKind.PICKAXE).minTier(3).drops("raw_gold").title("Золота руда").hardness(3f));
@@ -205,6 +207,8 @@ public final class VanillaContent implements VoxelinMod {
         r.item("seam_fire", new ItemSettings().color(0xFF6A20).texture("seam_fire").title("Вогонь Шву"));
         r.recipe("seam_cure", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "threshold_bloom", "glass").result("seam_cure", 1)); // квітка росте лише в міжсвітті
         r.recipe("seam_fire", RecipeSettings.shapeless("liminite_shard", "coal", "coal", "coal", "glass").result("seam_fire", 1));
+        r.recipe("iron_block", RecipeSettings.shaped("III", "III", "III").key('I', "iron_ingot").result("iron_block", 1));
+        r.recipe("iron_block_ingots", RecipeSettings.shapeless("iron_block").result("iron_ingot", 9));
         r.recipe("chest", RecipeSettings.shaped("PPP", "P.P", "PPP").key('P', "#planks").result("chest", 1));
         r.recipe("bed", RecipeSettings.shaped("LLL", "PPP").key('L', "leather").key('P', "#planks").result("bed", 1)); // шкіра - з корів
         r.loot("ruins", new LootSettings().rolls(1, 3).entry("stick", 2, 6, 10).entry("coal", 1, 4, 8).entry("apple", 1, 2, 6).entry("cobblestone", 3, 8, 8)
@@ -283,6 +287,14 @@ public final class VanillaContent implements VoxelinMod {
         for (int i = 0; i < 4; i++) { spider.legPart(-0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 == 0); spider.legPart(0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 != 0); }
         r.mob("spider", spider);
 
+        // --- Вартовий села: стоїть біля колодязя, б'є ворогів поблизу, гравця не чіпає. Будується: Т із 4 залізних блоків + лампа зверху (core/Guard)
+        r.mob("village_guard", new MobSettings().health(100).speed(1.8f).size(0.9f, 1.95f).behavior(MobSettings.Behavior.GUARD).attack(9, 1.6f, 1.5f).detect(16)
+                .homeRadius(20).persistent(true).title("Вартовий").drops("iron_ingot", 2, 4, 1f)
+                .legPart(-0.2f, 0, 0, 0.32f, 0.75f, 0.32f, 0x8A8A90, false).legPart(0.2f, 0, 0, 0.32f, 0.75f, 0.32f, 0x8A8A90, true)
+                .part(0, 0.75f, 0, 0.85f, 0.8f, 0.5f, 0xB4B4BA).part(0, 1.1f, -0.26f, 0.3f, 0.3f, 0.04f, 0x7A4AD0)
+                .legPart(-0.56f, 0.55f, 0, 0.24f, 1.0f, 0.26f, 0xA0A0A6, true).legPart(0.56f, 0.55f, 0, 0.24f, 1.0f, 0.26f, 0xA0A0A6, false)
+                .part(0, 1.55f, 0, 0.5f, 0.4f, 0.45f, 0xC4C4CA).part(-0.12f, 1.7f, -0.23f, 0.1f, 0.06f, 0.02f, 0xFFD27A).part(0.12f, 1.7f, -0.23f, 0.1f, 0.06f, 0.02f, 0xFFD27A));
+
         // --- жителі (S6): мирні, живуть біля дому, торгують за золотий злиток; модель - коробки, колір одягу за професією
         int[][] pal = {{0x8B5A2B, 0xE0C060}, {0x444A55, 0x2B2B30}, {0xE8E4D8, 0xC9C9C9}}; // одяг, капелюх/борода
         String[] vName = {"villager_farmer", "villager_smith", "villager_elder"}, vTitle = {"Житель-фермер", "Житель-коваль", "Старійшина"};
@@ -330,6 +342,7 @@ public final class VanillaContent implements VoxelinMod {
         r.record("infection_start", "Яйце пустило корені", "Ядро стоїть. Тиха пора - перші десять днів; активна - наступні десять; потім криза.\nПоки зараження активне, ядро не зламати.");
         r.record("infection_active", "Жили", "Минуло десять днів. Наріст пустив жили, небо над світом сіріє.\nТварини обходять заражену землю, а вороги в ній б'ють сильніше.");
         r.record("infection_crisis", "Криза", "Двадцятий день. Небо темне навіть удень, світ стихає.\nДо прориву - десять днів. Зілля, вогонь чи лімініт: час обирати.");
+        r.record("infection_village", "Шов іде на село", "Криза потягнулась до найближчого села: на його краю пустив корені наріст, а вночі звідти приходять мерці.\nЗахисти його (Вартовий: Т із чотирьох залізних блоків і лампа зверху), випали наріст - або відпусти жителів.");
         r.record("infection_breach", "Прорив", "Шов прорвався. Зона вдвічі більша, і росте вона вдвічі швидше.\nЦе ще можна зупинити - але кожен день коштує землі.");
         r.record("infection_end", "Шов затягнувся", "Зараження зупинено. Земля пам'ятатиме: шрами лишаться, але росту більше нема.");
         r.record("between", "Міжсвіття", "Тут немає неба й немає землі - лише уламки. Трава, якої ніхто не садив; камінь Краю поруч із рудою зі звичайного світу.\nІ нитки. Хтось колись зшивав ці уламки докупи.");

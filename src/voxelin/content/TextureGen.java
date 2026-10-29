@@ -268,6 +268,14 @@ public final class TextureGen {
         return rune ? rgb(160, 120, 255) : c;
     }); }
 
+    /** Залізний блок: світлі пластини з заклепками. */
+    public static int[] ironBlock() { return make((x, y) -> {
+        int c = speck(rgb(214, 214, 218), 5, 52, x, y);
+        if (x == 0 || y == 0 || x == N - 1 || y == N - 1) c = shade(c, -40);
+        if ((x == 2 || x == N - 3) && (y == 2 || y == N - 3)) c = shade(c, -60);
+        return c;
+    }); }
+
     public static int[] lamp() { return make((x, y) -> {
         boolean mortar = x % 8 == 0 || y % 8 == 0 || x == N - 1 || y == N - 1;
         if (mortar) return rgb(120, 82, 36);

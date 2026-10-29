@@ -33,7 +33,9 @@ public final class TerrainGenerator implements Generator {
     private final Noise nCont, nTemp, nHum, nWeird, nMount, nHill, nDetail, nPool, nFloor, nCave1, nCave2, nCave3;
     private final int air = 0, stone, deepStone, bedrock, grass, dirt, sand, sandstone, gravel, clay, snow, water, mud, paleGrass, sintered, duneGlass,
             oakLog, oakLeaves, birchLog, birchLeaves, spruceLog, spruceLeaves, paleLog, cactus, monolith,
-            coal, iron, copper, gold, diamond, liminite;
+            coal, iron, copper, gold, diamond, liminite, lava, obsidian;
+    /** Печери до цієї висоти залиті лавою (як у Minecraft); на березі лави - обсидіан (для порталу в Незер). */
+    public static final int LAVA_Y = 10;
 
     private final BlockRegistry reg;
     private final StructurePlacer placer;
@@ -47,7 +49,7 @@ public final class TerrainGenerator implements Generator {
         nDetail = new Noise(seed ^ 0x77770F0F0F0FL); nPool = new Noise(seed ^ 0x88881E1E1E1EL); nFloor = new Noise(seed ^ 0xCCCC5A5A5A5AL);
         nCave1 = new Noise(seed ^ 0x99992D2D2D2DL); nCave2 = new Noise(seed ^ 0xAAAA3C3C3C3CL); nCave3 = new Noise(seed ^ 0xBBBB4B4B4B4BL);
         stone = id(reg, "stone"); deepStone = id(reg, "deep_stone"); bedrock = id(reg, "bedrock"); grass = id(reg, "grass"); dirt = id(reg, "dirt");
-        sand = id(reg, "sand"); sandstone = id(reg, "sandstone"); gravel = id(reg, "gravel"); clay = id(reg, "clay"); snow = id(reg, "snow"); water = id(reg, "water");
+        sand = id(reg, "sand"); sandstone = id(reg, "sandstone"); gravel = id(reg, "gravel"); clay = id(reg, "clay"); snow = id(reg, "snow"); water = id(reg, "water"); lava = id(reg, "lava"); obsidian = id(reg, "obsidian");
         mud = id(reg, "mud"); paleGrass = id(reg, "pale_grass"); sintered = id(reg, "sintered_sand"); duneGlass = id(reg, "dune_glass");
         oakLog = id(reg, "oak_log"); oakLeaves = id(reg, "oak_leaves"); birchLog = id(reg, "birch_log"); birchLeaves = id(reg, "birch_leaves");
         spruceLog = id(reg, "spruce_log"); spruceLeaves = id(reg, "spruce_leaves"); paleLog = id(reg, "pale_log"); cactus = id(reg, "cactus"); monolith = id(reg, "monolith");
@@ -264,7 +266,18 @@ public final class TerrainGenerator implements Generator {
                 boolean cave = false;
                 if (Math.abs(tri(a, i, j, yy, fx, fy, fz)) < 0.07) cave = Math.abs(tri(b, i, j, yy, fx, fy, fz)) < 0.07;
                 if (!cave && y < 52 && yy + 1 < hallGy) cave = tri(k, i, j, yy, fx, fy, fz) > 0.5;
-                if (cave && c.get(x, y, z) != water) c.set(x, y, z, air);
+                if (cave && c.get(x, y, z) != water) c.set(x, y, z, y <= LAVA_Y && lava > 0 ? lava : air);
+            }
+        }
+        if (lava <= 0 || obsidian <= 0) return;
+        // береги лавових озер: камінь поруч із верхнім шаром лави стає обсидіаном
+        for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
+            if (c.get(x, LAVA_Y, z) != lava) continue;
+            for (int[] d : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                int nx = x + d[0], nz = z + d[1];
+                if (nx < 0 || nz < 0 || nx > 15 || nz > 15) continue;
+                int nbId = c.get(nx, LAVA_Y, nz);
+                if (nbId == stone || nbId == deepStone) c.set(nx, LAVA_Y, nz, obsidian);
             }
         }
     }

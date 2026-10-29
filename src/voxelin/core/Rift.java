@@ -14,7 +14,7 @@ public final class Rift {
     public static String open(World w, Inventory inv, long x, int y, long z, boolean creative) {
         Inventory.Stack st = inv.selectedStack();
         if (st == null || !st.item.equals(KEY)) return null;
-        if (w.info.type == WorldInfo.Type.END || w.info.type == WorldInfo.Type.BETWEEN) return "Розрив відкривається лише у звичайному світі.";
+        if (w.info.otherDim()) return "Розрив відкривається лише у звичайному світі.";
         if (w.info.infState == WorldInfo.InfState.BURNED) return "Шов випалено: розрив тут більше не відкривається.";
         BlockType rift = w.blocks.byName(RIFT);
         if (rift == null) return null;

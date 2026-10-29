@@ -249,6 +249,7 @@ public final class Voxelin {
             if (voxelin.core.Dimensions.type(opts.dimension) != null) {
                 World end = game.openDimension(opts.autoWorld, opts.dimension);
                 end.info.setPlayer(voxelin.core.Dimensions.arrival(opts.dimension), 0f, 0f);
+                if (voxelin.core.Dimensions.NETHER.equals(opts.dimension) && !opts.hasTp) end.info.netherArrival = true; // портал біля (0, 0)
                 refreshTextures();
                 beginLoadingWorld(end);
             } else beginLoading(opts.autoWorld);
@@ -297,7 +298,11 @@ public final class Voxelin {
             target.info.copyPlayerFrom(curInfo);
             if (toEnd) {
                 target.info.hasReturn = true; target.info.returnX = rx; target.info.returnY = ry; target.info.returnZ = rz;
-                target.info.setPlayer(voxelin.core.Dimensions.arrival(to), 0f, 0f);
+                if (voxelin.core.Dimensions.NETHER.equals(to)) { // у Незер: 1/8 координат, портал назад збудується, коли довкола завантажиться
+                    long[] a = voxelin.core.NetherPortal.target(rx, rz);
+                    target.info.netherArrival = true; target.info.arrivalX = a[0]; target.info.arrivalZ = a[1];
+                    target.info.setPlayer(Pos.ofBlock(a[0], 70, a[1]), 0f, 0f);
+                } else target.info.setPlayer(voxelin.core.Dimensions.arrival(to), 0f, 0f);
             } else if (curInfo.hasReturn) {
                 target.info.setPlayer(Pos.ofBlock(curInfo.returnX, curInfo.returnY + voxelin.core.entity.PlayerEntity.EYE + 0.02, curInfo.returnZ), 0f, 0f);
             }

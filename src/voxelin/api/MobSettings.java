@@ -39,7 +39,7 @@ public final class MobSettings {
     float health = 10, speed = 2f, width = 0.6f, height = 1.0f;
     Behavior behavior = Behavior.PASSIVE;
     float attackDamage = 2, reach = 1.5f, cooldown = 1f, detect = 16f;
-    boolean burnsInSun;
+    boolean burnsInSun, fireproof;
     String title;
     final List<BlockSettings.Drop> drops = new ArrayList<>();
     final List<Part> parts = new ArrayList<>();
@@ -59,6 +59,8 @@ public final class MobSettings {
     public MobSettings detect(float r) { detect = Float.isNaN(r) ? 16 : Math.max(1, Math.min(128, r)); return this; }
     /** Горить на сонці (зомбі). */
     public MobSettings burnsInSun(boolean b) { burnsInSun = b; return this; }
+    /** Не горить у лаві (істоти Незеру). */
+    public MobSettings fireproof() { fireproof = true; return this; }
     /** Угода для вікна торгівлі (ПКМ по жителю). */
     public MobSettings trade(String in, int inCount, String out, int outCount) { trades.add(new Trade(in, inCount, out, outCount)); return this; }
     /** Репліки жителя (випадкова при розмові). */
@@ -98,7 +100,7 @@ public final class MobSettings {
         s.health = health; s.speed = speed; s.width = width; s.height = height; s.behavior = behavior; s.attackDamage = attackDamage; s.reach = reach; s.cooldown = cooldown;
         s.homeRadius = homeRadius; s.persistent = persistent; s.flying = flying; s.boss = boss; s.armorPierce = armorPierce; s.dimension = dimension; s.invulnerable = invulnerable; s.dialog = dialog; s.greetings.addAll(greetings);
         for (Trade t : trades) s.trades.add(new Trade(t.in.indexOf(':') >= 0 ? t.in : modId + ":" + t.in, t.inCount, t.out.indexOf(':') >= 0 ? t.out : modId + ":" + t.out, t.outCount));
-        s.detect = detect; s.burnsInSun = burnsInSun; s.title = title; s.parts.addAll(parts);
+        s.detect = detect; s.burnsInSun = burnsInSun; s.fireproof = fireproof; s.title = title; s.parts.addAll(parts);
         for (BlockSettings.Drop d : drops) s.drops.add(new BlockSettings.Drop(d.item.indexOf(':') >= 0 ? d.item : modId + ":" + d.item, d.min, d.max, d.chance));
         for (String b : spawnOn) s.spawnOn.add(b.indexOf(':') >= 0 ? b : modId + ":" + b);
         return s;
@@ -122,6 +124,7 @@ public final class MobSettings {
     public float homeRadiusValue() { return homeRadius; }
     public boolean persistentValue() { return persistent; }
     public boolean burnsInSunValue() { return burnsInSun; }
+    public boolean fireproofValue() { return fireproof; }
     public String titleText() { return title; }
     public List<BlockSettings.Drop> dropList() { return Collections.unmodifiableList(drops); }
     public List<Part> partList() { return Collections.unmodifiableList(parts); }

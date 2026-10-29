@@ -104,7 +104,7 @@ public final class World implements WorldAccess {
     public long dayNumber() { return DayCycle.day(info.time + info.dayShift, dayTicks()); }
     public boolean rule(String id) { return info.rule(id); }
     /** Яскравість неба 0.12..1 за часом доби; в Енді стала. */
-    public double skyLevel() { return info.type == WorldInfo.Type.END ? END_SKY : info.type == WorldInfo.Type.BETWEEN ? BETWEEN_SKY : DayCycle.sky(dayPhase()); }
+    public double skyLevel() { return info.type == WorldInfo.Type.END ? END_SKY : info.type == WorldInfo.Type.BETWEEN ? BETWEEN_SKY : info.type == WorldInfo.Type.NETHER ? 0 : DayCycle.sky(dayPhase()); }
     public static final double END_SKY = 0.35, BETWEEN_SKY = 0.6;
     /** "overworld", "end" або "between". */
     public String dimension() { return Dimensions.of(info.type); }
@@ -198,7 +198,7 @@ public final class World implements WorldAccess {
             ItemEntity e = it.next();
             if (e.expired()) { it.remove(); continue; }
             e.tick(solidView, this::isLiquid);
-            if (e.pos.y < -30) it.remove(); // випав за межі світу
+            if (e.pos.y < -30 || isLava(e.pos.blockX(), e.pos.blockY(), e.pos.blockZ())) it.remove(); // випав за межі світу чи згорів у лаві
         }
         if (tick % 10 == 0 && items.size() > 1) { // злиття (раз на півсекунди)
             for (int i = 0; i < items.size(); i++) {
@@ -437,6 +437,7 @@ public final class World implements WorldAccess {
             Mob m = it.next();
             if (Math.floorMod(tick + m.hashCode(), 10) == 0) pickPrey(m);
             m.tick(this, target, mobRng);
+            if (!m.dying && !m.type.fireproof && tick % 10 == 0 && isLava(m.pos.blockX(), m.pos.blockY(), m.pos.blockZ())) hurtMob(m, 4, 0, 0, m.pos); // лава
             if (!m.dying && mobRng.nextInt(m.type.boss ? 160 : 480) == 0) mobSound(m, "idle", m.type.boss ? 1.5f : 0.8f); // голоси - зрідка, у випадковий момент
             if (!m.dying && m.type.flying && Math.floorMod(tick + m.hashCode(), 30) == 0) mobSound(m, "flap", 1f);
             if (m.dying && !m.lootDropped) dropLoot(m);
@@ -696,6 +697,7 @@ public final class World implements WorldAccess {
         if (boards != null && old != nb.id && boards.isBoards(blocks.get(old))) boards.cleared(x, y, z);
         if (infect) infection.start(x, y, z);
         if (nb.name.equals(Guard.HEAD) || nb.name.equals(Guard.IRON)) Guard.tryBuild(this, x, y, z); // Т із залізних блоків + лампа = Вартовий
+        NetherPortal.changed(this, x, y, z, blocks.get(old), nb); // зламали рамку чи портал - гасне весь
         return true;
     }
 
@@ -917,6 +919,8 @@ public final class World implements WorldAccess {
 
     /** Чи рідина в точці (вода): гравець у ній пливе. Незавантажене - ні. */
     public boolean isLiquid(long x, int y, long z) { int id = blockId(x, y, z); return id > 0 && blocks.get(id).liquid; }
+    public boolean isLava(long x, int y, long z) { int id = blockId(x, y, z); return id > 0 && blocks.get(id).name.equals(LAVA); }
+    public static final String LAVA = "voxelin:lava";
 
     /** Доступ до чанка під час генерації для модів (ChunkGeneratedEvent). */
     private final class GenAccess implements ChunkData {

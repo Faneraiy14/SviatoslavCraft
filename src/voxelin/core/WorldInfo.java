@@ -12,7 +12,9 @@ import java.util.*;
 public final class WorldInfo {
     public static final String FILE = "voxelin.world";
     public static final int FORMAT = 2;
-    public enum Type { NORMAL, FLAT, END, BETWEEN }
+    public enum Type { NORMAL, FLAT, END, BETWEEN, NETHER }
+    /** Не звичайний світ: Енд, міжсвіття чи Незер (тут нема зараження, розривів, зміни дня). */
+    public boolean otherDim() { return type == Type.END || type == Type.BETWEEN || type == Type.NETHER; }
     public enum Mode { SURVIVAL, CREATIVE }
     /** Вибір після смерті дракона. */
     public enum EggChoice { NONE, RITUAL, INFECTION }
@@ -43,6 +45,8 @@ public final class WorldInfo {
     public final String[] armor = new String[4];
     /** Лише для виміру Енд: куди повертати гравця в звичайний світ і чи вбито дракона. */
     public boolean hasReturn, dragonDead;
+    /** Щойно прибули в Незер (не зберігається): клієнт облаштує портал біля arrivalX/Z, коли довкола завантажиться. */
+    public boolean netherArrival; public long arrivalX, arrivalZ;
     /** Журнал записів (відкриті id) і сюжетний стан, спільні для вимірів світу (переносяться разом із гравцем). */
     public final java.util.LinkedHashSet<String> records = new java.util.LinkedHashSet<>();
     /** Досягнуті цілі «Шляху» (Progress) і чи вже показано титри фіналу. */
@@ -225,7 +229,7 @@ public final class WorldInfo {
         cheats = o.cheats; rules.clear(); rules.putAll(o.rules);
         ritualStage = Math.max(ritualStage, o.ritualStage);
         if (o.dragonDead && type == Type.END) dragonDead = true;
-        if (type == Type.BETWEEN && o.type != Type.END && o.type != Type.BETWEEN) overInf = o.infState;
+        if (type == Type.BETWEEN && !o.otherDim()) overInf = o.infState;
     }
 
     public synchronized void setPlayer(Pos p, float yaw, float pitch) {

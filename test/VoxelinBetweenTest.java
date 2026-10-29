@@ -35,7 +35,7 @@ public class VoxelinBetweenTest {
     }
 
     static void dims() {
-        check(Dimensions.type("between") == WorldInfo.Type.BETWEEN && Dimensions.type("end") == WorldInfo.Type.END && Dimensions.type("overworld") == null && Dimensions.type("nether") == null, "назви вимірів");
+        check(Dimensions.type("between") == WorldInfo.Type.BETWEEN && Dimensions.type("end") == WorldInfo.Type.END && Dimensions.type("overworld") == null && Dimensions.type("nether") == WorldInfo.Type.NETHER && Dimensions.type("sift") == null, "назви вимірів");
         check(Dimensions.of(WorldInfo.Type.BETWEEN).equals("between") && Dimensions.of(WorldInfo.Type.FLAT).equals("overworld"), "тип -> назва");
         check(Dimensions.portalTarget("overworld").equals("end") && Dimensions.portalTarget("end").equals("overworld") && Dimensions.portalTarget("between").equals("overworld"), "куди веде постійний портал");
         Pos p = Dimensions.arrival("between");

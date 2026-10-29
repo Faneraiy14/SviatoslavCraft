@@ -71,7 +71,7 @@ public final class GameSounds implements SoundSink {
         else audio.loop("glide", "voxelin:ambient.glide", (float) Math.min(1.2, p.speed() / 30));
         if (ticks % 20 == 0) ambient(p);
         WorldInfo i = world.info;
-        if (i.infState == WorldInfo.InfState.ACTIVE && i.type != WorldInfo.Type.END && i.type != WorldInfo.Type.BETWEEN && ticks % 80 == 0) {
+        if (i.infState == WorldInfo.InfState.ACTIVE && !i.otherDim() && ticks % 80 == 0) {
             Pos core = Pos.ofBlock(i.infX, i.infY + 0.5, i.infZ);
             double dx = core.relX(p.pos.cx) - p.pos.x, dz = core.relZ(p.pos.cz) - p.pos.z;
             if (dx * dx + dz * dz < 40 * 40) audio.play("voxelin:seam.pulse", core, 1.4f, 1f, AudioEngine.Cat.AMBIENT);
@@ -97,6 +97,7 @@ public final class GameSounds implements SoundSink {
         WorldInfo i = world.info;
         String key; float vol = 1f;
         if (i.type == WorldInfo.Type.END) key = "voxelin:ambient.end";
+        else if (i.type == WorldInfo.Type.NETHER) key = "voxelin:ambient.nether";
         else if (i.type == WorldInfo.Type.BETWEEN) key = i.overInf == WorldInfo.InfState.ACTIVE ? "voxelin:ambient.between_dark" : "voxelin:ambient.between";
         else {
             boolean open = skyOpen(p.pos.blockX(), p.pos.blockY(), p.pos.blockZ());

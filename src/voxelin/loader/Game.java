@@ -111,6 +111,7 @@ public final class Game {
         voxelin.core.gen.Generator gen = switch (info.type) {
             case END -> new voxelin.core.gen.EndGenerator(info.seed, blocks);
             case BETWEEN -> new voxelin.core.gen.BetweenGenerator(info.seed, blocks, structures.templates());
+            case NETHER -> new voxelin.core.gen.NetherGenerator(info.seed, blocks);
             default -> new TerrainGenerator(info.seed, info.type, blocks, structures.templates());
         };
         return new World(d, info, blocks, items, recipes, mobTypes, loot, records, events, gen);

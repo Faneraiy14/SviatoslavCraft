@@ -76,7 +76,7 @@ public final class MobSpawner {
         int l = c.lightAt((int) Math.floorMod(x, 16L), y, (int) Math.floorMod(z, 16L)), sky = l >> 4, blk = l & 15;
         if (hostile) {
             int eff = Math.max(blk, (int) (sky * w.skyLevel()));
-            if (eff > (w.info.type == WorldInfo.Type.BETWEEN ? 10 : 7)) return false; // у міжсвітті вічні сутінки - Відлуння з'являються й на поверхні островів
+            if (eff > (w.info.type == WorldInfo.Type.BETWEEN ? 10 : w.info.type == WorldInfo.Type.NETHER ? 11 : 7)) return false; // у міжсвітті вічні сутінки - Відлуння з'являються й на поверхні островів
         } else {
             if (sky < 15) return false;
             if (!t.spawnOn.isEmpty() && !t.spawnOn.contains(w.blocks.get(w.blockId(x, y - 1, z)).name)) return false;

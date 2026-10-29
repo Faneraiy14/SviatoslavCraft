@@ -282,6 +282,48 @@ public final class TextureGen {
         return rune ? rgb(160, 120, 255) : c;
     }); }
 
+    // ---- Незер (29.10.2026)
+    /** Лава: помаранчеві хвилі з жовтими прожилками й темними плямами кірки. */
+    public static int[] lava() { return make((x, y) -> {
+        double w = Math.sin((x + y * 0.6) * 0.8) + Math.sin((y - x * 0.4) * 0.7);
+        int c = rgb(222 + (int) (w * 14), 92 + (int) (w * 22), 18);
+        if (w > 1.2) c = rgb(255, 200, 70);
+        if (rnd(71, x / 2, y / 2) < 0.08) c = rgb(150, 44, 14);
+        return c;
+    }); }
+
+    /** Згарище: темно-бурий пористий камінь із червонуватими порами. */
+    public static int[] cinder() { return make((x, y) -> {
+        int c = speck(rgb(92, 44, 40), 14, 72, x, y);
+        if (rnd(73, x, y) < 0.1) c = rgb(60, 24, 24);
+        if (rnd(74, x, y) < 0.03) c = rgb(150, 66, 46);
+        return c;
+    }); }
+
+    public static int[] ash() { return make((x, y) -> speck(rgb(112, 104, 100), 12, 75, x, y)); }
+
+    /** Жарова жила: Згарище з тріщинами, що жевріють. */
+    public static int[] emberVein() { int[] base = cinder(); return make((x, y) -> {
+        boolean crack = (Math.abs((x * 3 + y * 2) % 11 - 5) < 1 && rnd(76, x / 3, y / 3) < 0.7) || (y == 8 && x > 3 && x < 12) || (x == 5 && y > 2 && y < 9);
+        return crack ? rgb(255, 150 + (int) (rnd(77, x, y) * 60), 40) : base[x + y * N];
+    }); }
+
+    /** Жаровий лімініт: Згарище з фіолетово-помаранчевими кристалами (лімініт, перегрітий біля лави). */
+    public static int[] emberOre() { return ore(cinder(), rgb(255, 128, 64), rgb(176, 110, 255), 78, 6); }
+
+    public static int[] fortressBricks() { return make((x, y) -> {
+        boolean mortar = y % 4 == 3 || ((y / 4) % 2 == 0 ? x % 8 == 7 : x % 8 == 3);
+        if (mortar) return rgb(28, 14, 18);
+        return speck(rgb(62, 28, 34), 8, 79, x / 2, y);
+    }); }
+
+    /** Портал Незеру: напівпрозорий червоно-фіолетовий вир. */
+    public static int[] netherPortal() { return make((x, y) -> {
+        double d = Math.hypot(x - 7.5, y - 7.5), a = Math.atan2(y - 7.5, x - 7.5);
+        double s = Math.sin(d * 1.3 + a * 2);
+        return argb(185, 150 + (int) (s * 50), 30, 120 + (int) (s * 40));
+    }); }
+
     /** Залізний блок: світлі пластини з заклепками. */
     public static int[] ironBlock() { return make((x, y) -> {
         int c = speck(rgb(214, 214, 218), 5, 52, x, y);

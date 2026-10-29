@@ -209,9 +209,20 @@ final class PlayScreen {
         if (trade != null) trade.mob.talkTicks = 6; // житель слухає
         { // портал: ноги в блоці порталу -> перехід у інший вимір (після виходу з порталу замок знімається)
             BlockType feet = world.blocks.get(Math.max(0, world.blockId(player.pos.blockX(), (int) Math.floor(player.pos.y - PlayerEntity.EYE + 0.05), player.pos.blockZ())));
-            boolean inPortal = "portal".equals(feet.interact), inRift = "rift".equals(feet.interact);
-            if (!inPortal && !inRift) portalLock = false;
-            else if (!portalLock && !vt.dead() && !v.opts.freeze) { portalLock = true; sounds.ui("voxelin:portal.travel"); v.requestTravel(inRift ? Dimensions.BETWEEN : Dimensions.portalTarget(world.dimension())); }
+            boolean inPortal = "portal".equals(feet.interact), inRift = "rift".equals(feet.interact), inNether = "nether_portal".equals(feet.interact);
+            if (!inPortal && !inRift && !inNether) portalLock = false;
+            else if (!portalLock && !vt.dead() && !v.opts.freeze) {
+                portalLock = true; sounds.ui("voxelin:portal.travel");
+                v.requestTravel(inRift ? Dimensions.BETWEEN : inNether ? (netherWorld() ? Dimensions.OVERWORLD : Dimensions.NETHER) : Dimensions.portalTarget(world.dimension()));
+            }
+            if (!vt.dead() && !world.creative() && world.tickCount() % 10 == 0 && (world.isLava(player.pos.blockX(), (int) Math.floor(player.pos.y - PlayerEntity.EYE + 0.3), player.pos.blockZ())
+                    || world.isLava(player.pos.blockX(), (int) Math.floor(player.pos.y - 0.5), player.pos.blockZ()))) vt.hurt(4, false); // лава
+            if (world.info.netherArrival && world.chunk(Math.floorDiv(world.info.arrivalX, 16L), Math.floorDiv(world.info.arrivalZ, 16L)) != null) { // прибули в Незер: портал назад поруч
+                world.info.netherArrival = false;
+                player.teleport(NetherPortal.arrive(world, world.info.arrivalX, world.info.arrivalZ));
+                player.yaw = 180; player.pitch = 0; // спиною до порталу
+                world.unlockRecord("voxelin:nether");
+            }
         }
         if (!vt.dead() && !v.opts.freeze && world.collectItems(bodyPos(), inv) + world.arrows.collect(bodyPos(), inv) > 0) sounds.self("voxelin:item.pickup", 0.6f);
         sounds.tick(player, !vt.dead());
@@ -289,10 +300,11 @@ final class PlayScreen {
         }
         boolean under = world.isLiquid(cam.pos.blockX(), cam.pos.blockY(), cam.pos.blockZ());
         rend.underwater = under;
-        boolean endDim = world.dimension().equals("end"), betweenDim = world.dimension().equals(Dimensions.BETWEEN);
-        double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : (endDim || betweenDim ? world.skyLevel() : DayCycle.sky(phase));
+        boolean endDim = world.dimension().equals("end"), betweenDim = world.dimension().equals(Dimensions.BETWEEN), netherDim = world.info.type == WorldInfo.Type.NETHER;
+        rend.ambient = netherDim ? 0.16f : 0.04f;
+        double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : (endDim || betweenDim || netherDim ? world.skyLevel() : DayCycle.sky(phase));
         rend.skyBrightness = (float) sky;
-        float[] horizon = endDim ? new float[]{0.10f, 0.05f, 0.16f} : betweenDim ? betweenSky() : DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
+        float[] horizon = endDim ? new float[]{0.10f, 0.05f, 0.16f} : netherDim ? new float[]{0.24f, 0.06f, 0.05f} : betweenDim ? betweenSky() : DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
         double gloom = world.infection.gloom(); // зараження: небо темніє й сивіє (попередження з DESIGN.md)
         if (gloom > 0) { float k = (float) (1 - gloom), gr = (horizon[0] + horizon[1] + horizon[2]) / 3f;
             horizon = new float[]{(horizon[0] * 0.5f + gr * 0.5f) * k + 0.04f * (float) gloom, (horizon[1] * 0.5f + gr * 0.5f) * k, (horizon[2] * 0.5f + gr * 0.5f) * k + 0.06f * (float) gloom}; }
@@ -426,7 +438,7 @@ final class PlayScreen {
             if (msg != null) { say(msg); if (msg.contains("відчинився")) world.unlockRecord("voxelin:gate"); }
             return;
         }
-        if (target != null && target.interact != null && !"portal".equals(target.interact) && !"end_frame_eye".equals(target.interact) && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
+        if (target != null && target.interact != null && !"portal".equals(target.interact) && !"end_frame_eye".equals(target.interact) && !"nether_portal".equals(target.interact) && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
             if ("workbench".equals(target.interact)) { activeScreen = benchScreen; invOpen = true; grab(false); }
             else if ("bed".equals(target.interact)) {
                 Sleep.Result r = Sleep.use(world, hit.x(), hit.y(), hit.z(), player.pos);
@@ -454,6 +466,14 @@ final class PlayScreen {
         Inventory.Stack st = inv.selectedStack();
         ItemType t = st == null ? null : world.itemTypes.get(st.item);
         if (t == null) return;
+        if (t.name.equals(NetherPortal.LIGHTER) && hit != null) { // кресало: розпалити рамку з обсидіану
+            int n = NetherPortal.ignite(world, hit.px(), hit.py(), hit.pz());
+            sounds.self("voxelin:flint.use", 0.8f);
+            if (n > 0) { if (!world.creative()) inv.wearSelected(t.durability); }
+            else if (!NetherPortal.allowed(world)) say("Тут портал у Незер не розпалиться.");
+            else say("Іскри гаснуть: потрібна рамка з обсидіану (усередині щонайменше 2x3, порожньо).");
+            return;
+        }
         if (t.armorSlot != null) { inv.equipSelected(world.itemTypes); return; } // ПКМ з бронею в руці - надягти
         if (t.name.equals(EndPortal.EYE) && eyeCompass()) return; // Око Енду в повітря - напрям до Брами (не витрачається)
         if (t.food > 0) {
@@ -465,6 +485,8 @@ final class PlayScreen {
             if (!world.creative()) inv.takeSelected();
         }
     }
+
+    private boolean netherWorld() { return world.info.type == WorldInfo.Type.NETHER; }
 
     private boolean solidAt(long x, int y, long z) { int id = world.blockId(x, y, z); return id > 0 && world.blocks.get(id).solid; }
 

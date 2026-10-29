@@ -283,6 +283,38 @@ public final class ItemTextureGen {
         return outlined(a);
     }
 
+    /** Жарина: тліюча грудка. */
+    public static int[] ember() {
+        int[] a = new int[256];
+        ellipse(a, 8, 8.5, 4.6, 4.0, (x, y, nx, ny) -> 0xFF000000 | (nx + ny < -0.4 ? 0xFFD060 : hash(x, y, 9) % 3 == 0 ? 0x8A2A10 : 0xF07A20));
+        return outlined(a);
+    }
+
+    /** Жаровий кристал: ромб, помаранчевий зверху й фіолетовий знизу. */
+    public static int[] emberCrystal() {
+        int[] a = new int[256];
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            double dx = Math.abs(x + 0.5 - 8) / 4.2, dy = Math.abs(y + 0.5 - 8) / 7.0;
+            if (dx + dy <= 1) a[x + y * N] = y < 8 ? (x < 8 ? 0xFFFFC070 : 0xFFF08030) : (x < 8 ? 0xFFB48CFF : 0xFF7040D0);
+        }
+        return outlined(a);
+    }
+
+    public static int[] flint() {
+        int[] a = new int[256];
+        ellipse(a, 8, 8, 4.2, 5.4, (x, y, nx, ny) -> nx + ny < -0.5 ? 0xFF6A6A70 : nx + ny > 0.6 ? 0xFF1E1E22 : 0xFF3A3A40);
+        return outlined(a);
+    }
+
+    /** Кресало: залізна скоба й кремінь. */
+    public static int[] flintAndSteel() {
+        int[] a = new int[256];
+        int st = 0xFFC8C8CC, st2 = 0xFF8A8A90;
+        line(a, 3, 5, 3, 11, st); line(a, 3, 11, 8, 11, st); line(a, 4, 5, 4, 10, st2); line(a, 3, 4, 6, 4, st);
+        ellipse(a, 11, 6, 2.6, 3.2, (x, y, nx, ny) -> nx + ny < -0.4 ? 0xFF6A6A70 : 0xFF33333A);
+        return outlined(a);
+    }
+
     public static int[] feather() {
         int[] a = new int[256];
         line(a, 3, 13, 12, 3, 0xFFD8D8D8);

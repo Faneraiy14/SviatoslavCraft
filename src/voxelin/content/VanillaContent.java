@@ -89,7 +89,7 @@ public final class VanillaContent implements VoxelinMod {
         block("sand", new BlockSettings().texture("sand").color(cSand).tool(ToolKind.SHOVEL).title("Пісок").hardness(0.5f));
         block("sandstone", new BlockSettings().texture("sandstone").color(cSandstone).tool(ToolKind.PICKAXE).minTier(1).title("Пісковик").hardness(0.8f));
         block("sintered_sand", new BlockSettings().texture("sintered_sand").color(cSinter).tool(ToolKind.PICKAXE).minTier(1).title("Спечений пісок").hardness(1f));
-        block("gravel", new BlockSettings().texture("gravel").color(cGravel).tool(ToolKind.SHOVEL).title("Гравій").hardness(0.6f));
+        block("gravel", new BlockSettings().texture("gravel").color(cGravel).tool(ToolKind.SHOVEL).drops("gravel").drops("flint", 1, 1, 0.1f).title("Гравій").hardness(0.6f)); // кремінь - для кресала
         block("clay", new BlockSettings().texture("clay").color(cClay).tool(ToolKind.SHOVEL).title("Глина").hardness(0.6f));
         block("snow", new BlockSettings().texture("snow").color(cSnow).tool(ToolKind.SHOVEL).title("Сніг").hardness(0.2f));
         block("ice", new BlockSettings().texture("ice").color(cIce).translucent(true).absorb(1).noDrops().title("Лід").hardness(0.5f));
@@ -142,6 +142,16 @@ public final class VanillaContent implements VoxelinMod {
         // мутації від Зараження (Infection.blight): ліс скам'яніває, болото «дихає» (пустеля спікається в уже наявні спечений пісок і скло дюн)
         block("petrified_log", new BlockSettings().textures("petrified_log_top", "petrified_log", "petrified_log_top").color(0x706C72).tool(ToolKind.PICKAXE).minTier(1).title("Скам'яніла колода").hardness(2.5f));
         block("seam_mud", new BlockSettings().texture("seam_mud").color(0x3E2E40).light(1).tool(ToolKind.SHOVEL).drops("mud").title("Дихальний мул").hardness(0.6f));
+        // --- Незер (рішення Святослава 29.10): свій, нижній бік Шву; лава й обсидіан - і в глибоких печерах звичайного світу
+        tex("lava", TextureGen.lava()); tex("cinder", TextureGen.cinder()); tex("ash", TextureGen.ash()); tex("ember_vein", TextureGen.emberVein());
+        tex("ember_ore", TextureGen.emberOre()); tex("fortress_bricks", TextureGen.fortressBricks()); tex("nether_portal", TextureGen.netherPortal());
+        block("lava", new BlockSettings().texture("lava").color(0xE0601A).liquid(true).solid(false).light(15).noItem().noDrops().title("Лава").hardness(-1f));
+        block("cinder", new BlockSettings().texture("cinder").color(0x5C2C28).tool(ToolKind.PICKAXE).minTier(1).title("Згарище").hardness(0.8f));
+        block("ash", new BlockSettings().texture("ash").color(0x706864).tool(ToolKind.SHOVEL).sound("sand").title("Попіл").hardness(0.5f));
+        block("ember_vein", new BlockSettings().texture("ember_vein").color(0xC05A28).light(10).tool(ToolKind.PICKAXE).minTier(1).drops("ember", 1, 2, 1f).title("Жарова жила").hardness(1.2f));
+        block("ember_ore", new BlockSettings().texture("ember_ore").color(0xB060C0).light(6).tool(ToolKind.PICKAXE).minTier(4).drops("ember_crystal").title("Жаровий лімініт").hardness(5f));
+        block("fortress_bricks", new BlockSettings().texture("fortress_bricks").color(0x3E1C22).tool(ToolKind.PICKAXE).minTier(1).title("Цегла фортеці").hardness(2.5f));
+        block("nether_portal", new BlockSettings().texture("nether_portal").color(0x902070).solid(false).translucent(true).light(11).noItem().noDrops().interact("nether_portal").title("Портал Незеру").hardness(-1f));
         block("seam_scar", new BlockSettings().texture("seam_scar").color(0x2A2628).tool(ToolKind.PICKAXE).minTier(1).title("Шрам Шву").hardness(2.5f));
         block("threshold_stone", new BlockSettings().texture("threshold_stone").color(0x8A8894).light(2).tool(ToolKind.PICKAXE).minTier(1).title("Пороговий камінь").hardness(2.5f));
         block("seam_thread", new BlockSettings().texture("seam_thread").color(0x9A88C8).light(3).tool(ToolKind.AXE).title("Нитка Шву").hardness(1.5f));
@@ -275,6 +285,14 @@ public final class VanillaContent implements VoxelinMod {
         r.item("leather", new ItemSettings().color(0x8A5A32).texture("leather").title("Шкіра"));
         r.item("feather", new ItemSettings().color(0xF0F0F0).texture("feather").title("Пір'я"));
         r.item("string", new ItemSettings().color(0xDDDDCC).texture("string").title("Нитка"));
+        tex("ember", ItemTextureGen.ember()); tex("ember_crystal", ItemTextureGen.emberCrystal()); tex("flint", ItemTextureGen.flint()); tex("flint_and_steel", ItemTextureGen.flintAndSteel());
+        r.item("ember", new ItemSettings().color(0xF07A20).texture("ember").title("Жарина"));
+        r.item("ember_crystal", new ItemSettings().color(0xD080FF).texture("ember_crystal").title("Жаровий кристал"));
+        r.item("flint", new ItemSettings().color(0x3A3A40).texture("flint").title("Кремінь"));
+        r.item("flint_and_steel", new ItemSettings().color(0xC8C8CC).texture("flint_and_steel").durability(64).title("Кресало"));
+        r.recipe("flint_and_steel", RecipeSettings.shapeless("iron_ingot", "flint").result("flint_and_steel", 1));
+        r.recipe("torch_ember", RecipeSettings.shaped("E", "S").key('E', "ember").key('S', "stick").result("torch", 4));
+        r.fuel("ember", 40);
         // лук і стріли (рішення Святослава 29.10): натяг ПКМ до 1 с, стріли з міді (є рано, з шахти), палиці й пір'я курки
         tex("bow", ItemTextureGen.bow()); tex("arrow", ItemTextureGen.arrow());
         r.item("bow", new ItemSettings().color(0x9C7A48).texture("bow").durability(384).title("Лук"));
@@ -363,6 +381,7 @@ public final class VanillaContent implements VoxelinMod {
         // --- журнал записів (відкриваються подіями гри; лор «Шов»)
         r.record("seam", "Шов", "Світи зшиті. Де шов тонкий - земля сивіє, а лімініт проступає крізь камінь.\nТак записав той, хто ходив тут до тебе.");
         r.record("elder", "Слова старійшини", "«Є місця, де тиша гучніша за грім.»\nСтарійшина не каже більше: його погляд завжди йде в бік мовчазних пустищ.");
+        r.record("nether", "Нижній бік", "Тут Шов тече лавою. Камінь пам'ятає жар, а в глибині, біля самого моря, лімініт перегрівся й став кристалом.\nТой, хто ходив тут до тебе, не лишив карти - лише попіл на підлогах.");
         r.record("gate", "Брама Шву", "Дванадцять рамок і дванадцять очей.\nШов не відчиняється тому, хто не вдягнений як належить: так було висічено на камені біля брами.");
         r.record("end_arrival", "Край", "Тут немає неба - лише порожнеча й острів. Обсидіанові вежі стоять, як спогад про когось, хто тут жив.\nНад островом - тінь.");
         r.record("dragon", "Дракон Краю", "Дракон був не ворогом, а замком. Тепер замок відкритий.\nНа острові лишилось яйце, тепле, як живе.");

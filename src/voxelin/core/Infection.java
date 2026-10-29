@@ -74,7 +74,7 @@ public final class Infection {
 
     /** Чи (x, z) у зоні, де зараження вже діє на істот: активна пора чи пізніше (тиха пора лише лишає сліди). */
     public boolean affects(long x, long z) {
-        return w.info.infState == WorldInfo.InfState.ACTIVE && w.info.type != WorldInfo.Type.END && w.info.type != WorldInfo.Type.BETWEEN
+        return w.info.infState == WorldInfo.InfState.ACTIVE && !w.info.otherDim()
                 && phase() != Phase.QUIET && inZone(x, z);
     }
 
@@ -84,7 +84,7 @@ public final class Infection {
     /** Наскільки темніє небо (0..1): попередження, що росте з порою, - тиха 0, активна 0.15, криза 0.35, прорив 0.5. */
     public double gloom() {
         WorldInfo i = w.info;
-        if (i.infState != WorldInfo.InfState.ACTIVE || i.type == WorldInfo.Type.END || i.type == WorldInfo.Type.BETWEEN) return 0;
+        if (i.infState != WorldInfo.InfState.ACTIVE || i.otherDim()) return 0;
         Phase p = phase();
         return breached() ? 0.5 : p == Phase.CRISIS ? 0.35 : p == Phase.ACTIVE ? 0.15 : 0;
     }
@@ -92,7 +92,7 @@ public final class Infection {
     /** Поставлено яйце: чи це початок зараження (лише звичайний світ, вибір «Зараження», ще не почалось). */
     boolean shouldStart(BlockType placed) {
         WorldInfo i = w.info;
-        return placed.name.equals(EGG) && i.type != WorldInfo.Type.END && i.eggChoice == WorldInfo.EggChoice.INFECTION && i.infState == WorldInfo.InfState.NONE
+        return placed.name.equals(EGG) && !i.otherDim() && i.eggChoice == WorldInfo.EggChoice.INFECTION && i.infState == WorldInfo.InfState.NONE
                 && i.cataclysms != WorldInfo.Cataclysms.OFF;
     }
 

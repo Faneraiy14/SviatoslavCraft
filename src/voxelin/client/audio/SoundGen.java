@@ -127,6 +127,7 @@ public final class SoundGen {
         { float[] a = buf(0.25); noise(a, r, 1); band(a, 400, 3000); env(a, 0.06, 0.06); b.register("voxelin:player.swing", s(norm(a, 0.35f))); }
         { float[] a = buf(0.3); tone(a, 0, a.length, 260, 90, 1, 0.6f); noise(a, r, 0.4f); band(a, 150, 2500); env(a, 0.004, 0.12); b.register("voxelin:bow.shoot", s(norm(a, 0.6f))); } // тятива
         { float[] a = buf(0.12); noise(a, r, 1); band(a, 200, 1800); env(a, 0.001, 0.03); float[] t = buf(0.12); tone(t, 0, t.length, 380, 300, 0, 1); env(t, 0.001, 0.04); add(a, t, 0, 0.7f); b.register("voxelin:arrow.hit", s(norm(a, 0.55f))); } // стріла в дерево/камінь
+        { float[] a = buf(0.15); noise(a, r, 1); band(a, 1500, 7000); env(a, 0.001, 0.04); b.register("voxelin:flint.use", s(norm(a, 0.5f))); } // іскри кресала
         // істоти
         b.register("voxelin:mob.chicken.idle", s(norm(voice(r, 0.12, 1500, 1900, 2, 4000, 0f), 0.4f)), s(norm(voice(r, 0.1, 1700, 1500, 2, 4000, 0f), 0.4f)));
         b.register("voxelin:mob.chicken.hurt", s(norm(voice(r, 0.15, 2000, 1300, 2, 4500, 0.1f), 0.5f)));
@@ -158,6 +159,7 @@ public final class SoundGen {
         b.register("voxelin:ambient.night", s(nightLoop(r, 12)));
         b.register("voxelin:ambient.cave", s(droneLoop(r, 12, 55, 0.05f, 300)));
         b.register("voxelin:ambient.end", s(windLoop(r, 14, 300, 0.25f)));
+        b.register("voxelin:ambient.nether", s(droneLoop(r, 10, 41, 0.12f, 500))); // низький гул лави
         b.register("voxelin:ambient.between", s(droneLoop(r, 8, 73, 0.08f, 1200)));
         b.register("voxelin:ambient.between_dark", s(droneLoop(r, 8, 49, 0.12f, 500)));
         b.register("voxelin:ambient.glide", s(windLoop(r, 3, 1800, 0.6f)));

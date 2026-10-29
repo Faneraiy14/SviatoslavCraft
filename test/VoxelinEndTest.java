@@ -162,7 +162,7 @@ public class VoxelinEndTest {
         check(back.dimension().equals("overworld") && back.skyLevel() >= DayCycle.NIGHT_SKY, "звичайний світ - звичайний");
         back.close();
         boolean threw = false;
-        try { g.openDimension("Dim", "nether"); } catch (IllegalArgumentException e) { threw = true; }
+        try { g.openDimension("Dim", "sift"); } catch (IllegalArgumentException e) { threw = true; }
         check(threw, "невідомий вимір відхиляється");
         // биті поля повернення
         Files.write(new File(root, "saves/Dim/dimensions/end/voxelin.world").toPath(), (new String(Files.readAllBytes(new File(root, "saves/Dim/dimensions/end/voxelin.world").toPath())) + "\nreturnY=999\n").getBytes());

@@ -25,7 +25,7 @@ public final class WorldRenderer implements World.Listener {
     private static final String VS = """
             #version 130
             in vec3 aPos; in vec4 aColor; in float aFace; in float aLayer;
-            uniform mat4 uProjView; uniform vec3 uOffset; uniform float uScale; uniform vec3 uCam; uniform float uSky;
+            uniform mat4 uProjView; uniform vec3 uOffset; uniform float uScale; uniform vec3 uCam; uniform float uSky; uniform float uAmbient;
             flat out float vLight;
             out vec4 vColor; out vec3 vBlock; flat out int vFace; out float vDist; out vec2 vUv; flat out float vLayer;
             void main() {
@@ -36,7 +36,7 @@ public final class WorldRenderer implements World.Listener {
                 int sky = (pf >> 3) & 15, blk = pf >> 7;
                 float ls = sky == 0 ? 0.0 : pow(0.8, float(15 - sky)) * uSky;
                 float lb = blk == 0 ? 0.0 : pow(0.8, float(15 - blk));
-                vLight = max(max(ls, lb), 0.04);
+                vLight = max(max(ls, lb), uAmbient);
                 vBlock = b; vColor = aColor; vFace = f; vLayer = aLayer + 0.5; vDist = length(w - uCam);
                 // UV за гранню: текстура стоїть вертикально на боках (v вниз), на верху/низу - за X/Z; координати в блоках, тож злиті грані повторюють плитку
                 vec2 uv;
@@ -93,7 +93,7 @@ public final class WorldRenderer implements World.Listener {
     private final ThreadLocal<byte[]> paddedLight = ThreadLocal.withInitial(() -> new byte[ChunkMesher.P * ChunkMesher.P * ChunkMesher.P]);
     private final Shader shader;
     private final TextureArray tex;
-    private final int uProjView, uOffset, uScale, uCam, uFogColor, uFogStart, uFogEnd, uOutline, uCutout, uTex, uSkyU;
+    private final int uProjView, uOffset, uScale, uCam, uFogColor, uFogStart, uFogEnd, uOutline, uCutout, uTex, uSkyU, uAmbientU;
     private int ebo, eboQuads;
     private boolean closed;
 
@@ -101,6 +101,8 @@ public final class WorldRenderer implements World.Listener {
     public boolean outlines = true;
     /** Яскравість неба 0..1 (1 - день); пізніше її змінюватиме час доби. */
     public float skyBrightness = 1f;
+    /** Найменше світло в темряві (0.04; у Незері більше - видно обриси залів). */
+    public float ambient = 0.04f;
     /** Камера під водою: густий синій туман. */
     public boolean underwater;
     public float[] fogColor = {0.53f, 0.71f, 0.92f};
@@ -140,7 +142,7 @@ public final class WorldRenderer implements World.Listener {
         pool = Executors.newFixedThreadPool(poolSize, r -> { Thread t = new Thread(r, "voxelin-mesh"); t.setDaemon(true); t.setPriority(Thread.NORM_PRIORITY - 1); return t; });
         shader = new Shader(VS, FS, "aPos", "aColor", "aFace", "aLayer");
         uProjView = shader.uniform("uProjView"); uOffset = shader.uniform("uOffset"); uScale = shader.uniform("uScale"); uCam = shader.uniform("uCam");
-        uFogColor = shader.uniform("uFogColor"); uFogStart = shader.uniform("uFogStart"); uFogEnd = shader.uniform("uFogEnd"); uOutline = shader.uniform("uOutline"); uCutout = shader.uniform("uCutout"); uTex = shader.uniform("uTex"); uSkyU = shader.uniform("uSky");
+        uFogColor = shader.uniform("uFogColor"); uFogStart = shader.uniform("uFogStart"); uFogEnd = shader.uniform("uFogEnd"); uOutline = shader.uniform("uOutline"); uCutout = shader.uniform("uCutout"); uTex = shader.uniform("uTex"); uSkyU = shader.uniform("uSky"); uAmbientU = shader.uniform("uAmbient");
         ebo = glGenBuffers();
         ensureIndices(4096);
         world.setListener(this);
@@ -347,6 +349,7 @@ public final class WorldRenderer implements World.Listener {
         glUniformMatrix4fv(uProjView, false, cam.projView.m);
         glUniform1f(uScale, S);
         glUniform1f(uSkyU, skyBrightness);
+        glUniform1f(uAmbientU, ambient);
         glUniform3f(uCam, (float) (cam.eye.x * S), (float) (cam.eye.y * S), (float) (cam.eye.z * S));
         glUniform3f(uFogColor, fogColor[0], fogColor[1], fogColor[2]);
         if (underwater) { glUniform1f(uFogStart, 0f); glUniform1f(uFogEnd, 24 * S); } else { glUniform1f(uFogStart, far * 0.65f); glUniform1f(uFogEnd, far * 0.98f); }

@@ -60,7 +60,8 @@ final class Menus {
 
     void frame() {
         Gui g = v.gui;
-        Gui.rect(0, 0, Gui.W, Gui.H, 0.08f, 0.11f, 0.22f, 1f);
+        scene.draw((System.nanoTime() - started) / 1e9);
+        if (screen != Screen.MAIN) Gui.rect(0, 0, Gui.W, Gui.H, 0.03f, 0.04f, 0.1f, 0.72f); // на інших екранах фон приглушений - текст читається
         switch (screen) {
             case MAIN -> main(g);
             case WORLDS -> worlds(g);
@@ -72,16 +73,56 @@ final class Menus {
         Gui.text("Voxelin " + Voxelin.VERSION, 12, Gui.H - 22, 1.8f, 0.55f, 0.6f, 0.7f);
     }
 
-    private void title(String s, float y) {
-        Gui.rect(Gui.W / 2f - 260, y - 14, 520, 78, 1f, 0.8f, 0.2f, 1f);
-        Gui.textCentered(s, Gui.W / 2f, y + 4, 7f, 0.2f, 0.15f, 0.05f);
+    /** Об'ємний логотип: кілька темних шарів зі зсувом (бік «блока»), чорний контур, золотий верх зі світлішою верхньою половиною. */
+    private static void logo(String s, float y, float scale) {
+        float w = Gui.textWidth(s, scale), x = (Gui.W - w) / 2f;
+        for (int d = 7; d >= 1; d--) Gui.text(s, x + d * 1.2f, y + d * 1.5f, scale, 0.32f - d * 0.02f, 0.18f - d * 0.01f, 0.05f);
+        for (int ox = -2; ox <= 2; ox += 2) for (int oy = -2; oy <= 2; oy += 2) if (ox != 0 || oy != 0) Gui.text(s, x + ox, y + oy, scale, 0.08f, 0.04f, 0.02f);
+        Gui.text(s, x, y, scale, 1f, 0.78f, 0.22f);
+    }
+
+    private static final String[] SPLASH = {"Шов тримається!", "Тепер зі звуком!", "Блоки на 50% більші!", "Квітка Порогу не росте вдома", "Не стій під драконом",
+            "Зроблено в Україні!", "Херобрин? Ніколи не чули", "100% синтезовані звуки", "Крила не ламаються!", "Шукай нитки між островами", "Слава Україні!"};
+    private final String splash = SPLASH[new java.util.Random().nextInt(SPLASH.length)];
+    private final voxelin.client.ui.MenuScene scene = new voxelin.client.ui.MenuScene(0x5EA4L);
+    private final long started = System.nanoTime();
+    private String lastWorld;
+    private long lastWorldCheck;
+
+    /** Світ, у який грали останнім (за часом зміни файла світу) - для кнопки «Продовжити». */
+    private String lastWorld() {
+        long now = System.currentTimeMillis();
+        if (now - lastWorldCheck < 2000) return lastWorld;
+        lastWorldCheck = now;
+        String best = null; long t = -1;
+        for (String n : v.game.listWorlds()) { long m = new File(new File(v.game.savesDir, n), WorldInfo.FILE).lastModified(); if (m > t) { t = m; best = n; } }
+        return lastWorld = best;
     }
 
     private void main(Gui g) {
-        title("VOXELIN", 90);
-        if (g.button("ОДИНОЧНА ГРА", 440, 300, 400, 64) || v.input.pressed(GLFW_KEY_ENTER)) show(Screen.WORLDS);
-        if (g.button("НАЛАШТУВАННЯ", 440, 390, 400, 64)) { show(Screen.SETTINGS); return; }
-        if (g.button("ВИХІД", 440, 480, 400, 64) || v.input.pressed(GLFW_KEY_ESCAPE)) v.quit();
+        double sec = (System.nanoTime() - started) / 1e9;
+        logo("VOXELIN", 92, 13f);
+        // сплеш: жовтий рядок під кутом, що «дихає» (як у Minecraft)
+        float k = 1f + 0.06f * (float) Math.abs(Math.sin(sec * 3.5));
+        org.lwjgl.opengl.GL11.glPushMatrix();
+        org.lwjgl.opengl.GL11.glTranslatef(Gui.W / 2f + 250, 178, 0);
+        org.lwjgl.opengl.GL11.glRotatef(-12, 0, 0, 1);
+        org.lwjgl.opengl.GL11.glScalef(k, k, 1);
+        Gui.text(splash, -Gui.textWidth(splash, 2.4f) / 2f + 2, 2, 2.4f, 0.25f, 0.22f, 0);
+        Gui.text(splash, -Gui.textWidth(splash, 2.4f) / 2f, 0, 2.4f, 1f, 1f, 0.2f);
+        org.lwjgl.opengl.GL11.glPopMatrix();
+        float x = 440, w = 400, y = 270;
+        String last = lastWorld();
+        if (last != null) {
+            if (g.button("ПРОДОВЖИТИ", x, y, w, 64, true, true)) { v.beginLoading(last); return; }
+            Gui.textCentered("світ: " + last, Gui.W / 2f, y + 72, 1.8f, 0.8f, 0.82f, 0.95f);
+            y += 96;
+        }
+        if (g.button("ОДИНОЧНА ГРА", x, y, w, 64) || (v.input.pressed(GLFW_KEY_ENTER) && last == null)) show(Screen.WORLDS);
+        if (v.input.pressed(GLFW_KEY_ENTER) && last != null) { v.beginLoading(last); return; }
+        if (g.button("НАЛАШТУВАННЯ", x, y + 80, 195, 56)) { show(Screen.SETTINGS); return; }
+        if (g.button("ВИХІД", x + 205, y + 80, 195, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) v.quit();
+        Gui.text("Enter - " + (last != null ? "продовжити" : "грати") + "   Esc - вихід", Gui.W - 330, Gui.H - 22, 1.6f, 0.55f, 0.6f, 0.75f);
     }
 
     private void settings(Gui g) {

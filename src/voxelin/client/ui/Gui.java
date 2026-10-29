@@ -49,13 +49,22 @@ public final class Gui {
 
     public boolean over(float x, float y, float w, float h) { return mx >= x && mx <= x + w && my >= y && my <= y + h; }
 
+    /** Кнопка з об'ємом: світлий верхній край, тінь знизу; наведення - світліша й золота рамка; selected - головна (золота). */
     public boolean button(String label, float x, float y, float w, float h, boolean selected, boolean enabled) {
         boolean hov = enabled && over(x, y, w, h);
-        float k = !enabled ? 0.25f : (hov || selected) ? 1f : 0.45f;
-        rect(x, y, w, h, k, (enabled ? (k > 0.9f ? 0.85f : 0.45f) : 0.25f), enabled ? (k > 0.9f ? 0.2f : 0.65f) : 0.28f, 0.95f);
-        frame(x, y, w, h, 2, 1, 1, 1);
-        float scale = Math.min(3.2f, (w - 24) / Math.max(1, label.length() * 6f));
-        textCentered(label, x + w / 2f, y + h / 2f - 3.5f * scale, scale, enabled ? 1 : 0.6f, enabled ? 1 : 0.6f, enabled ? 1 : 0.6f);
+        float r, g, b;
+        if (!enabled) { r = 0.16f; g = 0.17f; b = 0.22f; }
+        else if (selected) { r = hov ? 0.93f : 0.82f; g = hov ? 0.68f : 0.58f; b = hov ? 0.22f : 0.16f; }
+        else { r = hov ? 0.36f : 0.24f; g = hov ? 0.39f : 0.26f; b = hov ? 0.6f : 0.42f; }
+        rect(x - 2, y - 2, w + 4, h + 5, 0, 0, 0, 0.75f);                     // тінь і обвід
+        rect(x, y, w, h, r, g, b, 0.97f);
+        rect(x, y, w, 3, Math.min(1, r + 0.18f), Math.min(1, g + 0.18f), Math.min(1, b + 0.18f), 1f); // світлий верх
+        rect(x, y + h - 4, w, 4, r * 0.6f, g * 0.6f, b * 0.6f, 1f);           // темний низ
+        if (hov) frame(x - 2, y - 2, w + 4, h + 5, 2, 1f, 0.85f, 0.35f);
+        float scale = Math.min(3.2f, (w - 24) / Math.max(1, label.length() * 6f)), dy = hov ? -1 : 0;
+        float tc = !enabled ? 0.45f : 1f;
+        textCentered(label, x + w / 2f + 1.5f, y + h / 2f - 3.5f * scale + 1.5f + dy, scale, 0, 0, 0); // тінь тексту
+        textCentered(label, x + w / 2f, y + h / 2f - 3.5f * scale + dy, scale, tc, tc, selected && enabled ? 0.85f * tc : tc);
         if (hov && click) { click = false; onClick.run(); return true; }
         return false;
     }

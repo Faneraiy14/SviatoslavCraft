@@ -75,6 +75,19 @@ public class VoxelinCraftTest {
         check(craft(gr, 2) == null, "різні інструменти не ремонтуються");
         gr[3] = null; gr[1] = new Inventory.Stack("voxelin:iron_pickaxe", 1, 5); gr[2] = new Inventory.Stack("voxelin:iron_pickaxe", 1, 5);
         check(craft(gr, 2) == null, "три інструменти - нічого");
+        // Крила Шву: уламки лімініту, по чверті міцності за клітинку
+        Inventory.Stack[] wg = new Inventory.Stack[9];
+        wg[4] = new Inventory.Stack(Inventory.WINGS, 1, 431); wg[0] = new Inventory.Stack(Infection.SHARD, 5);
+        Inventory.Stack wr = craft(wg, 3);
+        check(wr != null && wr.item.equals(Inventory.WINGS) && wr.damage == 431 - 108, "крила + 1 уламок = +чверть: " + (wr == null ? "null" : wr.damage));
+        wg[1] = new Inventory.Stack(Infection.SHARD, 1); wg[2] = new Inventory.Stack(Infection.SHARD, 1); wg[3] = new Inventory.Stack(Infection.SHARD, 1);
+        check(craft(wg, 3).damage == 0, "4 уламки - повністю");
+        wg[5] = new Inventory.Stack(Infection.SHARD, 1);
+        check(craft(wg, 3) == null, "5 уламків - забагато");
+        wg[5] = new Inventory.Stack("voxelin:stick", 1);
+        check(craft(wg, 3) == null, "чужий предмет - нічого");
+        wg = new Inventory.Stack[9]; wg[4] = new Inventory.Stack(Inventory.WINGS, 1, 0); wg[0] = new Inventory.Stack(Infection.SHARD, 1);
+        check(craft(wg, 3) == null, "цілі крила не лагодяться");
     }
 
     static void menu() {

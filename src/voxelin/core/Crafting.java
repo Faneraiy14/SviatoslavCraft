@@ -5,7 +5,8 @@ import java.util.*;
 /**
  * Співставлення сітки крафту з рецептами (чисті функції). Форма шукається де завгодно в сітці (порожні краї обрізаються) і, якщо дозволено,
  * у дзеркальному відбитті; безформні - в будь-якому порядку. Кожен крафт витрачає по одному предмету з кожної зайнятої клітинки.
- * Окремо: ремонт - два однакових зношених інструменти дають один зі сумою міцності +10%.
+ * Окремо: ремонт - два однакових зношених інструменти дають один зі сумою міцності +10%; Крила Шву (вони одні на світ) лагодяться
+ * уламками лімініту: кожна клітинка з уламком повертає чверть міцності.
  */
 public final class Crafting {
     private Crafting() {}
@@ -18,7 +19,8 @@ public final class Crafting {
     public static Inventory.Stack match(RecipeRegistry recipes, ItemRegistry items, Inventory.Stack[] grid, int n) {
         List<RecipeRegistry.Recipe> all = matchAll(recipes, items, grid, n);
         if (!all.isEmpty()) return new Inventory.Stack(all.get(0).result, all.get(0).count);
-        return repair(items, grid);
+        Inventory.Stack w = repairWings(items, grid);
+        return w != null ? w : repair(items, grid);
     }
 
     /** Усі рецепти, що підходять до сітки (для перевірки на неоднозначність). */
@@ -61,6 +63,20 @@ public final class Crafting {
             used[j] = false;
         }
         return false;
+    }
+
+    /** Крила Шву + 1..4 клітинки з уламком лімініту -> крила, кожен уламок повертає чверть міцності (з кожної клітинки береться один). */
+    static Inventory.Stack repairWings(ItemRegistry items, Inventory.Stack[] grid) {
+        Inventory.Stack wings = null; int shards = 0;
+        for (Inventory.Stack s : grid) {
+            if (s == null) continue;
+            if (s.item.equals(Inventory.WINGS) && wings == null && s.count == 1) wings = s;
+            else if (s.item.equals(Infection.SHARD)) shards++;
+            else return null;
+        }
+        ItemType t = wings == null ? null : items.get(wings.item);
+        if (t == null || t.durability <= 0 || shards == 0 || shards > 4 || wings.damage == 0) return null;
+        return new Inventory.Stack(wings.item, 1, Math.max(0, wings.damage - shards * (t.durability / 4)));
     }
 
     /** Ремонт: рівно два однакових інструменти (хоч один зношений) -> один зі сумою залишку міцності +10% (не більше повної). */

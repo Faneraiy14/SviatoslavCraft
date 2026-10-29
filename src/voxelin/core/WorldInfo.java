@@ -43,6 +43,9 @@ public final class WorldInfo {
     public boolean hasReturn, dragonDead;
     /** Журнал записів (відкриті id) і сюжетний стан, спільні для вимірів світу (переносяться разом із гравцем). */
     public final java.util.LinkedHashSet<String> records = new java.util.LinkedHashSet<>();
+    /** Досягнуті цілі «Шляху» (Progress) і чи вже показано титри фіналу. */
+    public final java.util.LinkedHashSet<String> goals = new java.util.LinkedHashSet<>();
+    public boolean creditsShown;
     public EggChoice eggChoice = EggChoice.NONE;
     /** Ритуал: 0 не розпочато, 1 боси в Енді, 2 виконано. */
     public int ritualStage;
@@ -106,6 +109,8 @@ public final class WorldInfo {
         try { w.invSelected = Math.max(0, Math.min(Inventory.HOTBAR - 1, Integer.parseInt(p.getProperty("invSelected", "0").trim()))); } catch (NumberFormatException e) { w.invSelected = 0; }
         w.dragonDead = "true".equals(p.getProperty("dragonDead"));
         for (String r : p.getProperty("records", "").split(",")) if (r.trim().matches("[a-z0-9_]+:[a-z0-9_/]+")) w.records.add(r.trim());
+        for (String g : p.getProperty("goals", "").split(",")) if (g.trim().matches("[a-z0-9_]+")) w.goals.add(g.trim());
+        w.creditsShown = "true".equals(p.getProperty("creditsShown"));
         try { w.eggChoice = EggChoice.valueOf(p.getProperty("eggChoice", "NONE").trim()); } catch (IllegalArgumentException e) { w.eggChoice = EggChoice.NONE; }
         try { w.infState = InfState.valueOf(p.getProperty("infState", "NONE").trim()); } catch (IllegalArgumentException e) { w.infState = InfState.NONE; }
         if (w.infState != InfState.NONE) {
@@ -150,6 +155,8 @@ public final class WorldInfo {
         if (hasInv) for (int i = 0; i < 4; i++) if (armor[i] != null) p.setProperty("armor." + i, armor[i]);
         if (dragonDead) p.setProperty("dragonDead", "true");
         if (!records.isEmpty()) p.setProperty("records", String.join(",", records));
+        if (!goals.isEmpty()) p.setProperty("goals", String.join(",", goals));
+        if (creditsShown) p.setProperty("creditsShown", "true");
         if (eggChoice != EggChoice.NONE) p.setProperty("eggChoice", eggChoice.name());
         if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); p.setProperty("infOwed", String.valueOf(infOwed)); }
         if (ritualKills != 0) p.setProperty("ritualKills", String.valueOf(ritualKills));
@@ -179,6 +186,8 @@ public final class WorldInfo {
         hasVitals = o.hasVitals; health = o.health; hunger = o.hunger; saturation = o.saturation;
         mode = o.mode;
         records.addAll(o.records);
+        goals.addAll(o.goals);
+        creditsShown |= o.creditsShown;
         if (o.eggChoice != EggChoice.NONE) eggChoice = o.eggChoice;
         ritualStage = Math.max(ritualStage, o.ritualStage);
         if (o.dragonDead && type == Type.END) dragonDead = true;

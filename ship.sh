@@ -39,13 +39,13 @@ cat > "$PKG/run.sh" << 'RUNEOF'
 #!/bin/bash
 set -e
 cd "$(dirname "$0")"
-java -cp "out:lib/*" com.sviatoslav.craft.game.SviatoslavCraft
+java -cp "out:lib/*" voxelin.client.Voxelin
 RUNEOF
 chmod +x "$PKG/run.sh"
 cat > "$PKG/run.bat" << 'RUNEOF'
 @echo off
 cd /d "%~dp0"
-java -cp "out;lib/*" com.sviatoslav.craft.game.SviatoslavCraft
+java -cp "out;lib/*" voxelin.client.Voxelin
 RUNEOF
 ( cd "$DIST" && zip -r -q "$ARTIFACT.zip" "$ARTIFACT" )
 

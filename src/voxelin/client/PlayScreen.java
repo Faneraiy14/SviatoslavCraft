@@ -38,6 +38,10 @@ final class PlayScreen {
     private TradeScreen trade;
     private JournalScreen journal;
     private KeeperScreen keeper;
+    private CreditsScreen credits;
+    /** Око Енду в повітря: куди тягне до Брами Шву (показується кілька секунд). */
+    private long[] gateHint;
+    private long gateHintUntil, goalFlashAt;
     private IconAtlas icons;
     private boolean invOpen, chatOpen, debug, hud = true, grabbed;
     private Raycast.Hit hit;
@@ -124,6 +128,8 @@ final class PlayScreen {
         grab(!v.opts.quiet()); // автоперевірки не захоплюють справжній курсор користувача
         if ("inventory".equals(v.opts.open)) invOpen = true;
         if ("pause".equals(v.opts.open)) paused = true;
+        if ("journal".equals(v.opts.open)) { journal = new JournalScreen(world); invOpen = true; }
+        if ("credits".equals(v.opts.open)) { world.info.goals.add(Progress.RITUAL_END); credits = new CreditsScreen(world); credits.skip(40); invOpen = true; } // лише для знімків (тестова тека saves)
         if ("skin".equals(v.opts.open)) { paused = true; skinScreen = new SkinScreen(v); }
         if ("front".equals(v.opts.open)) cam.mode = Camera.Mode.THIRD_FRONT; // знімки моделі гравця
         if ("back".equals(v.opts.open)) cam.mode = Camera.Mode.THIRD_BACK;
@@ -212,8 +218,25 @@ final class PlayScreen {
         }
         if (vt.dead() && !deadHandled) { deadHandled = true; hud = true; if (invOpen) closeInventory(); invOpen = false; chatOpen = false; v.input.endText(); grab(false); say("Ти загинув."); }
         if (player.pos.y < -20) { player.teleport(spawn); if (!vt.dead()) vt.damage(4); say("Ти впав за межі світу - повернено на спавн."); }
+        if (ticks % 20 == 0 && !world.creative() && !vt.dead()) checkGoals();
         world.update(player.pos.cx, player.pos.cz, rend.renderDistance + 1);
         world.tick();
+    }
+
+    /** «Шлях»: нові досягнуті цілі - у чат; перше проходження - титри. */
+    private void checkGoals() {
+        List<Progress.Goal> fresh = Progress.update(world, inv);
+        for (Progress.Goal g : fresh) say("Ціль досягнуто: " + g.title());
+        if (!fresh.isEmpty()) {
+            goalFlashAt = System.currentTimeMillis();
+            sounds.ui("voxelin:record.unlock");
+            Progress.Goal next = Progress.current(world.info);
+            if (next != null) say("Далі: " + next.title() + ". " + next.hint());
+        }
+        if (Progress.finished(world.info) && !world.info.creditsShown && !invOpen && !paused) {
+            world.info.creditsShown = true;
+            credits = new CreditsScreen(world); invOpen = true; grab(false);
+        }
     }
 
     // ------------------------------------------------------------------ кадр
@@ -223,7 +246,7 @@ final class PlayScreen {
         Input in = v.input;
         if (leaving) return false;
         if (invOpen && openedBlock && !openedKind.equals(world.blocks.get(Math.max(0, world.blockId(openedX, openedY, openedZ))).interact)) closeInventory(); // блок зламано/зник
-        boolean searching = invOpen && journal == null && keeper == null && trade == null && activeScreen.typing(); // пошук в інвентарі забирає клавіатуру
+        boolean searching = invOpen && journal == null && keeper == null && trade == null && credits == null && activeScreen.typing(); // пошук в інвентарі забирає клавіатуру
         boolean subScreen = pauseSettings || skinScreen != null; // Esc і Enter обробляє сам екран налаштувань чи скіна
         if (in.pressed(GLFW_KEY_ESCAPE) && !vt.dead() && !subScreen) {
             if (chatOpen) closeChat(); else if (searching) activeScreen.stopTyping(); else if (invOpen) { closeInventory(); } else if (paused) resume(); else pause();
@@ -401,6 +424,7 @@ final class PlayScreen {
         ItemType t = st == null ? null : world.itemTypes.get(st.item);
         if (t == null) return;
         if (t.armorSlot != null) { inv.equipSelected(world.itemTypes); return; } // ПКМ з бронею в руці - надягти
+        if (t.name.equals(EndPortal.EYE) && eyeCompass()) return; // Око Енду в повітря - напрям до Брами (не витрачається)
         if (t.food > 0) {
             if (vt.hunger() < Vitals.MAX && !vt.dead()) { vt.feed(t.food); sounds.self("voxelin:player.eat", 0.9f); if (!world.creative()) inv.takeSelected(); }
         } else if (hit != null && t.placesBlock != null && !player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
@@ -612,7 +636,7 @@ final class PlayScreen {
 
     private void openChat(String initial) { chatOpen = true; v.input.beginText(initial, true); grab(false); }
 
-    private void closeInventory() { if (trade != null || journal != null || keeper != null) { trade = null; journal = null; keeper = null; invOpen = false; grab(true); return; } openedBlock = false; activeScreen.close(); invOpen = false; grab(true); }
+    private void closeInventory() { if (trade != null || journal != null || keeper != null || credits != null) { trade = null; journal = null; keeper = null; credits = null; invOpen = false; grab(true); return; } openedBlock = false; activeScreen.close(); invOpen = false; grab(true); }
 
     private void closeChat() { chatOpen = false; v.input.endText(); grab(!invOpen); }
 
@@ -648,6 +672,7 @@ final class PlayScreen {
             float r = ph == Infection.Phase.QUIET ? 0.75f : 1f, gg = ph == Infection.Phase.CRISIS ? 0.3f : 0.6f;
             Gui.text(t, Gui.W - 300, 12, 2.2f, r, gg, 1f);
         }
+        goalHud();
         int bars = 0;
         for (Mob boss : world.mobs()) if (boss.type.boss && boss.alive() && bars < 2) { // смуги босів вгорі екрана (до двох: Ткач і Розплітач)
             float w = 520, x = (Gui.W - w) / 2f, oy = bars * 52;
@@ -684,7 +709,8 @@ final class PlayScreen {
             Gui.text("> " + in.text() + ((now / 500) % 2 == 0 ? "_" : ""), 14, Gui.H - 107, 2.4f, 1, 1, 0.8f);
         }
         if (invOpen) {
-            if (journal != null) { journal.draw(g); if (journal.close) closeInventory(); }
+            if (credits != null) { credits.draw(g); if (credits.close) { if (credits.toMenu) leaving = true; closeInventory(); } }
+            else if (journal != null) { journal.draw(g); if (journal.close) closeInventory(); }
             else if (keeper != null) { keeper.draw(g); if (keeper.close) closeInventory(); }
             else if (trade != null) { trade.draw(g); if (trade.close) closeInventory(); }
             else activeScreen.draw(g, v.input);
@@ -696,6 +722,41 @@ final class PlayScreen {
         }
         if (vt.dead()) deathScreen(g);
         if (debug) debugText();
+    }
+
+    /** Поточна ціль «Шляху» у лівому верхньому куті (у виживанні) і стрілка Ока до Брами. */
+    private void goalHud() {
+        long now = System.currentTimeMillis();
+        if (gateHint != null && now < gateHintUntil) {
+            double dx = (gateHint[0] - player.pos.cx * 16) + 0.5 - player.pos.x, dz = (gateHint[2] - player.pos.cz * 16) + 0.5 - player.pos.z;
+            double ang = Math.toDegrees(Math.atan2(dx, -dz)) - player.yaw;
+            ang = ((ang % 360) + 540) % 360 - 180; // -180..180, плюс - праворуч
+            String arrow = Math.abs(ang) < 20 ? "^ ПРЯМО ^" : ang > 0 ? (ang > 135 ? "ПОЗАДУ >>" : "ПРАВОРУЧ >") : (ang < -135 ? "<< ПОЗАДУ" : "< ЛІВОРУЧ");
+            String t = "Око тягне: " + arrow + "   " + Math.round(Math.hypot(dx, dz)) + " бл.   глибина ~" + gateHint[1];
+            float w = Gui.textWidth(t, 2.4f) + 24;
+            Gui.rect((Gui.W - w) / 2f, 120, w, 40, 0.05f, 0.12f, 0.06f, 0.7f);
+            Gui.textCentered(t, Gui.W / 2f, 130, 2.4f, 0.55f, 1f, 0.6f);
+        }
+        if (world.creative() || debug) return;
+        Progress.Goal goal = Progress.current(world.info);
+        if (goal == null) return;
+        float flash = (float) Math.max(0, 1 - (now - goalFlashAt) / 2500.0);
+        String t = "ЦІЛЬ: " + goal.title();
+        float w = Gui.textWidth(t, 2.1f) + 20;
+        String sub = "J - журнал і підказка";
+        Gui.rect(8, 8, Math.max(w, Gui.textWidth(sub, 1.7f) + 20), 58, 0.1f * flash, 0.3f * flash, 0.1f * flash, 0.5f + 0.3f * flash);
+        Gui.text(t, 18, 15, 2.1f, 1f, 0.9f - 0.1f * flash, 0.5f + 0.5f * flash);
+        Gui.text(sub, 18, 44, 1.7f, 0.85f, 0.85f, 0.9f);
+    }
+
+    /** Око Енду в повітря (не в рамку): показати напрям до найближчої Брами Шву. */
+    private boolean eyeCompass() {
+        if (world.info.type != WorldInfo.Type.NORMAL && world.info.type != WorldInfo.Type.FLAT) { say("Око тремтить і нікуди не тягне: тут немає Брами."); return true; }
+        long[] r = world.locate("seam_gate", player.pos.blockX(), player.pos.blockZ());
+        if (r == null) { say("Око не відчуває Брами поблизу."); return true; }
+        gateHint = r; gateHintUntil = System.currentTimeMillis() + 20000;
+        sounds.ui("voxelin:portal.travel");
+        return true;
     }
 
     // ------------------------------------------------------------------ здоров'я, голод, повітря, смерть

@@ -34,6 +34,7 @@ final class SkinScreen {
         for (String f : SkinImages.list(new File(dir, "skins"))) skins.add("file:" + f);
         capes = new ArrayList<>(PlayerLook.CAPES);
         for (String f : SkinImages.list(new File(dir, "capes"))) capes.add("file:" + f);
+        v.cosmetics.reload(v.cosmeticRenderer); // нові теки в cosmetics/ з'являються без перезапуску
         if (!skins.contains(edit.skin)) skins.add(edit.skin);
         if (!capes.contains(edit.cape)) capes.add(edit.cape);
     }
@@ -68,20 +69,22 @@ final class SkinScreen {
         model(px + pw / 2f, py + ph - 60, 11f, spin, pose);
         Gui.textCentered("тягни мишею - обернути", px + pw / 2f, py + ph - 22, 1.6f, 0.55f, 0.6f, 0.75f);
         // вибір
-        float x = 580, w = 600, y = 120;
+        float x = 580, w = 600, y = 96;
         y = row(g, "СКІН", skinTitle(edit.skin), x, y, w, d -> edit.skin = next(skins, edit.skin, d));
-        y = row(g, "ПЛАЩ", PlayerLook.capeTitle(edit.cape), x, y + 20, w, d -> edit.cape = next(capes, edit.cape, d));
-        Gui.rect(x, y + 30, w, 2, 0.3f, 0.32f, 0.44f, 1f);
-        float ty = y + 50;
+        y = row(g, "ПЛАЩ", PlayerLook.capeTitle(edit.cape), x, y + 14, w, d -> edit.cape = next(capes, edit.cape, d));
+        y = row(g, "НА ГОЛОВІ", v.cosmetics.title(edit.head), x, y + 14, w, d -> edit.head = next(v.cosmetics.forSlot("head"), edit.head, d));
+        y = row(g, "НА СПИНІ", v.cosmetics.title(edit.body), x, y + 14, w, d -> edit.body = next(v.cosmetics.forSlot("body"), edit.body, d));
+        Gui.rect(x, y + 18, w, 2, 0.3f, 0.32f, 0.44f, 1f);
+        float ty = y + 32;
         for (String line : new String[]{
-                "Свій скін: PNG 64x64 у форматі Minecraft",
-                "(підійде той, що в лаунчері) - у теку skins/.",
-                "Свій плащ: PNG 64x32 - у теку capes/.",
-                "Лаунчер може задати вигляд у player.properties або --skin."}) {
-            Gui.text(line, x, ty, 1.7f, 0.72f, 0.76f, 0.9f); ty += 26;
+                "Скін: PNG 64x64 формату Minecraft - у теку skins/.",
+                "Плащ: PNG 64x32 - у теку capes/.",
+                "3D-річ: модель Blockbench у теку cosmetics/<назва>/",
+                "(model.geo.json + texture.png + cosmetic.properties)."}) {
+            Gui.text(line, x, ty, 1.6f, 0.72f, 0.76f, 0.9f); ty += 22;
         }
-        boolean done = g.button("ГОТОВО", x, 540, 290, 56, true, true) || v.input.pressed(GLFW_KEY_ENTER);
-        boolean cancel = g.button("СКАСУВАТИ", x + 310, 540, 290, 56) || v.input.pressed(GLFW_KEY_ESCAPE);
+        boolean done = g.button("ГОТОВО", x, 616, 290, 56, true, true) || v.input.pressed(GLFW_KEY_ENTER);
+        boolean cancel = g.button("СКАСУВАТИ", x + 310, 616, 290, 56) || v.input.pressed(GLFW_KEY_ESCAPE);
         if (done) { v.look = edit.copy(); v.look.save(v.lookFile); v.playerModel.apply(v.look); return false; }
         if (cancel) { v.playerModel.apply(v.look); return false; }
         return true;
@@ -111,7 +114,7 @@ final class SkinScreen {
         glScalef(k, -k, k);
         glRotatef(12, 1, 0, 0); // трохи згори
         glRotatef(yaw, 0, 1, 0);
-        v.playerModel.draw(pose, null);
+        v.playerModel.draw(pose, v.cosmeticsFor(edit, pose.light));
         glDisable(GL_DEPTH_TEST);
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDisable(GL_CULL_FACE); // Gui малює без відсікання

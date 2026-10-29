@@ -464,7 +464,7 @@ final class PlayScreen {
         glRotatef(-player.yaw, 0, 1, 0);
         if (player.gliding) { glTranslatef(0, 16, 0); glRotatef(-(90 + player.pitch * 0.5f), 1, 0, 0); glTranslatef(0, -16, 0); } // у польоті - горизонтально
         else if (player.eyeOffset < -0.05) { glTranslatef(0, 12, 0); glRotatef(-25, 1, 0, 0); glTranslatef(0, -12, 0); } // присід
-        v.playerModel.draw(pose, null);
+        v.playerModel.draw(pose, v.cosmeticsFor(v.look, pose.light));
         glPopMatrix();
     }
 

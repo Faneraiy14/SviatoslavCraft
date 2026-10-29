@@ -122,6 +122,14 @@ public final class Voxelin {
     /** Вигляд гравця (player.properties - пишуть гра й лаунчер) і модель із текстурами скіна. */
     voxelin.client.look.PlayerLook look;
     voxelin.client.look.PlayerModel playerModel;
+    /** 3D-косметика: вбудована + теки cosmetics/ (моделі Blockbench). */
+    voxelin.client.look.CosmeticLibrary cosmetics;
+    voxelin.client.look.CosmeticRenderer cosmeticRenderer;
+
+    /** Хук моделі гравця: намалювати косметику вигляду look у слоті (у координатах цієї частини тіла). */
+    java.util.function.Consumer<String> cosmeticsFor(voxelin.client.look.PlayerLook look, float light) {
+        return slot -> { voxelin.client.look.Cosmetic c = cosmetics.get(look.slot(slot)); if (c != null) cosmeticRenderer.draw(c, light); };
+    }
     /** Рушій звуку (завжди є; без пристрою чи в тестових запусках - мовчить). */
     voxelin.client.audio.AudioEngine audio;
     private String audioState = "звук не запущено";
@@ -186,6 +194,8 @@ public final class Voxelin {
         playerModel = new voxelin.client.look.PlayerModel(new File(gameDir, "skins"), new File(gameDir, "capes"));
         playerModel.launcherSkin = opts.skin;
         playerModel.apply(look);
+        cosmetics = new voxelin.client.look.CosmeticLibrary(new File(gameDir, "cosmetics"));
+        cosmeticRenderer = new voxelin.client.look.CosmeticRenderer();
         startAudio();
         gui.onClick = () -> audio.play("voxelin:ui.click", null, 1f, 1f, voxelin.client.audio.AudioEngine.Cat.UI);
         if (opts.autoWorld != null) autoWorld();

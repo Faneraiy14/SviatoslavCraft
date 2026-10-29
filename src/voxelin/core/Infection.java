@@ -41,22 +41,29 @@ public final class Infection {
     /** Номер дня зараження від 0. */
     public long day() { return Math.max(0, w.info.time - w.info.infStart) / w.dayTicks(); }
 
-    public Phase phase() { long d = day(); return d < 10 ? Phase.QUIET : d < 20 ? Phase.ACTIVE : Phase.CRISIS; }
+    public Phase phase() { long d = day(); return d < 10 ? Phase.QUIET : d < 20 || mild() ? Phase.ACTIVE : Phase.CRISIS; }
+
+    /** «Катаклізми: помірні» - зараження зупиняється на активній порі: без кризи й прориву, відлік не закінчується. */
+    public boolean mild() { return w.info.cataclysms == WorldInfo.Cataclysms.MILD; }
+
+    /** Прорив (30-й день минув); у помірних катаклізмах не настає. */
+    public boolean breached() { return !mild() && day() >= DAYS; }
 
     /** Спроб росту за тік: тиха 1/100, активна 2/40, криза 4/12; після 30-го дня (прорив) - удвічі більше. */
     public double rate() {
         Phase p = phase();
         double r = p == Phase.QUIET ? 1 / 100.0 : p == Phase.ACTIVE ? 2 / 40.0 : 4 / 12.0;
-        return day() >= DAYS ? r * 2 : r;
+        return breached() ? r * 2 : r;
     }
 
     /** Радіус зони від ядра: 64, після прориву (30-й день) - 128. */
-    public int radius() { return day() >= DAYS ? BREACH_RADIUS : RADIUS; }
+    public int radius() { return breached() ? BREACH_RADIUS : RADIUS; }
 
     /** Поставлено яйце: чи це початок зараження (лише звичайний світ, вибір «Зараження», ще не почалось). */
     boolean shouldStart(BlockType placed) {
         WorldInfo i = w.info;
-        return placed.name.equals(EGG) && i.type != WorldInfo.Type.END && i.eggChoice == WorldInfo.EggChoice.INFECTION && i.infState == WorldInfo.InfState.NONE;
+        return placed.name.equals(EGG) && i.type != WorldInfo.Type.END && i.eggChoice == WorldInfo.EggChoice.INFECTION && i.infState == WorldInfo.InfState.NONE
+                && i.cataclysms != WorldInfo.Cataclysms.OFF;
     }
 
     void start(long x, int y, long z) {
@@ -161,7 +168,7 @@ public final class Infection {
             tame(); return "Ядро прийняло лімініт і заснуло. Розростання зупинено.";
         }
         Phase p = phase();
-        return "Ядро Шву: день " + (day() + 1) + " з " + DAYS + " (" + (p == Phase.QUIET ? "тиха пора" : p == Phase.ACTIVE ? "активна пора" : "криза") + "), наросту: " + growth.size()
+        return "Ядро Шву: день " + (day() + 1) + (mild() ? "" : " з " + DAYS) + " (" + (p == Phase.QUIET ? "тиха пора" : p == Phase.ACTIVE ? "активна пора" : "криза") + "), наросту: " + growth.size()
                 + ". Зупинити: Зілля Шву, Вогонь Шву або " + TAME_COST + " уламків лімініту.";
     }
 

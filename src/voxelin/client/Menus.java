@@ -19,6 +19,7 @@ final class Menus {
     private int selected, scroll, hiddenOld;
     private String status = "";
     private boolean flat;
+    private WorldInfo.Cataclysms cataclysms = WorldInfo.Cataclysms.ON;
     private String renameFrom;
     private SkinScreen skin;
 
@@ -31,7 +32,7 @@ final class Menus {
         v.input.endText();
         if (s == Screen.WORLDS) refresh();
         if (s == Screen.SKIN) skin = new SkinScreen(v);
-        if (s == Screen.CREATE) { flat = false; v.input.beginText(autoName(), false); }
+        if (s == Screen.CREATE) { flat = false; cataclysms = WorldInfo.Cataclysms.ON; v.input.beginText(autoName(), false); }
         if (s == Screen.RENAME) { renameFrom = selectedName(); v.input.beginText(renameFrom == null ? "" : renameFrom, false); }
     }
 
@@ -229,10 +230,20 @@ final class Menus {
     private void create(Gui g) {
         Gui.textCentered("НОВИЙ СВІТ", Gui.W / 2f, 60, 5f, 1f, 0.85f, 0.3f);
         nameField(g, "Назва світу");
-        if (g.button("ЗВИЧАЙНИЙ", 390, 340, 245, 56, !flat, true)) flat = false;
-        if (g.button("ПЛОСКИЙ", 645, 340, 245, 56, flat, true)) flat = true;
-        boolean ok = g.button("СТВОРИТИ", 390, 440, 245, 60) || v.input.pressed(GLFW_KEY_ENTER);
-        if (g.button("НАЗАД", 645, 440, 245, 60) || v.input.pressed(GLFW_KEY_ESCAPE)) { show(Screen.WORLDS); return; }
+        if (g.button("ЗВИЧАЙНИЙ", 390, 330, 245, 56, !flat, true)) flat = false;
+        if (g.button("ПЛОСКИЙ", 645, 330, 245, 56, flat, true)) flat = true;
+        // «Катаклізми»: чи може гра зламати світ Зараженням (DESIGN, відповідь 6)
+        Gui.text("Катаклізми", 390, 400, 2.4f, 0.8f, 0.8f, 0.85f);
+        if (g.button("УВІМКНЕНО", 390, 428, 160, 50, cataclysms == WorldInfo.Cataclysms.ON, true)) cataclysms = WorldInfo.Cataclysms.ON;
+        if (g.button("ПОМІРНІ", 560, 428, 160, 50, cataclysms == WorldInfo.Cataclysms.MILD, true)) cataclysms = WorldInfo.Cataclysms.MILD;
+        if (g.button("ВИМКНЕНО", 730, 428, 160, 50, cataclysms == WorldInfo.Cataclysms.OFF, true)) cataclysms = WorldInfo.Cataclysms.OFF;
+        Gui.textCentered(switch (cataclysms) {
+            case ON -> "Зараження можливе повністю: криза й прорив на 30-й день";
+            case MILD -> "Зараження можливе, але зупиняється на активній порі";
+            case OFF -> "Зараження вимкнено: після дракона лише Ритуал";
+        }, Gui.W / 2f, 490, 2f, 0.65f, 0.65f, 0.7f);
+        boolean ok = g.button("СТВОРИТИ", 390, 530, 245, 60) || v.input.pressed(GLFW_KEY_ENTER);
+        if (g.button("НАЗАД", 645, 530, 245, 60) || v.input.pressed(GLFW_KEY_ESCAPE)) { show(Screen.WORLDS); return; }
         if (ok) {
             String name = v.input.text().trim();
             if (name.isEmpty()) name = autoName();
@@ -240,12 +251,12 @@ final class Menus {
             else if (new File(v.game.savesDir, name).exists()) { status = "Світ із такою назвою вже є"; }
             else {
                 try {
-                    v.game.createWorld(name, System.nanoTime() ^ (System.currentTimeMillis() << 20), flat ? WorldInfo.Type.FLAT : WorldInfo.Type.NORMAL);
+                    v.game.createWorld(name, System.nanoTime() ^ (System.currentTimeMillis() << 20), flat ? WorldInfo.Type.FLAT : WorldInfo.Type.NORMAL, cataclysms);
                     show(Screen.WORLDS); select(name); return;
                 } catch (IOException e) { status = "Не вдалося створити: " + e.getMessage(); }
             }
         }
-        if (!status.isEmpty()) Gui.textCentered(status, Gui.W / 2f, 540, 2.4f, 1f, 0.5f, 0.4f);
+        if (!status.isEmpty()) Gui.textCentered(status, Gui.W / 2f, 615, 2.4f, 1f, 0.5f, 0.4f);
     }
 
     private void rename(Gui g) {

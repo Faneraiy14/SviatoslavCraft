@@ -16,6 +16,8 @@ public final class WorldInfo {
     public enum Mode { SURVIVAL, CREATIVE }
     /** Вибір після смерті дракона. */
     public enum EggChoice { NONE, RITUAL, INFECTION }
+    /** Налаштування світу «Катаклізми» (вибирається при створенні): ON - усе; MILD - зараження не доходить до кризи й прориву; OFF - розвилка лише з Ритуалом. */
+    public enum Cataclysms { ON, MILD, OFF }
 
     public String name;
     public long seed;
@@ -50,6 +52,7 @@ public final class WorldInfo {
     public boolean hasBed;
     public long bedX, bedZ; public int bedY;
     public EggChoice eggChoice = EggChoice.NONE;
+    public Cataclysms cataclysms = Cataclysms.ON;
     /** Ритуал: 0 не розпочато, 1 боси в Енді, 2 виконано. */
     public int ritualStage;
     /** Ритуал: хто з босів уже впав (1 - Ткач, 2 - Розплітач). */
@@ -117,6 +120,7 @@ public final class WorldInfo {
         try { w.bedX = Long.parseLong(p.getProperty("bedX").trim()); w.bedY = Integer.parseInt(p.getProperty("bedY").trim()); w.bedZ = Long.parseLong(p.getProperty("bedZ").trim()); w.hasBed = w.bedY >= 0 && w.bedY < Chunk.HEIGHT; }
         catch (RuntimeException e) { w.hasBed = false; }
         try { w.eggChoice = EggChoice.valueOf(p.getProperty("eggChoice", "NONE").trim()); } catch (IllegalArgumentException e) { w.eggChoice = EggChoice.NONE; }
+        try { w.cataclysms = Cataclysms.valueOf(p.getProperty("cataclysms", "ON").trim()); } catch (IllegalArgumentException e) { w.cataclysms = Cataclysms.ON; }
         try { w.infState = InfState.valueOf(p.getProperty("infState", "NONE").trim()); } catch (IllegalArgumentException e) { w.infState = InfState.NONE; }
         if (w.infState != InfState.NONE) {
             try { w.infX = Long.parseLong(p.getProperty("infX").trim()); w.infY = Integer.parseInt(p.getProperty("infY").trim()); w.infZ = Long.parseLong(p.getProperty("infZ").trim()); w.infStart = Long.parseLong(p.getProperty("infStart").trim()); }
@@ -164,6 +168,7 @@ public final class WorldInfo {
         if (creditsShown) p.setProperty("creditsShown", "true");
         if (hasBed) { p.setProperty("bedX", String.valueOf(bedX)); p.setProperty("bedY", String.valueOf(bedY)); p.setProperty("bedZ", String.valueOf(bedZ)); }
         if (eggChoice != EggChoice.NONE) p.setProperty("eggChoice", eggChoice.name());
+        if (cataclysms != Cataclysms.ON) p.setProperty("cataclysms", cataclysms.name());
         if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); p.setProperty("infOwed", String.valueOf(infOwed)); }
         if (ritualKills != 0) p.setProperty("ritualKills", String.valueOf(ritualKills));
         if (overInf != InfState.NONE) p.setProperty("overInf", overInf.name());
@@ -195,6 +200,7 @@ public final class WorldInfo {
         goals.addAll(o.goals);
         creditsShown |= o.creditsShown;
         if (o.eggChoice != EggChoice.NONE) eggChoice = o.eggChoice;
+        cataclysms = o.cataclysms; // налаштування одне на всі виміри світу
         ritualStage = Math.max(ritualStage, o.ritualStage);
         if (o.dragonDead && type == Type.END) dragonDead = true;
         if (type == Type.BETWEEN && o.type != Type.END && o.type != Type.BETWEEN) overInf = o.infState;

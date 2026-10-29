@@ -71,10 +71,13 @@ public final class Game {
         return r;
     }
 
-    public void createWorld(String name, long seed, WorldInfo.Type type) throws IOException {
+    public void createWorld(String name, long seed, WorldInfo.Type type) throws IOException { createWorld(name, seed, type, WorldInfo.Cataclysms.ON); }
+
+    public void createWorld(String name, long seed, WorldInfo.Type type, WorldInfo.Cataclysms cataclysms) throws IOException {
         File d = worldDir(name);
         if (d.exists()) throw new IOException("тека світу вже існує: " + d);
-        WorldInfo.create(d, name, seed, type);
+        WorldInfo w = WorldInfo.create(d, name, seed, type);
+        if (cataclysms != WorldInfo.Cataclysms.ON) { w.cataclysms = cataclysms; w.save(d); }
     }
 
     public World openWorld(String name) throws IOException {

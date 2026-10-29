@@ -54,7 +54,7 @@ public class VoxelinInfectionTest {
     public static void main(String[] a) throws Exception {
         File root = Files.createTempDirectory("vx-inf").toFile();
         g = new Game(new File(root, "saves"), null);
-        content(); start(); phases(); spread(); tame(); cure(); burn(); persistence();
+        content(); start(); phases(); cataclysms(); spread(); tame(); cure(); burn(); persistence();
         System.out.println("VoxelinInfectionTest: " + n + " перевірок OK");
     }
 
@@ -94,6 +94,36 @@ public class VoxelinInfectionTest {
         w.info.time = s + d * 20; check(w.infection.phase() == Infection.Phase.CRISIS, "день 20 - криза");
         w.info.time = s + d * 500; check(w.infection.phase() == Infection.Phase.CRISIS, "далі - криза");
         w.close();
+    }
+
+    static void cataclysms() throws Exception {
+        g.createWorld("k0", 5, WorldInfo.Type.FLAT, WorldInfo.Cataclysms.MILD);
+        check(WorldInfo.load(g.worldDir("k0")).cataclysms == WorldInfo.Cataclysms.MILD, "налаштування зберігається у світі");
+        check(WorldInfo.load(g.worldDir("s1")).cataclysms == WorldInfo.Cataclysms.ON, "за замовчуванням - увімкнено");
+        WorldInfo end = new WorldInfo(); end.type = WorldInfo.Type.END;
+        end.copyPlayerFrom(WorldInfo.load(g.worldDir("k0")));
+        check(end.cataclysms == WorldInfo.Cataclysms.MILD, "переходить у вимір (вибір робиться в Краї)");
+        // помірні: без кризи й прориву
+        World m = open("k1", WorldInfo.EggChoice.INFECTION);
+        m.info.cataclysms = WorldInfo.Cataclysms.MILD;
+        placeEgg(m);
+        long d = m.dayTicks(), s = m.info.infStart;
+        m.info.time = s + d * 15; check(m.infection.phase() == Infection.Phase.ACTIVE, "помірні: день 15 - активна");
+        m.info.time = s + d * 25; check(m.infection.phase() == Infection.Phase.ACTIVE, "помірні: день 25 - все ще активна, не криза");
+        m.info.time = s + d * 100; check(!m.infection.breached() && m.infection.radius() == Infection.RADIUS && m.infection.rate() == 2 / 40.0, "помірні: прориву нема");
+        m.info.cataclysms = WorldInfo.Cataclysms.ON;
+        check(m.infection.breached() && m.infection.radius() == Infection.BREACH_RADIUS, "увімкнені: день 100 - прорив");
+        m.close();
+        // вимкнені: Сторож не пропонує Зараження, яйце не заражає
+        World o = open("k2", WorldInfo.EggChoice.NONE);
+        o.info.cataclysms = WorldInfo.Cataclysms.OFF; o.info.dragonDead = true;
+        Keeper.Dialog dl = Keeper.dialog(o, null);
+        check(dl.choices().size() == 1 && dl.choices().get(0).action().equals("ritual"), "вимкнені: у розвилці лише Ритуал");
+        check(Keeper.act(o, null, "infection") == null && o.info.eggChoice == WorldInfo.EggChoice.NONE, "вимкнені: дію «infection» не прийнято");
+        o.info.eggChoice = WorldInfo.EggChoice.INFECTION; // навіть якщо вибір якось уже стоїть
+        int y = placeEgg(o);
+        check(at(o, 0, y, 0).equals(Infection.EGG) && o.info.infState == WorldInfo.InfState.NONE, "вимкнені: яйце - просто блок");
+        o.close();
     }
 
     static void spread() throws Exception {

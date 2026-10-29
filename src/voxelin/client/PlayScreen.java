@@ -672,7 +672,8 @@ final class PlayScreen {
         vitalsHud();
         if (world.info.infState == WorldInfo.InfState.ACTIVE) { // відлік зараження в правому верхньому куті
             Infection.Phase ph = world.infection.phase();
-            String t = "ШОВ: день " + Math.min(Infection.DAYS, world.infection.day() + 1) + "/" + Infection.DAYS;
+            String t = world.infection.mild() ? "ШОВ: день " + (world.infection.day() + 1) // помірні катаклізми: відліку до прориву нема
+                    : "ШОВ: день " + Math.min(Infection.DAYS, world.infection.day() + 1) + "/" + Infection.DAYS;
             float r = ph == Infection.Phase.QUIET ? 0.75f : 1f, gg = ph == Infection.Phase.CRISIS ? 0.3f : 0.6f;
             Gui.text(t, Gui.W - 300, 12, 2.2f, r, gg, 1f);
         }

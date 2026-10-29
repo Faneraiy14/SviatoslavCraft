@@ -293,6 +293,32 @@ public final class ItemTextureGen {
         return a;
     }
 
+    /** Верх ліжка: біла подушка вгорі, червона ковдра з відворотом, дерев'яна рамка. */
+    public static int[] bedTop() {
+        int[] a = TextureGen.oakPlanks().clone();
+        for (int y = 1; y <= 14; y++) for (int x = 1; x <= 14; x++) {
+            int c;
+            if (y <= 4) c = (x == 1 || x == 14 || y == 1) ? 0xFFC8C8C0 : 0xFFF0EEE6; // подушка
+            else if (y == 5) c = 0xFFE8E0D8; // відворот простирадла
+            else c = ((x + y * 3) % 7 == 0) ? 0xFF9E2222 : 0xFFB82C2C; // ковдра
+            a[x + y * N] = c;
+        }
+        return a;
+    }
+
+    /** Бік ліжка: червона ковдра звисає над дерев'яною основою. */
+    public static int[] bedSide() {
+        int[] a = TextureGen.oakPlanks().clone();
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            if (y < 2) a[x + y * N] = 0xFFB82C2C;
+            else if (y < 8) a[x + y * N] = y == 7 ? 0xFF7A1A1A : (x % 5 == 0 ? 0xFF9E2222 : 0xFFB82C2C);
+            else if (y > 12 && (x < 2 || x > 13)) a[x + y * N] = dark(a[x + y * N], -40); // ніжки
+            else if (y > 12) a[x + y * N] = 0xFF2A2018;
+            else a[x + y * N] = dark(a[x + y * N], -10);
+        }
+        return a;
+    }
+
     // ------------------------------------------------------------------ броня
 
     private static final int[][] ARMOR_MAT = { // шкіра, залізо, алмаз: основний, світлий, темний

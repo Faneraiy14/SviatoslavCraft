@@ -41,7 +41,7 @@ final class PlayScreen {
     private CreditsScreen credits;
     /** Око Енду в повітря: куди тягне до Брами Шву (показується кілька секунд). */
     private long[] gateHint;
-    private long gateHintUntil, goalFlashAt;
+    private long gateHintUntil, goalFlashAt, sleepAt;
     private IconAtlas icons;
     private boolean invOpen, chatOpen, debug, hud = true, grabbed;
     private Raycast.Hit hit;
@@ -401,6 +401,10 @@ final class PlayScreen {
         }
         if (target != null && target.interact != null && !"portal".equals(target.interact) && !"end_frame_eye".equals(target.interact) && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
             if ("workbench".equals(target.interact)) { activeScreen = benchScreen; invOpen = true; grab(false); }
+            else if ("bed".equals(target.interact)) {
+                Sleep.Result r = Sleep.use(world, hit.x(), hit.y(), hit.z(), player.pos);
+                if (r != null) { say(r.message()); if (r.slept()) sleepAt = System.currentTimeMillis(); }
+            }
             else if ("chest".equals(target.interact)) {
                 sounds.self("voxelin:chest.open", 0.8f);
                 ChestEntity ce = world.chestAt(hit.x(), hit.y(), hit.z());
@@ -716,6 +720,8 @@ final class PlayScreen {
             else activeScreen.draw(g, v.input);
         }
         if (hurtFlash > 0) Gui.rect(0, 0, Gui.W, Gui.H, 0.8f, 0.05f, 0.05f, (float) (0.35 * hurtFlash));
+        long slept = System.currentTimeMillis() - sleepAt;
+        if (slept < 2200) Gui.rect(0, 0, Gui.W, Gui.H, 0, 0, 0.02f, (float) Math.min(1, slept < 600 ? slept / 600.0 : (2200 - slept) / 1600.0)); // сон: затемнення й світанок
         if (System.currentTimeMillis() - bannerAt < 4000 && bannerDay > 1) {
             float a = (float) Math.min(1, (4000 - (System.currentTimeMillis() - bannerAt)) / 1000.0);
             Gui.textCentered("ДЕНЬ " + bannerDay, Gui.W / 2f, 120, 5f, 1f, 0.9f, 0.4f * a + 0.2f);
@@ -874,7 +880,10 @@ final class PlayScreen {
 
     private void respawn() {
         vt.respawn();
-        player.teleport(spawn);
+        boolean hadBed = world.info.hasBed;
+        long[] bed = Sleep.respawnAt(world);
+        if (bed != null) player.teleport(Pos.ofBlock(bed[0], bed[1] + PlayerEntity.EYE + 0.02, bed[2]));
+        else { if (hadBed) say("Твоє ліжко зникло - відроджуєшся на початку світу."); player.teleport(spawn); }
         deadHandled = false; prevHealth = vt.health(); hurtFlash = 0;
         grab(true);
     }

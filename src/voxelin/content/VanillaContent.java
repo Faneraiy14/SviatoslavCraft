@@ -69,7 +69,7 @@ public final class VanillaContent implements VoxelinMod {
         tex("seam_cure", ItemTextureGen.flask(0x50E0B0)); tex("seam_fire", ItemTextureGen.flask(0xFF6A20));
         tex("end_stone", ItemTextureGen.endStone()); tex("obsidian", ItemTextureGen.obsidian()); tex("end_frame_side", ItemTextureGen.frameSide());
         tex("end_frame_top", ItemTextureGen.frameTop(false)); tex("end_frame_eye_top", ItemTextureGen.frameTop(true)); tex("end_portal", ItemTextureGen.portal()); tex("end_eye", ItemTextureGen.eye());
-        tex("chest_top", ItemTextureGen.chestTop()); tex("chest_side", ItemTextureGen.chestSide());
+        tex("chest_top", ItemTextureGen.chestTop()); tex("chest_side", ItemTextureGen.chestSide()); tex("bed_top", ItemTextureGen.bedTop()); tex("bed_side", ItemTextureGen.bedSide());
         tex("furnace_top", ItemTextureGen.furnaceTop()); tex("furnace_side", ItemTextureGen.furnaceSide());
         tex("workbench_top", ItemTextureGen.workbenchTop()); tex("workbench_side", ItemTextureGen.workbenchSide());
 
@@ -115,6 +115,7 @@ public final class VanillaContent implements VoxelinMod {
         block("workbench", new BlockSettings().textures("workbench_top", "workbench_side", "oak_planks").color(0xB08850).tool(ToolKind.AXE).interact("workbench").title("Верстак").hardness(2f));
         block("furnace", new BlockSettings().textures("furnace_top", "furnace_side", "furnace_top").color(0x777777).tool(ToolKind.PICKAXE).minTier(1).interact("furnace").title("Піч").hardness(3.5f));
         block("chest", new BlockSettings().textures("chest_top", "chest_side", "chest_top").color(0xA0763C).tool(ToolKind.AXE).interact("chest").title("Скриня").hardness(2.5f));
+        block("bed", new BlockSettings().textures("bed_top", "bed_side", "oak_planks").color(0xB82C2C).tool(ToolKind.AXE).interact("bed").title("Ліжко").hardness(0.6f));
         block("end_stone", new BlockSettings().texture("end_stone").color(0xDDD8A0).tool(ToolKind.PICKAXE).minTier(1).title("Камінь Краю").hardness(3f));
         block("obsidian", new BlockSettings().texture("obsidian").color(0x1B1228).tool(ToolKind.PICKAXE).minTier(4).title("Обсидіан").hardness(50f));
         block("end_frame", new BlockSettings().textures("end_frame_top", "end_frame_side", "end_frame_side").color(0x2E4A3C).interact("end_frame").noItem().light(2).title("Рамка Шву").hardness(-1f));
@@ -201,6 +202,7 @@ public final class VanillaContent implements VoxelinMod {
         r.recipe("seam_cure", RecipeSettings.shapeless("liminite_shard", "liminite_shard", "threshold_bloom", "glass").result("seam_cure", 1)); // квітка росте лише в міжсвітті
         r.recipe("seam_fire", RecipeSettings.shapeless("liminite_shard", "coal", "coal", "coal", "glass").result("seam_fire", 1));
         r.recipe("chest", RecipeSettings.shaped("PPP", "P.P", "PPP").key('P', "#planks").result("chest", 1));
+        r.recipe("bed", RecipeSettings.shaped("LLL", "PPP").key('L', "leather").key('P', "#planks").result("bed", 1)); // шкіра - з корів
         r.loot("ruins", new LootSettings().rolls(1, 3).entry("stick", 2, 6, 10).entry("coal", 1, 4, 8).entry("apple", 1, 2, 6).entry("cobblestone", 3, 8, 8)
                 .entry("raw_iron", 1, 3, 5).entry("leather", 1, 2, 4).entry("string", 1, 3, 4).entry("iron_ingot", 1, 2, 2));
         r.loot("dungeon", new LootSettings().rolls(2, 4).entry("raw_iron", 2, 5, 8).entry("raw_gold", 1, 3, 5).entry("iron_ingot", 1, 3, 5).entry("steak", 2, 4, 6)

@@ -1,5 +1,6 @@
 import voxelin.api.*;
 import voxelin.core.*;
+import voxelin.core.entity.*;
 import voxelin.loader.*;
 
 import java.io.File;
@@ -15,7 +16,7 @@ public class VoxelinProgressTest {
     public static void main(String[] a) throws Exception {
         File root = Files.createTempDirectory("vx-progress").toFile();
         g = new Game(new File(root, "saves"), null);
-        goals(); order(); branches(); persistence(); reachable(); gateCompass();
+        goals(); order(); branches(); persistence(); reachable(); gateCompass(); sleep();
         System.out.println("VoxelinProgressTest: " + n + " перевірок OK");
     }
 
@@ -50,7 +51,7 @@ public class VoxelinProgressTest {
         check(Progress.update(w, inv).isEmpty() && w.info.goals.contains("wood"), "витрачене дерево не відкочує ціль");
         inv.add("voxelin:diamond", 1); // алмаз зі скрині - без кирок
         List<String> f = ids(Progress.update(w, inv));
-        check(f.equals(List.of("workbench", "pickaxe", "stone", "iron", "iron_pickaxe", "diamond")), "пізніша ціль закриває ранніші по порядку: " + f);
+        check(f.equals(List.of("workbench", "pickaxe", "stone", "bed", "iron", "iron_pickaxe", "diamond")), "пізніша ціль закриває ранніші по порядку: " + f);
         check(Progress.current(w.info).id().equals("diamond_pickaxe"), "далі алмазна кирка");
         inv.clear();
         inv.add("voxelin:end_eye", 11);
@@ -127,6 +128,44 @@ public class VoxelinProgressTest {
         w.close();
     }
 
+    static void sleep() throws Exception {
+        World w = world("p6");
+        Source p = Sources.player("P");
+        for (int i = 0; i < 600 && w.chunk(0, 0) == null; i++) { w.update(0, 0, 2); Thread.sleep(10); }
+        int y = w.surfaceY(0, 0) + 1;
+        check(w.setBlock(p, 0, y, 0, w.blocks.byName(Sleep.BED)), "ліжко поставлено");
+        Pos me = Pos.ofBlock(1, y + 1.6, 0);
+        long day = w.dayTicks();
+        w.setTime(day / 4); // день
+        Sleep.Result r = Sleep.use(w, 0, y, 0, me);
+        check(r != null && !r.slept() && r.message().contains("відродження") && w.info.hasBed && w.info.bedY == y, "вдень: лише точка відродження");
+        check(!Sleep.use(w, 0, y, 0, me).message().contains("відродження"), "те саме ліжко вдруге - без повтору повідомлення");
+        w.setTime(day + (long) (day * 0.8)); // ніч другого дня
+        Mob z = w.spawnMob(w.mobTypes.get("voxelin:zombie"), Pos.ofBlock(4, y, 0));
+        r = Sleep.use(w, 0, y, 0, me);
+        check(!r.slept() && r.message().contains("вороги") && w.time() == day + (long) (day * 0.8), "зомбі поруч - спати не можна, час не змінився");
+        z.health = 0; z.dying = true;
+        r = Sleep.use(w, 0, y, 0, me);
+        check(r.slept() && w.time() == 2 * day && w.dayNumber() == 3, "сон до ранку третього дня");
+        long[] at = Sleep.respawnAt(w);
+        check(at != null && at[0] == 0 && at[1] == y + 1 && at[2] == 0, "відродження над ліжком");
+        Progress.update(w, new Inventory());
+        check(w.info.goals.contains("bed"), "ціль «ліжко» закривається поставленим ліжком");
+        w.setBlock(p, 0, y, 0, w.blocks.byName("voxelin:air"));
+        check(Sleep.respawnAt(w) == null && !w.info.hasBed, "ліжко зламано - відродження на спавні");
+        check(Sleep.use(w, 0, y, 0, me) == null, "ПКМ не по ліжку - нічого");
+        File dir = g.worldDir("p6");
+        w.info.hasBed = true; w.info.bedX = -5; w.info.bedY = 70; w.info.bedZ = 1L << 40;
+        w.info.save(dir);
+        WorldInfo li = WorldInfo.load(dir);
+        check(li.hasBed && li.bedX == -5 && li.bedY == 70 && li.bedZ == 1L << 40, "ліжко зберігається");
+        w.close();
+        g.createWorld("p7", 1, WorldInfo.Type.FLAT);
+        World e = g.openDimension("p7", "end");
+        check(!Sleep.use(e, 0, 64, 0, me).slept() && !e.info.hasBed, "у Краї не спиться");
+        e.close();
+    }
+
     // ------------------------------------------------------------------ чи можна пройти гру з нуля
 
     /** Блоки, які гравець знаходить у звичайному світі (генератор, структури). */
@@ -190,7 +229,7 @@ public class VoxelinProgressTest {
         Set<String> have = obtainable();
         for (String need : List.of("workbench", "furnace", "stone_pickaxe", "iron_ingot", "iron_pickaxe", "diamond", "diamond_pickaxe", "liminite_shard",
                 "diamond_helmet", "diamond_chestplate", "diamond_leggings", "diamond_boots", "end_eye", "gold_ingot", "obsidian",
-                "seam_anchor", "threshold_key", "threshold_bloom", "seam_cure", "seam_fire", "dragon_egg"))
+                "seam_anchor", "threshold_key", "threshold_bloom", "seam_cure", "seam_fire", "dragon_egg", "bed"))
             check(have.contains("voxelin:" + need), "з нуля можна здобути " + need);
     }
 }

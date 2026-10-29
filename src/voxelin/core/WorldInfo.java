@@ -46,6 +46,9 @@ public final class WorldInfo {
     /** Досягнуті цілі «Шляху» (Progress) і чи вже показано титри фіналу. */
     public final java.util.LinkedHashSet<String> goals = new java.util.LinkedHashSet<>();
     public boolean creditsShown;
+    /** Ліжко - точка відродження (лише звичайний світ). */
+    public boolean hasBed;
+    public long bedX, bedZ; public int bedY;
     public EggChoice eggChoice = EggChoice.NONE;
     /** Ритуал: 0 не розпочато, 1 боси в Енді, 2 виконано. */
     public int ritualStage;
@@ -111,6 +114,8 @@ public final class WorldInfo {
         for (String r : p.getProperty("records", "").split(",")) if (r.trim().matches("[a-z0-9_]+:[a-z0-9_/]+")) w.records.add(r.trim());
         for (String g : p.getProperty("goals", "").split(",")) if (g.trim().matches("[a-z0-9_]+")) w.goals.add(g.trim());
         w.creditsShown = "true".equals(p.getProperty("creditsShown"));
+        try { w.bedX = Long.parseLong(p.getProperty("bedX").trim()); w.bedY = Integer.parseInt(p.getProperty("bedY").trim()); w.bedZ = Long.parseLong(p.getProperty("bedZ").trim()); w.hasBed = w.bedY >= 0 && w.bedY < Chunk.HEIGHT; }
+        catch (RuntimeException e) { w.hasBed = false; }
         try { w.eggChoice = EggChoice.valueOf(p.getProperty("eggChoice", "NONE").trim()); } catch (IllegalArgumentException e) { w.eggChoice = EggChoice.NONE; }
         try { w.infState = InfState.valueOf(p.getProperty("infState", "NONE").trim()); } catch (IllegalArgumentException e) { w.infState = InfState.NONE; }
         if (w.infState != InfState.NONE) {
@@ -157,6 +162,7 @@ public final class WorldInfo {
         if (!records.isEmpty()) p.setProperty("records", String.join(",", records));
         if (!goals.isEmpty()) p.setProperty("goals", String.join(",", goals));
         if (creditsShown) p.setProperty("creditsShown", "true");
+        if (hasBed) { p.setProperty("bedX", String.valueOf(bedX)); p.setProperty("bedY", String.valueOf(bedY)); p.setProperty("bedZ", String.valueOf(bedZ)); }
         if (eggChoice != EggChoice.NONE) p.setProperty("eggChoice", eggChoice.name());
         if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); p.setProperty("infOwed", String.valueOf(infOwed)); }
         if (ritualKills != 0) p.setProperty("ritualKills", String.valueOf(ritualKills));

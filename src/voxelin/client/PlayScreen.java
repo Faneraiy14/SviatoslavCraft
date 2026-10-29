@@ -60,8 +60,13 @@ final class PlayScreen {
     private double prevHealth = 20, hurtFlash;
     private long bannerDay = -1, bannerAt;
 
+    final voxelin.client.audio.GameSounds sounds;
+    private double hitSoundCd;
+
     PlayScreen(Voxelin v, World world) {
         this.v = v; this.world = world;
+        sounds = new voxelin.client.audio.GameSounds(v.audio, world);
+        world.sound = sounds;
         rend = new WorldRenderer(world, v.textures);
         rend.renderDistance = v.opts.renderDistance;
         rend.outlines = v.settings.outlines;
@@ -176,7 +181,9 @@ final class PlayScreen {
             boolean sprinting = active && in.down(GLFW_KEY_W) && (in.down(GLFW_KEY_LEFT_CONTROL) || in.down(GLFW_KEY_RIGHT_CONTROL));
             if (sprinting) vt.exhaust(0.1 * Math.hypot(player.pos.relX(player.prev.cx) - player.prev.x, player.pos.relZ(player.prev.cz) - player.prev.z));
             if (player.jumped) vt.exhaust(sprinting ? 0.2 : 0.05);
-            vt.land(player.takeLanded());
+            double fell = player.takeLanded();
+            sounds.land(player, fell);
+            vt.land(fell);
             if (world.info.type == WorldInfo.Type.BETWEEN && Math.abs(player.pos.blockX() - voxelin.core.gen.BetweenGenerator.HOUSE_X) <= 3 && Math.abs(player.pos.blockZ() - voxelin.core.gen.BetweenGenerator.HOUSE_Z) <= 3
                     && player.pos.y > voxelin.core.gen.BetweenGenerator.TOP && player.pos.y < voxelin.core.gen.BetweenGenerator.TOP + 6) { world.unlockRecord("voxelin:keeper_home"); world.unlockRecord("voxelin:threads"); } // зайшов у Дім Сторожа
             double imp = player.takeImpact();
@@ -189,9 +196,10 @@ final class PlayScreen {
             BlockType feet = world.blocks.get(Math.max(0, world.blockId(player.pos.blockX(), (int) Math.floor(player.pos.y - PlayerEntity.EYE + 0.05), player.pos.blockZ())));
             boolean inPortal = "portal".equals(feet.interact), inRift = "rift".equals(feet.interact);
             if (!inPortal && !inRift) portalLock = false;
-            else if (!portalLock && !vt.dead() && !v.opts.freeze) { portalLock = true; v.requestTravel(inRift ? Dimensions.BETWEEN : Dimensions.portalTarget(world.dimension())); }
+            else if (!portalLock && !vt.dead() && !v.opts.freeze) { portalLock = true; sounds.ui("voxelin:portal.travel"); v.requestTravel(inRift ? Dimensions.BETWEEN : Dimensions.portalTarget(world.dimension())); }
         }
-        if (!vt.dead() && !v.opts.freeze) world.collectItems(bodyPos(), inv);
+        if (!vt.dead() && !v.opts.freeze && world.collectItems(bodyPos(), inv) > 0) sounds.self("voxelin:item.pickup", 0.6f);
+        sounds.tick(player, !vt.dead());
         if (vt.dead() && !deadHandled && !world.creative()) {
             Pos at = bodyPos();
             for (Inventory.Stack st : inv.drain()) world.spawnItem(at, st.item, st.count, st.damage, true);
@@ -255,7 +263,8 @@ final class PlayScreen {
         else rend.fogColor = horizon;
         long dn = world.dayNumber();
         if (dn != bannerDay) { if (bannerDay >= 0) bannerAt = System.currentTimeMillis(); bannerDay = dn; }
-        if (vt.health() < prevHealth - 0.01) hurtFlash = 1;
+        if (vt.health() < prevHealth - 0.01) { hurtFlash = 1; sounds.self("voxelin:player.hurt", 1f); }
+        v.audio.listener(cam.pos, yaw);
         prevHealth = vt.health();
         hurtFlash = Math.max(0, hurtFlash - 0.03);
         cam.update(v.window.fbWidth(), v.window.fbHeight(), (rend.renderDistance + 1) * 16 * Units.BLOCK_SIZE);
@@ -265,6 +274,7 @@ final class PlayScreen {
         double dt = Math.min(0.1, (nowNs - lastFrameNs) / 1e9);
         lastFrameNs = nowNs;
         if (breakCooldown > 0) breakCooldown -= dt;
+        hitSoundCd -= dt;
         attackCd = Math.max(0, attackCd - dt);
         aimedMob = play ? Combat.raycast(world, cam.pos, yaw, pitch, 3.6, hit == null ? 99 : hit.distance()) : null;
         boolean pressed = play && in.clicked(GLFW_MOUSE_BUTTON_LEFT);
@@ -308,10 +318,11 @@ final class PlayScreen {
         double secs = Mining.seconds(bt, tool, world.creative());
         if (secs == Double.POSITIVE_INFINITY) return;
         breakProgress = secs <= 0 ? 1 : breakProgress + dt / secs;
-        if (breakProgress < 1) return;
+        if (breakProgress < 1) { if (hitSoundCd <= 0) { hitSoundCd = 0.25; sounds.block(bt, breakX, breakY, breakZ, "hit"); } return; }
         boolean ok = actions.breakBlock(breakX, breakY, breakZ, tool == null ? null : tool.name, !world.creative());
         breaking = false; breakProgress = 0; breakCooldown = 0.2;
         if (!ok) return;
+        sounds.block(bt, breakX, breakY, breakZ, "break");
         vt.exhaust(0.005);
         if (!world.creative() && tool != null) inv.wearSelected(tool.durability);
     }
@@ -322,7 +333,9 @@ final class PlayScreen {
         attackCd = 0.4;
         ItemType tool = held();
         double dmg = tool == null ? 1 : tool.attack;
-        if (Combat.attack(world, m, dmg, bodyPos())) {
+        boolean hurt = Combat.attack(world, m, dmg, bodyPos());
+        sounds.self(hurt ? "voxelin:player.attack" : "voxelin:player.swing", 0.8f);
+        if (hurt) {
             vt.exhaust(0.1);
             if (!world.creative() && tool != null) inv.wearSelected(tool.durability);
         }
@@ -340,7 +353,9 @@ final class PlayScreen {
         }
         BlockType target = hit == null ? null : world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
         if (hit != null && !sneak) { // Ключ Порогу: розрив у міжсвіття
+            int rifts = world.info.rifts.size();
             String msg = Rift.open(world, inv, hit.x(), hit.y(), hit.z(), world.creative());
+            if (world.info.rifts.size() > rifts) sounds.play("voxelin:rift.open", Pos.ofBlock(hit.x(), hit.y() + 1.5, hit.z()), 1.2f, 1f);
             if (msg != null) { say(msg); return; }
         }
         if (target != null && target.name.equals(Infection.CORE)) { // ядро зараження: стан або зупинка (зілля, вогонь, лімініт)
@@ -355,6 +370,7 @@ final class PlayScreen {
         if (target != null && target.interact != null && !"portal".equals(target.interact) && !"end_frame_eye".equals(target.interact) && !sneak) { // верстак, піч: права кнопка відкриває вікно (присід - ставити блок)
             if ("workbench".equals(target.interact)) { activeScreen = benchScreen; invOpen = true; grab(false); }
             else if ("chest".equals(target.interact)) {
+                sounds.self("voxelin:chest.open", 0.8f);
                 ChestEntity ce = world.chestAt(hit.x(), hit.y(), hit.z());
                 if (ce != null) {
                     activeScreen = InventoryScreen.container("СКРИНЯ", new ChestMenu(world.itemTypes, inv, ce), inv, world, icons, st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
@@ -377,8 +393,9 @@ final class PlayScreen {
         if (t == null) return;
         if (t.armorSlot != null) { inv.equipSelected(world.itemTypes); return; } // ПКМ з бронею в руці - надягти
         if (t.food > 0) {
-            if (vt.hunger() < Vitals.MAX && !vt.dead()) { vt.feed(t.food); if (!world.creative()) inv.takeSelected(); }
+            if (vt.hunger() < Vitals.MAX && !vt.dead()) { vt.feed(t.food); sounds.self("voxelin:player.eat", 0.9f); if (!world.creative()) inv.takeSelected(); }
         } else if (hit != null && t.placesBlock != null && !player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
+            sounds.block(world.blocks.get(Math.max(0, world.blockId(hit.px(), hit.py(), hit.pz()))), hit.px(), hit.py(), hit.pz(), "place");
             if (!world.creative()) inv.takeSelected();
         }
     }
@@ -763,6 +780,8 @@ final class PlayScreen {
 
     /** Зберегти позицію й закрити (виклик при виході зі світу чи гри). */
     void close() {
+        sounds.close();
+        world.sound = voxelin.core.SoundSink.NONE;
         if (invOpen) activeScreen.close();
         if (vt.dead()) player.teleport(spawn); // збереження в момент смерті: гравець з'явиться на спавні
         world.info.setPlayer(player.pos, player.yaw, player.pitch);

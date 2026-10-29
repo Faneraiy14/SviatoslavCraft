@@ -16,6 +16,8 @@ public final class Gui {
     private final Window win;
     public double mx, my;
     public boolean click;
+    /** Що робити при натисканні кнопки (клієнт ставить звук клацання). */
+    public Runnable onClick = () -> {};
 
     public Gui(Window win, Input in) { this.win = win; this.in = in; }
 
@@ -54,7 +56,7 @@ public final class Gui {
         frame(x, y, w, h, 2, 1, 1, 1);
         float scale = Math.min(3.2f, (w - 24) / Math.max(1, label.length() * 6f));
         textCentered(label, x + w / 2f, y + h / 2f - 3.5f * scale, scale, enabled ? 1 : 0.6f, enabled ? 1 : 0.6f, enabled ? 1 : 0.6f);
-        if (hov && click) { click = false; return true; }
+        if (hov && click) { click = false; onClick.run(); return true; }
         return false;
     }
 

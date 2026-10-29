@@ -232,6 +232,14 @@ public final class World implements WorldAccess {
     public Infection infection;
     /** Вимкнути природний спавн (тести, /gamerule пізніше). */
     public boolean naturalSpawning = true;
+    /** Куди йдуть звукові події (клієнт ставить свій рушій; на сервері й у тестах - тиша). */
+    public SoundSink sound = SoundSink.NONE;
+
+    /** Звук істоти: voxelin:zombie + "hurt" -> voxelin:mob.zombie.hurt (клієнт сам підставляє загальний, якщо такого нема). */
+    public void mobSound(Mob m, String what, float volume) {
+        String n = m.type.name; int c = n.indexOf(':');
+        sound.play(n.substring(0, c + 1) + "mob." + n.substring(c + 1) + "." + what, new Pos(m.pos.cx, m.pos.cz, m.pos.x, m.pos.y + m.type.height * 0.7, m.pos.z), volume, 0.9f + mobRng.nextFloat() * 0.2f);
+    }
 
     public List<Mob> mobs() { return Collections.unmodifiableList(mobs); }
     public void setPlayerTarget(PlayerTarget t) { target = t; }
@@ -253,6 +261,7 @@ public final class World implements WorldAccess {
         RecordRegistry.Record r = records.get(id);
         if (r == null || !info.records.add(id)) return false;
         if (target != null) target.notify("Новий запис у журналі: " + r.title + "  (J)");
+        sound.play("voxelin:record.unlock", null, 0.8f, 1f);
         return true;
     }
 
@@ -347,6 +356,7 @@ public final class World implements WorldAccess {
     /** Удар по істоті (шкода, поштовх від (kx,kz)); дроп - у момент смерті. */
     public boolean hurtMob(Mob m, double damage, double kx, double kz, Pos from) {
         boolean ok = m.damage(damage, kx, kz, from);
+        if (ok) mobSound(m, "hurt", 1f);
         if (ok && m.dying) dropLoot(m);
         return ok;
     }
@@ -354,6 +364,7 @@ public final class World implements WorldAccess {
     private void dropLoot(Mob m) {
         if (m.lootDropped) return;
         m.lootDropped = true;
+        mobSound(m, "death", m.type.boss ? 1.5f : 0.8f);
         if (m.type.boss && m.type.name.equals("voxelin:ender_dragon")) { info.dragonDead = true; unlockRecord("voxelin:dragon"); keeperPending = true; } // смерть дракона записується у світ (не відроджується)
         if (m.type.name.equals(WEAVER) || m.type.name.equals(UNRAVELER)) ritualBossDied(m);
         for (voxelin.api.BlockSettings.Drop d : m.type.drops) {
@@ -372,6 +383,8 @@ public final class World implements WorldAccess {
         for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
             Mob m = it.next();
             m.tick(this, target, mobRng);
+            if (!m.dying && mobRng.nextInt(m.type.boss ? 160 : 480) == 0) mobSound(m, "idle", m.type.boss ? 1.5f : 0.8f); // голоси - зрідка, у випадковий момент
+            if (!m.dying && m.type.flying && Math.floorMod(tick + m.hashCode(), 30) == 0) mobSound(m, "flap", 1f);
             if (m.dying && !m.lootDropped) dropLoot(m);
             if (m.removable()) { it.remove(); continue; }
             if (pc != null) { // далекі зникають (вороги ближче, ніж мирні)

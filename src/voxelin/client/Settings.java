@@ -18,8 +18,11 @@ public final class Settings {
     public int textureSize = 0, renderDistance = 12, fov = 70, msaa = 2;
     public float mouseSensitivity = 0.12f;
     public boolean vsync = true, outlines = true;
+    /** Гучність у відсотках (0..100, крок 10): загальна, блоки, істоти, оточення, інтерфейс. */
+    public int volMaster = 100, volBlocks = 100, volMobs = 100, volAmbient = 80, volUi = 100;
 
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
+    private static int vol(int v) { return clamp(Math.round(v / 10f) * 10, 0, 100); }
 
     /** Привести значення до допустимих (використовується після читання й зі стрілок на екрані). */
     public void clampAll() {
@@ -28,6 +31,7 @@ public final class Settings {
         fov = clamp(fov, 60, 100);
         msaa = msaa >= 4 ? 4 : (msaa >= 2 ? 2 : 0);
         if (Float.isNaN(mouseSensitivity)) mouseSensitivity = 0.12f;
+        volMaster = vol(volMaster); volBlocks = vol(volBlocks); volMobs = vol(volMobs); volAmbient = vol(volAmbient); volUi = vol(volUi);
         mouseSensitivity = Math.max(0.04f, Math.min(0.30f, Math.round(mouseSensitivity * 100) / 100f));
     }
 
@@ -44,6 +48,8 @@ public final class Settings {
         try { s.mouseSensitivity = Float.parseFloat(p.getProperty("mouseSensitivity", "0.12").trim()); } catch (NumberFormatException e) { s.mouseSensitivity = 0.12f; }
         s.vsync = !"false".equalsIgnoreCase(p.getProperty("vsync", "true").trim());
         s.outlines = !"false".equalsIgnoreCase(p.getProperty("outlines", "true").trim());
+        s.volMaster = intOf(p, "volume.master", s.volMaster); s.volBlocks = intOf(p, "volume.blocks", s.volBlocks); s.volMobs = intOf(p, "volume.mobs", s.volMobs);
+        s.volAmbient = intOf(p, "volume.ambient", s.volAmbient); s.volUi = intOf(p, "volume.ui", s.volUi);
         s.clampAll();
         return s;
     }
@@ -62,6 +68,8 @@ public final class Settings {
         p.setProperty("mouseSensitivity", String.format(Locale.ROOT, "%.2f", mouseSensitivity));
         p.setProperty("vsync", String.valueOf(vsync));
         p.setProperty("outlines", String.valueOf(outlines));
+        p.setProperty("volume.master", String.valueOf(volMaster)); p.setProperty("volume.blocks", String.valueOf(volBlocks)); p.setProperty("volume.mobs", String.valueOf(volMobs));
+        p.setProperty("volume.ambient", String.valueOf(volAmbient)); p.setProperty("volume.ui", String.valueOf(volUi));
         try {
             File dir = f.getAbsoluteFile().getParentFile();
             if (dir != null && !dir.isDirectory()) dir.mkdirs();

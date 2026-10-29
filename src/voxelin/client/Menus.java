@@ -11,7 +11,7 @@ import static org.lwjgl.glfw.GLFW.*;
 
 /** Меню: головне, список світів, створення й перейменування світу. Малює й обробляє ввід у кадрі (Gui - негайний режим). */
 final class Menus {
-    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS }
+    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS, SOUND }
 
     private final Voxelin v;
     Screen screen = Screen.MAIN;
@@ -60,6 +60,7 @@ final class Menus {
             case CREATE -> create(g);
             case RENAME -> rename(g);
             case SETTINGS -> settings(g);
+            case SOUND -> sound(g);
         }
         Gui.text("Voxelin " + Voxelin.VERSION, 12, Gui.H - 22, 1.8f, 0.55f, 0.6f, 0.7f);
     }
@@ -91,7 +92,25 @@ final class Menus {
         if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Контури блоків", st.outlines ? "увімкнено" : "вимкнено")) st.outlines = !st.outlines;
         st.clampAll();
         Gui.textCentered("Розмір текстур застосується при наступному відкритті світу. Власні PNG - тека textures/.", Gui.W / 2f, y0 + row[0] * (h + gap) + 6, 1.9f, 0.7f, 0.75f, 0.9f);
-        if (g.button("ГОТОВО", 445, 640, 390, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { v.saveSettings(); show(Screen.MAIN); }
+        if (g.button("ЗВУК", 330, 640, 300, 56)) { v.saveSettings(); show(Screen.SOUND); return; }
+        if (g.button("ГОТОВО", 650, 640, 300, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { v.saveSettings(); show(Screen.MAIN); }
+    }
+
+    private void sound(Gui g) {
+        Settings st = v.settings;
+        Gui.textCentered("ЗВУК", Gui.W / 2f, 36, 5f, 1f, 0.85f, 0.3f);
+        final float x = 250, w = 780, h = 50, gap = 10, y0 = 130;
+        int[] row = {0};
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Загальна гучність", st.volMaster + "%")) st.volMaster += 10 * stepDir;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Блоки", st.volBlocks + "%")) st.volBlocks += 10 * stepDir;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Істоти", st.volMobs + "%")) st.volMobs += 10 * stepDir;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Оточення", st.volAmbient + "%")) st.volAmbient += 10 * stepDir;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Інтерфейс", st.volUi + "%")) st.volUi += 10 * stepDir;
+        st.clampAll();
+        v.applySettings(); // гучність - одразу, щоб чути зміну
+        Gui.textCentered(v.audioStatus(), Gui.W / 2f, y0 + row[0] * (h + gap) + 6, 1.9f, 0.7f, 0.75f, 0.9f);
+        Gui.textCentered("Власні звуки (.wav) - тека sounds/, назва як у звуку гри (block.stone.break.wav).", Gui.W / 2f, y0 + row[0] * (h + gap) + 34, 1.9f, 0.7f, 0.75f, 0.9f);
+        if (g.button("НАЗАД", 445, 640, 390, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { v.saveSettings(); show(Screen.SETTINGS); }
     }
 
     private int stepDir = 1;

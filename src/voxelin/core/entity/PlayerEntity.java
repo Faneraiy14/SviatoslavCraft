@@ -169,6 +169,8 @@ public final class PlayerEntity {
     }
 
     public boolean onGround() { return onGround; }
+    /** Швидкість, блоків/с (для звуку вітру під час польоту). */
+    public double speed() { return Math.sqrt(vx * vx + vy * vy + vz * vz); }
     public double bodyCenterY() { return pos.y + EYE_OFFSET; }
     /** Висота очей із присіданням - звідси йде промінь прицілу. */
     public double aimY() { return pos.y + eyeOffset; }

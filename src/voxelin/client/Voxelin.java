@@ -32,6 +32,8 @@ public final class Voxelin {
         boolean vsync = true;
         float sky = -1f; // --sky 0..1: примусова яскравість неба (інакше - за часом доби)
         String dimension; // --dimension end: стартувати автосвіт у вимірі (для знімків)
+        boolean noSound; // --no-sound
+        File recordAudio; // --record-audio f.wav: мікшер пише у файл замість звукової карти (нічого не звучить)
         String open; // --open inventory: відкрити вікно на старті (для знімків)
         float showProgress = -1f; // --show-progress 0..1: показати тріщини цілі (для знімків)
         double dayMinutes = -1; // --day-minutes N: довжина доби (інакше - зі світу, типово 30)
@@ -60,6 +62,8 @@ public final class Voxelin {
                         case "--texture-size" -> o.textureSize = Integer.parseInt(a[++i]) >= 64 ? 64 : (Integer.parseInt(a[i]) >= 32 ? 32 : 16);
                         case "--msaa" -> o.msaa = Math.max(0, Math.min(8, Integer.parseInt(a[++i])));
                         case "--no-vsync" -> o.vsync = false;
+                        case "--no-sound" -> o.noSound = true;
+                        case "--record-audio" -> o.recordAudio = new File(a[++i]);
                         case "--open" -> o.open = a[++i];
                         case "--dimension" -> o.dimension = a[++i];
                         case "--show-progress" -> o.showProgress = Math.max(0f, Math.min(1f, Float.parseFloat(a[++i])));
@@ -113,6 +117,11 @@ public final class Voxelin {
 
     Settings settings;
     File settingsFile;
+    /** Рушій звуку (завжди є; без пристрою чи в тестових запусках - мовчить). */
+    voxelin.client.audio.AudioEngine audio;
+    private String audioState = "звук не запущено";
+
+    String audioStatus() { return audioState; }
 
     private Voxelin(Options opts) {
         this.opts = opts;
@@ -146,6 +155,13 @@ public final class Voxelin {
         if (!opts.explicit.contains("--texture-size")) opts.textureSize = settings.textureSize;
         if (!opts.explicit.contains("--msaa")) opts.msaa = settings.msaa;
         if (!opts.explicit.contains("--no-vsync")) opts.vsync = settings.vsync;
+        if (audio != null) {
+            audio.master = settings.volMaster / 100f;
+            audio.setCategory(voxelin.client.audio.AudioEngine.Cat.BLOCKS, settings.volBlocks / 100f);
+            audio.setCategory(voxelin.client.audio.AudioEngine.Cat.MOBS, settings.volMobs / 100f);
+            audio.setCategory(voxelin.client.audio.AudioEngine.Cat.AMBIENT, settings.volAmbient / 100f);
+            audio.setCategory(voxelin.client.audio.AudioEngine.Cat.UI, settings.volUi / 100f);
+        }
     }
 
     /** Зберегти налаштування й застосувати те, що діє одразу; розмір текстур - при наступному відкритті світу. */
@@ -158,6 +174,8 @@ public final class Voxelin {
         gui = new Gui(window, input);
         textures = new voxelin.client.render.TextureArray(game.textures, textureSizeNow(), new File("textures"));
         menus = new Menus(this);
+        startAudio();
+        gui.onClick = () -> audio.play("voxelin:ui.click", null, 1f, 1f, voxelin.client.audio.AudioEngine.Cat.UI);
         if (opts.autoWorld != null) autoWorld();
 
         long last = System.nanoTime(), fpsAt = last;
@@ -183,6 +201,16 @@ public final class Voxelin {
             frames++; frameCount++;
             if (now - fpsAt >= 1_000_000_000L) { fps = frameCount; frameCount = 0; fpsAt = now; }
         }
+    }
+
+    private void startAudio() {
+        voxelin.client.audio.SoundBank bank = voxelin.client.audio.SoundGen.build();
+        bank.loadOverrides(new File("sounds"));
+        audio = new voxelin.client.audio.AudioEngine(bank);
+        applySettings();
+        if (opts.recordAudio != null) { audio.startVirtual(); audioState = "звук: лише запис у файл (--record-audio)"; }
+        else if (opts.quiet() || opts.noSound) audioState = "звук вимкнено для цього запуску";
+        else audioState = audio.start() ? "звук працює" : "звук недоступний: немає пристрою";
     }
 
     int textureSizeNow() { return opts.textureSize == 0 ? Settings.autoTextureSize(window.glRenderer()) : opts.textureSize; }
@@ -211,7 +239,7 @@ public final class Voxelin {
         switch (state) {
             case MENU -> {
                 if (opts.menuScreen != null && frames == 2) { // dev: --menu worlds|create|rename
-                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); default -> { } }
+                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); case "sound" -> menus.show(Menus.Screen.SOUND); default -> { } }
                 }
                 glViewport(0, 0, window.fbWidth(), window.fbHeight());
                 glClearColor(0.08f, 0.11f, 0.22f, 1f);
@@ -329,6 +357,7 @@ public final class Voxelin {
     private void shutdown() {
         try { if (play != null) { play.close(); play = null; } else if (loading != null) { loading.close(); loading = null; } }
         catch (Throwable t) { System.out.println("[Voxelin] ⚠️ при закритті: " + t); }
+        if (audio != null) { if (opts.recordAudio != null) audio.saveRecording(opts.recordAudio); audio.close(); }
         try { if (window != null) window.destroy(); } catch (Throwable ignored) { /* вікно вже закрите */ }
     }
 }

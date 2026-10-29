@@ -25,6 +25,8 @@ public final class BlockType implements BlockRef {
     public final boolean hasItem;
     /** Вікно, що відкривається правою кнопкою (workbench, furnace) або null. */
     public final String interact;
+    /** Матеріал звуку (кроки, ламання, ставлення). */
+    public final String sound;
 
     BlockType(int id, String name, BlockSettings s) {
         this.id = id; this.name = name;
@@ -34,6 +36,20 @@ public final class BlockType implements BlockRef {
         tool = s.toolKind(); minTier = s.minTierValue(); hasItem = !s.hasNoItem() && id > 1; // повітря й «невідомий» предмета не мають
         drops = s.hasNoDrops() ? List.of() : (s.dropList() != null ? List.copyOf(s.dropList()) : (hasItem ? List.of(new BlockSettings.Drop(name, 1, 1, 1f)) : List.of()));
         texTop = s.textureTop(); texSide = s.textureSide(); texBottom = s.textureBottom();
+        sound = s.soundValue() != null ? s.soundValue() : guessSound(name, s);
+    }
+
+    /** Здогадка матеріалу звуку за назвою й інструментом (моди можуть задати явно: BlockSettings.sound). */
+    static String guessSound(String name, BlockSettings s) {
+        String n = name.substring(name.indexOf(':') + 1);
+        if (n.contains("glass") || n.equals("ice") || n.contains("portal") || n.contains("rift")) return "glass";
+        if (n.contains("snow")) return "snow";
+        if (n.contains("sand") || n.contains("gravel")) return "sand";
+        if (n.contains("grass") || n.contains("leaves") || n.contains("bloom") || n.contains("growth")) return "grass";
+        if (n.contains("iron") || n.contains("gold") || n.contains("copper") || n.contains("anchor")) return "metal";
+        if (s.toolKind() == ToolKind.AXE || n.contains("log") || n.contains("plank") || n.contains("thread")) return "wood";
+        if (s.toolKind() == ToolKind.SHOVEL || n.contains("dirt") || n.contains("clay")) return "dirt";
+        return "stone";
     }
 
     @Override public String name() { return name; }

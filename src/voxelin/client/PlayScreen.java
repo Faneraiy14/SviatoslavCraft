@@ -612,8 +612,10 @@ final class PlayScreen {
     private void hud(Gui g) {
         Input in = v.input;
         if (cam.mode == Camera.Mode.FIRST && !invOpen && !chatOpen) {
-            Gui.rect(Gui.W / 2f - 12, Gui.H / 2f - 1, 24, 2, 1, 1, 1, 0.85f);
-            Gui.rect(Gui.W / 2f - 1, Gui.H / 2f - 12, 2, 24, 1, 1, 1, 0.85f);
+            Gui.rect(Gui.W / 2f - 13, Gui.H / 2f - 2, 26, 4, 0, 0, 0, 0.45f); // темний обвід - приціл видно і на небі, і на снігу
+            Gui.rect(Gui.W / 2f - 2, Gui.H / 2f - 13, 4, 26, 0, 0, 0, 0.45f);
+            Gui.rect(Gui.W / 2f - 12, Gui.H / 2f - 1, 24, 2, 1, 1, 1, 0.9f);
+            Gui.rect(Gui.W / 2f - 1, Gui.H / 2f - 12, 2, 24, 1, 1, 1, 0.9f);
         }
         hotbar(g);
         vitalsHud();
@@ -675,33 +677,73 @@ final class PlayScreen {
 
     // ------------------------------------------------------------------ здоров'я, голод, повітря, смерть
 
-    private static final String[] HEART = {".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."};
-    private static final String[] FOOD = {"...XXX.", "..XXXXX", "..XXXXX", ".XXXXX.", "XXXXX..", "XXX....", "XX....."};
-    private static final String[] SHIELD = {"XXXXXXX", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."};
-    private static final String[] BUBBLE = {".XXX.", "X...X", "X...X", "X...X", ".XXX."};
+    // Піксельні іконки 9 px: O - контур, X - основний колір, H - відблиск, S - тінь, B - кістка (у їжі)
+    private static final String[] HEART = {".OO...OO.", "OHHO.OXXO", "OHXXOXXXO", "OXXXXXXSO", ".OXXXXSO.", "..OXXSO..", "...OSO...", "....O...."};
+    private static final String[] FOOD = {".....OOO.", "....OXHXO", "...OXHXXO", "...OXXXSO", "..OBOXSO.", ".OBO.OO..", "OBBO.....", "OBBO.....", ".OO......"};
+    private static final String[] SHIELD = {"OO.....OO", "OHOOOOOXO", "OHXXXXXXO", ".OHXXXXO.", ".OHXXXSO.", ".OXXXXSO.", ".OOOOOOO."};
+    private static final String[] BUBBLE = {".OOOOO.", "OHHXXXO", "OHXXXXO", "OXXXXSO", "OXXXSSO", ".OOOOO."};
+    private static final float[][] HEART_C = {{0.16f, 0.02f, 0.03f}, {0.86f, 0.1f, 0.12f}, {1f, 0.72f, 0.72f}, {0.55f, 0.04f, 0.07f}, {1, 1, 1}};
+    private static final float[][] FOOD_C = {{0.17f, 0.08f, 0.03f}, {0.74f, 0.43f, 0.18f}, {0.95f, 0.7f, 0.42f}, {0.48f, 0.25f, 0.09f}, {0.94f, 0.9f, 0.8f}};
+    private static final float[][] SHIELD_C = {{0.1f, 0.12f, 0.16f}, {0.72f, 0.77f, 0.86f}, {0.97f, 0.98f, 1f}, {0.45f, 0.5f, 0.6f}, {1, 1, 1}};
+    private static final float[][] BUBBLE_C = {{0.1f, 0.25f, 0.5f}, {0.45f, 0.7f, 1f}, {0.92f, 0.97f, 1f}, {0.28f, 0.48f, 0.85f}, {1, 1, 1}};
+    private static final float ICON_PX = 2.5f, ICON_STEP = 24f;
 
-    private static void icon(String[] pat, float x, float y, float px, int full, float r, float g, float b) { // full: 0 порожня, 1 половина, 2 повна
+    /** full: 0 порожня (лише контур і темне нутро), 1 половина (ліва), 2 повна. outline - колір контуру замість звичайного (спалах болю) або null. */
+    private static void icon(String[] pat, float x, float y, float px, int full, float[][] c, float[] outline) {
         for (int row = 0; row < pat.length; row++) for (int col = 0; col < pat[row].length(); col++) {
-            if (pat[row].charAt(col) != 'X') continue;
-            boolean lit = full == 2 || (full == 1 && col < pat[row].length() / 2 + 1);
-            if (lit) Gui.rect(x + col * px, y + row * px, px, px, r, g, b, 1f); else Gui.rect(x + col * px, y + row * px, px, px, r * 0.22f, g * 0.22f, b * 0.22f, 0.9f);
+            char ch = pat[row].charAt(col);
+            if (ch == '.') continue;
+            float[] k = switch (ch) { case 'O' -> outline != null ? outline : c[0]; case 'H' -> c[2]; case 'S' -> c[3]; case 'B' -> c[4]; default -> c[1]; };
+            boolean lit = ch == 'O' || full == 2 || (full == 1 && col <= pat[row].length() / 2);
+            if (lit) Gui.rect(x + col * px, y + row * px, px, px, k[0], k[1], k[2], 1f);
+            else Gui.rect(x + col * px, y + row * px, px, px, c[1][0] * 0.18f + 0.04f, c[1][1] * 0.18f + 0.04f, c[1][2] * 0.18f + 0.04f, 0.92f);
         }
+    }
+
+    /** Темна підкладка під рядом іконок (як під хотбаром). */
+    private static void plate(float x, float y, float w, float h) {
+        Gui.rect(x, y, w, h, 0, 0, 0, 0.45f);
+        Gui.rect(x, y, w, 1, 1, 1, 1, 0.08f); // ледь світліший верхній край
     }
 
     private void vitalsHud() {
         if (vt.dead()) return;
-        float size = 54, gap = 6, total = 9 * (size + gap) - gap, x0 = (Gui.W - total) / 2f, y = Gui.H - size - 14 - 62, px = 3f, step = 24;
+        float size = 54, gap = 6, total = 9 * (size + gap) - gap, x0 = (Gui.W - total) / 2f, px = ICON_PX, step = ICON_STEP;
+        float rowW = 9 * step + 9 * px, pad = 6, ph = 8 * px + 2 * pad, py = Gui.H - size - 14 - 8 - 8 - ph; // підкладки на 8 px вище плити хотбара
+        long now = System.currentTimeMillis();
         int hp = (int) Math.ceil(vt.health()), food = (int) Math.ceil(vt.hunger());
-        boolean low = vt.health() <= 6;
-        float wob = low ? (float) Math.sin(System.currentTimeMillis() / 90.0) * 1.5f : 0;
-        for (int i = 0; i < 10; i++) icon(HEART, x0 + i * step, y + (low && i % 2 == 0 ? wob : 0), px, hp >= 2 * i + 2 ? 2 : (hp == 2 * i + 1 ? 1 : 0), 0.9f, 0.12f, 0.15f);
-        for (int i = 0; i < 10; i++) icon(FOOD, x0 + total - (i + 1) * step + 2, y, px, food >= 2 * i + 2 ? 2 : (food == 2 * i + 1 ? 1 : 0), 0.78f, 0.5f, 0.2f);
-        int apts = inv.armorPoints(world.itemTypes);
-        if (apts > 0) { int sh = (apts + 1) / 2; for (int i = 0; i < 10; i++) icon(SHIELD, x0 + i * step, y - 24, px, sh >= i + 1 ? (apts % 2 == 1 && sh == i + 1 ? 1 : 2) : 0, 0.7f, 0.8f, 0.95f); }
-        if (vt.air() < Vitals.MAX_AIR) {
-            int bubbles = (int) Math.ceil(Math.max(0, vt.air()) / Vitals.MAX_AIR * 10);
-            for (int i = 0; i < bubbles; i++) icon(BUBBLE, x0 + total - (i + 1) * step + 2, y - 26, px, 2, 0.45f, 0.7f, 1f);
+        boolean low = vt.health() <= 6, hungry = vt.hunger() <= 6;
+        float[] flash = hurtFlash > 0.4 && (now / 80) % 2 == 0 ? new float[]{1, 1, 1} : null; // щойно вдарили - контур сердець блимає
+        plate(x0 - 8, py, rowW + 2 * pad, ph);
+        for (int i = 0; i < 10; i++) {
+            float wob = low ? (float) Math.sin(now / 90.0 + i * 1.7) * 1.5f : 0; // мало здоров'я - серця тремтять
+            icon(HEART, x0 - 8 + pad + i * step, py + pad + wob, px, hp >= 2 * i + 2 ? 2 : (hp == 2 * i + 1 ? 1 : 0), HEART_C, flash);
         }
+        float fx = x0 + total + 8 - rowW - 2 * pad;
+        plate(fx, py, rowW + 2 * pad, ph);
+        for (int i = 0; i < 10; i++) {
+            float shake = hungry && (now / 120 + i * 7) % 11 == 0 ? 1.5f : 0; // голод: шматки зрідка смикаються
+            icon(FOOD, fx + pad + (9 - i) * step, py + pad - 1 + shake, px, food >= 2 * i + 2 ? 2 : (food == 2 * i + 1 ? 1 : 0), FOOD_C, null); // справа наліво, як у Minecraft
+        }
+        int apts = inv.armorPoints(world.itemTypes);
+        if (apts > 0) {
+            float ay = py - ph - 4;
+            plate(x0 - 8, ay, rowW + 2 * pad, ph);
+            int sh = (apts + 1) / 2;
+            for (int i = 0; i < 10; i++) icon(SHIELD, x0 - 8 + pad + i * step, ay + pad + px / 2, px, sh >= i + 1 ? (apts % 2 == 1 && sh == i + 1 ? 1 : 2) : 0, SHIELD_C, null);
+        }
+        if (vt.air() < Vitals.MAX_AIR) {
+            float ay = py - ph - 4;
+            int bubbles = (int) Math.ceil(Math.max(0, vt.air()) / Vitals.MAX_AIR * 10);
+            plate(fx, ay, rowW + 2 * pad, ph);
+            for (int i = 0; i < bubbles; i++) icon(BUBBLE, fx + pad + (9 - i) * step + px, ay + pad + px, px, 2, BUBBLE_C, null);
+        }
+    }
+
+    /** Верх найвищої підкладки над хотбаром (броня/повітря або здоров'я) - щоб назва предмета не налазила. */
+    private float vitalsTop() {
+        float ph = 8 * ICON_PX + 12, py = Gui.H - 54 - 14 - 16 - ph;
+        return inv.armorPoints(world.itemTypes) > 0 || vt.air() < Vitals.MAX_AIR ? py - ph - 4 : py;
     }
 
     private void deathScreen(Gui g) {
@@ -719,12 +761,25 @@ final class PlayScreen {
         grab(true);
     }
 
+    private int lastSel = -1;
+    private String lastSelItem;
+    private long selShownAt;
+
     private void hotbar(Gui g) {
         float size = 54, gap = 6, total = 9 * (size + gap) - gap, x0 = (Gui.W - total) / 2f, y = Gui.H - size - 14;
         Gui.rect(x0 - 8, y - 8, total + 16, size + 16, 0, 0, 0, 0.45f);
         for (int i = 0; i < 9; i++) { float x = x0 + i * (size + gap); invScreen.slotBox(x, y, size, i == inv.selected(), false); invScreen.drawStack(inv.get(i), x, y, size); }
         Inventory.Stack st = inv.selectedStack();
-        if (st != null && !invOpen) Gui.textCentered(InventoryScreen.titleOf(world, st.item), Gui.W / 2f, y - 26, 2.2f, 1, 1, 1);
+        String name = st == null ? null : st.item;
+        if (inv.selected() != lastSel || !java.util.Objects.equals(name, lastSelItem)) { lastSel = inv.selected(); lastSelItem = name; selShownAt = System.currentTimeMillis(); }
+        long age = System.currentTimeMillis() - selShownAt;
+        if (st != null && !invOpen && age < 2500) { // назва предмета - коротко після вибору, потім згасає (не висить постійно)
+            float a = Math.min(1f, (2500 - age) / 500f), ty = (vt.dead() ? y - 8 : vitalsTop()) - 30;
+            String t = InventoryScreen.titleOf(world, st.item);
+            float w = Gui.textWidth(t, 2.2f) + 16;
+            Gui.rect((Gui.W - w) / 2f, ty - 4, w, 26, 0, 0, 0, 0.4f * a);
+            Gui.textCentered(t, Gui.W / 2f, ty + 2, 2.2f, a, a, a);
+        }
     }
 
     private String lightLine() {

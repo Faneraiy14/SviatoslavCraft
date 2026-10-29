@@ -131,6 +131,7 @@ final class PlayScreen {
         if ("inventory".equals(v.opts.open)) invOpen = true;
         if ("pause".equals(v.opts.open)) paused = true;
         if ("journal".equals(v.opts.open)) { journal = new JournalScreen(world); invOpen = true; }
+        if ("creative".equals(v.opts.open)) { activeScreen = creativeScreen(); invOpen = true; }
         if ("credits".equals(v.opts.open)) { world.info.goals.add(Progress.RITUAL_END); credits = new CreditsScreen(world); credits.skip(40); invOpen = true; } // лише для знімків (тестова тека saves)
         if ("skin".equals(v.opts.open)) { paused = true; skinScreen = new SkinScreen(v); }
         if ("front".equals(v.opts.open)) cam.mode = Camera.Mode.THIRD_FRONT; // знімки моделі гравця
@@ -269,7 +270,7 @@ final class PlayScreen {
         if (in.pressed(GLFW_KEY_F1)) hud = !hud;
         if (in.pressed(GLFW_KEY_F5)) cam.cycle();
         if (!chatOpen && !vt.dead() && !searching) {
-            if (in.pressed(GLFW_KEY_E)) { if (invOpen) closeInventory(); else { activeScreen = invScreen; invOpen = true; grab(false); } }
+            if (in.pressed(GLFW_KEY_E)) { if (invOpen) closeInventory(); else { activeScreen = world.creative() ? creativeScreen() : invScreen; invOpen = true; grab(false); } }
             if (in.pressed(GLFW_KEY_J) && !invOpen) { journal = new JournalScreen(world); invOpen = true; grab(false); }
             if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); }
         }
@@ -484,6 +485,13 @@ final class PlayScreen {
             sounds.block(world.blocks.get(Math.max(0, world.blockId(hit.px(), hit.py(), hit.pz()))), hit.px(), hit.py(), hit.pz(), "place");
             if (!world.creative()) inv.takeSelected();
         }
+    }
+
+    private InventoryScreen creativeScr;
+    /** Творчий інвентар (усе по вкладках); створюється при першому відкритті. */
+    private InventoryScreen creativeScreen() {
+        if (creativeScr == null) creativeScr = InventoryScreen.creative(new CreativeMenu(world.itemTypes, world.blocks, inv), inv, world, icons, st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
+        return creativeScr;
     }
 
     private boolean netherWorld() { return world.info.type == WorldInfo.Type.NETHER; }

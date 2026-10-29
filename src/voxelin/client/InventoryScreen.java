@@ -54,6 +54,11 @@ final class InventoryScreen {
         return new InventoryScreen(title, menu, new ChestTop(menu), inv, world, icons, dropper);
     }
 
+    /** Творчий інвентар: вкладки з усіма предметами гри. */
+    static InventoryScreen creative(CreativeMenu menu, Inventory inv, World world, IconAtlas icons, Consumer<Inventory.Stack> dropper) {
+        return new InventoryScreen("ТВОРЧИЙ", menu, new CreativeTop(menu), inv, world, icons, dropper);
+    }
+
     /** Вікно печі. */
     static InventoryScreen furnace(FurnaceMenu menu, Inventory inv, World world, IconAtlas icons, Consumer<Inventory.Stack> dropper) {
         return new InventoryScreen("ПІЧ", menu, new FurnaceTop(menu), inv, world, icons, dropper);
@@ -329,6 +334,54 @@ final class InventoryScreen {
             Gui.rect(ax, ay, aw, 16, 0.2f, 0.2f, 0.22f, 1f);
             float pf = f.cookTotal <= 0 ? 0 : Math.min(1f, f.progress / (float) f.cookTotal);
             if (pf > 0) Gui.rect(ax, ay, aw * pf, 16, 0.95f, 0.95f, 0.95f, 1f);
+            return hovered;
+        }
+    }
+
+    /** Творчий: рядок вкладок і палітра 5x9 (колесо миші гортає; клік з предметом у курсорі - викинути його). */
+    private static final class CreativeTop implements Top {
+        private final CreativeMenu m;
+        CreativeTop(CreativeMenu m) { this.m = m; }
+        public float height() { return 70 + CreativeMenu.ROWS * (SIZE + GAP) - GAP; }
+        public void onClose() {}
+        public int draw(InventoryScreen s, Gui g, float x0, float top) {
+            int hovered = -1;
+            CreativeMenu.Tab hoverTab = null;
+            CreativeMenu.Tab[] tabs = CreativeMenu.Tab.values();
+            float total = 9 * (SIZE + GAP) - GAP, tw = (total + 6) / tabs.length - 6;
+            for (int t = 0; t < tabs.length; t++) {
+                float tx = x0 + t * (tw + 6), ty = top - 8;
+                boolean on = m.tab() == tabs[t], hov = g.over(tx, ty, tw, 40);
+                Gui.rect(tx, ty, tw, 40, on ? 0.3f : hov ? 0.22f : 0.08f, on ? 0.26f : hov ? 0.23f : 0.08f, on ? 0.14f : hov ? 0.3f : 0.12f, 1f);
+                Gui.frame(tx, ty, tw, 40, 2, on ? 1f : 0.3f, on ? 0.82f : 0.32f, on ? 0.3f : 0.44f);
+                if (s.world.itemTypes.get(tabs[t].icon) != null) s.icons.draw(tabs[t].icon, tx + tw / 2f - 16, ty + 4, 32); // картинка замість слова
+                else Gui.textCentered(tabs[t].shortName, tx + tw / 2f, ty + 13, 1.4f, 1f, 0.9f, 0.6f);
+                if (hov) hoverTab = tabs[t];
+                if (hov && g.click) { g.click = false; m.tab(tabs[t]); }
+            }
+            float gy = top + 66;
+            label(m.tab().title.toUpperCase() + "   (" + m.items(m.tab()).size() + ")", x0, gy - 20);
+            boolean overGrid = g.over(x0, gy, total, CreativeMenu.ROWS * (SIZE + GAP));
+            if (overGrid && s.input != null) { double sc = s.input.consumeScroll(); if (sc != 0) m.scrollBy(sc > 0 ? -1 : 1); }
+            for (int k = 0; k < CreativeMenu.ROWS * CreativeMenu.COLS; k++) {
+                float x = x0 + (k % 9) * (SIZE + GAP), y = gy + (k / 9) * (SIZE + GAP);
+                boolean hov = g.over(x, y, SIZE, SIZE);
+                if (hov) hovered = CreativeMenu.PALETTE + k;
+                s.slotBox(x, y, SIZE, false, hov);
+                s.drawStack(m.get(CreativeMenu.PALETTE + k), x, y, SIZE);
+                s.overlay(m.get(CreativeMenu.PALETTE + k), x, y, SIZE, null);
+            }
+            if (hoverTab != null) { // назва вкладки під мишею
+                float w = Gui.textWidth(hoverTab.title, 1.8f) + 16, hx = Math.min((float) g.mx + 14, Gui.W - w - 4), hy = (float) g.my + 16;
+                Gui.rect(hx, hy, w, 28, 0.06f, 0.02f, 0.12f, 0.95f);
+                Gui.frame(hx, hy, w, 28, 2, 0.35f, 0.2f, 0.55f);
+                Gui.text(hoverTab.title, hx + 8, hy + 7, 1.8f, 1, 1, 1);
+            }
+            if (m.maxScroll() > 0) { // смуга прокрутки праворуч
+                float bx = x0 + total + 6, bh = CreativeMenu.ROWS * (SIZE + GAP) - GAP, kh = bh * CreativeMenu.ROWS / (float) (CreativeMenu.ROWS + m.maxScroll());
+                Gui.rect(bx, gy, 8, bh, 0.06f, 0.06f, 0.09f, 1f);
+                Gui.rect(bx, gy + (bh - kh) * m.scroll() / m.maxScroll(), 8, kh, 0.55f, 0.58f, 0.72f, 1f);
+            }
             return hovered;
         }
     }

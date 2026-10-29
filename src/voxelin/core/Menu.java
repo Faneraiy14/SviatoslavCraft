@@ -39,6 +39,7 @@ public class Menu {
     public int size() { return slots.size(); }
     public Inventory.Stack get(int i) { return i >= 0 && i < slots.size() ? slots.get(i).get() : null; }
     public Inventory.Stack cursor() { return cursor; }
+    protected void setCursor(Inventory.Stack s) { cursor = s; }
     public boolean takeOnly(int i) { return i >= 0 && i < slots.size() && slots.get(i).takeOnly(); }
 
     protected int maxStack(String item) { return items == null ? Inventory.MAX_STACK : items.maxStack(item); }

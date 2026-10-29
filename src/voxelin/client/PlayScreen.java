@@ -124,6 +124,9 @@ final class PlayScreen {
         grab(!v.opts.quiet()); // автоперевірки не захоплюють справжній курсор користувача
         if ("inventory".equals(v.opts.open)) invOpen = true;
         if ("pause".equals(v.opts.open)) paused = true;
+        if ("skin".equals(v.opts.open)) { paused = true; skinScreen = new SkinScreen(v); }
+        if ("front".equals(v.opts.open)) cam.mode = Camera.Mode.THIRD_FRONT; // знімки моделі гравця
+        if ("back".equals(v.opts.open)) cam.mode = Camera.Mode.THIRD_BACK;
         if ("workbench".equals(v.opts.open)) { activeScreen = benchScreen; invOpen = true; }
         if ("chest".equals(v.opts.open)) { // лише для знімків: скриня з жеребом здобичі
             ChestEntity demo = new ChestEntity(0, 0, 0);
@@ -220,9 +223,9 @@ final class PlayScreen {
         Input in = v.input;
         if (leaving) return false;
         if (invOpen && openedBlock && !openedKind.equals(world.blocks.get(Math.max(0, world.blockId(openedX, openedY, openedZ))).interact)) closeInventory(); // блок зламано/зник
-        if (pauseSettings) return true; // Esc обробляє екран налаштувань
         boolean searching = invOpen && journal == null && keeper == null && trade == null && activeScreen.typing(); // пошук в інвентарі забирає клавіатуру
-        if (in.pressed(GLFW_KEY_ESCAPE) && !vt.dead()) {
+        boolean subScreen = pauseSettings || skinScreen != null; // Esc і Enter обробляє сам екран налаштувань чи скіна
+        if (in.pressed(GLFW_KEY_ESCAPE) && !vt.dead() && !subScreen) {
             if (chatOpen) closeChat(); else if (searching) activeScreen.stopTyping(); else if (invOpen) { closeInventory(); } else if (paused) resume(); else pause();
         }
         if (in.pressed(GLFW_KEY_F3)) debug = !debug;
@@ -430,25 +433,39 @@ final class PlayScreen {
         drawCracks(rcx, rcz, s);
         drawItems(rcx, rcz, s);
         drawMobs(s);
-        if (cam.mode != Camera.Mode.FIRST) { // заглушка тіла: коробка розміром із хітбокс
-            float hw = (float) (PlayerEntity.WIDTH / 2 * s), hh = (float) (PlayerEntity.HEIGHT / 2 * s);
-            float px = (float) (player.pos.relX(cam.eye.cx) * s), cy = (float) (player.bodyCenterY() * s), pz = (float) (player.pos.relZ(cam.eye.cz) * s);
-            glDisable(GL_CULL_FACE);
-            glBegin(GL_QUADS);
-            float[][] shade = {{0.85f, 0.7f, 0.55f}, {0.7f, 0.58f, 0.45f}, {0.78f, 0.64f, 0.5f}};
-            for (int a = 0; a < 3; a++) for (int sgn = -1; sgn <= 1; sgn += 2) {
-                glColor3f(shade[a][0], shade[a][1], shade[a][2]);
-                for (int q = 0; q < 4; q++) {
-                    float u = (q == 0 || q == 3) ? -1 : 1, w = (q < 2) ? -1 : 1;
-                    float[] p = new float[3];
-                    p[a] = sgn; p[(a + 1) % 3] = u; p[(a + 2) % 3] = w;
-                    glVertex3f(px + p[0] * hw, cy + p[1] * hh, pz + p[2] * hw);
-                }
-            }
-            glEnd();
-            glEnable(GL_CULL_FACE);
-        }
+        if (cam.mode != Camera.Mode.FIRST && !vt.dead()) drawPlayer(s);
         glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix();
+    }
+
+    private double walkPhase;
+    private long lastBodyNs;
+
+    /** Тіло гравця від третьої особи: модель зі скіном, крок за пройденою відстанню, голова за кутом погляду, плащ від швидкості. */
+    private void drawPlayer(float s) {
+        long now = System.nanoTime();
+        double dt = lastBodyNs == 0 ? 0 : Math.min(0.1, (now - lastBodyNs) / 1e9);
+        lastBodyNs = now;
+        double hs = player.onGround() || player.inWater ? Math.hypot(player.pos.relX(player.prev.cx) - player.prev.x, player.pos.relZ(player.prev.cz) - player.prev.z) / Voxelin.TICK : 0;
+        walkPhase += hs * dt * 1.6;
+        Chunk c = world.chunk(player.pos.cx, player.pos.cz);
+        int l = c == null ? 0xF0 : c.lightAt((int) Math.floorMod(player.pos.blockX(), 16L), Math.min(255, Math.max(0, player.pos.blockY())), (int) Math.floorMod(player.pos.blockZ(), 16L));
+        voxelin.client.look.PlayerModel.Pose pose = new voxelin.client.look.PlayerModel.Pose();
+        pose.light = (float) Math.max(0.25, Math.max(Math.pow(0.8, 15 - (l >> 4)) * rend.skyBrightness, Math.pow(0.8, 15 - (l & 15))));
+        pose.headPitch = player.pitch;
+        pose.limbPhase = (float) walkPhase;
+        pose.limbAmount = (float) Math.min(1, hs / 5);
+        pose.capeLift = (float) Math.min(60, player.speed() * 6);
+        pose.wings = player.wings; pose.gliding = player.gliding;
+        v.playerModel.apply(v.look);
+        float feet = (float) ((cam.pos.y - player.eyeOffset - PlayerEntity.EYE) * s), k = (float) (PlayerEntity.HEIGHT / 32 * s);
+        glPushMatrix();
+        glTranslatef((float) (cam.pos.relX(cam.eye.cx) * s), feet, (float) (cam.pos.relZ(cam.eye.cz) * s));
+        glScalef(k, k, k);
+        glRotatef(-player.yaw, 0, 1, 0);
+        if (player.gliding) { glTranslatef(0, 16, 0); glRotatef(-(90 + player.pitch * 0.5f), 1, 0, 0); glTranslatef(0, -16, 0); } // у польоті - горизонтально
+        else if (player.eyeOffset < -0.05) { glTranslatef(0, 12, 0); glRotatef(-25, 1, 0, 0); glTranslatef(0, -12, 0); } // присід
+        v.playerModel.draw(pose, null);
+        glPopMatrix();
     }
 
     /** Тріщини на цілі: затемнення + ламані лінії на гранях, їх більшає з прогресом (детерміновано за позицією блока). */
@@ -755,13 +772,15 @@ final class PlayScreen {
     // ------------------------------------------------------------------ пауза (Esc)
 
     private boolean paused, pauseSettings;
+    private SkinScreen skinScreen;
 
     private void pause() { paused = true; grab(false); v.input.clearPressed(); }
 
-    private void resume() { paused = false; pauseSettings = false; grab(true); }
+    private void resume() { paused = false; pauseSettings = false; skinScreen = null; grab(true); }
 
     /** Меню паузи поверх гри; налаштування й звук - ті самі екрани, що в головному меню. */
     private void pauseMenu(Gui g) {
+        if (skinScreen != null) { if (!skinScreen.draw(g)) skinScreen = null; return; }
         if (pauseSettings) {
             if (!v.menus.overlay(g)) { pauseSettings = false; applyLiveSettings(); }
             return;
@@ -773,6 +792,7 @@ final class PlayScreen {
         if (g.button("ПРОДОВЖИТИ", x, y, w, h)) { resume(); return; }
         if (g.button("НАЛАШТУВАННЯ", x, y += 66, w, h)) { pauseSettings = true; v.menus.show(Menus.Screen.SETTINGS); return; }
         if (g.button("ЗВУК", x, y += 66, w, h)) { pauseSettings = true; v.menus.show(Menus.Screen.SOUND); return; }
+        if (g.button("СКІН І КОСМЕТИКА", x, y += 66, w, h)) { skinScreen = new SkinScreen(v); v.input.clearPressed(); return; }
         if (g.button("ЗБЕРЕГТИ Й ВИЙТИ В МЕНЮ", x, y += 66 + 20, w, h)) leaving = true;
     }
 

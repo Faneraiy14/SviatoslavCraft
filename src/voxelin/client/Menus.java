@@ -11,7 +11,7 @@ import static org.lwjgl.glfw.GLFW.*;
 
 /** Меню: головне, список світів, створення й перейменування світу. Малює й обробляє ввід у кадрі (Gui - негайний режим). */
 final class Menus {
-    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS, SOUND }
+    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS, SOUND, SKIN }
 
     private final Voxelin v;
     Screen screen = Screen.MAIN;
@@ -20,6 +20,7 @@ final class Menus {
     private String status = "";
     private boolean flat;
     private String renameFrom;
+    private SkinScreen skin;
 
     Menus(Voxelin v) { this.v = v; }
 
@@ -29,6 +30,7 @@ final class Menus {
         v.input.clearPressed();
         v.input.endText();
         if (s == Screen.WORLDS) refresh();
+        if (s == Screen.SKIN) skin = new SkinScreen(v);
         if (s == Screen.CREATE) { flat = false; v.input.beginText(autoName(), false); }
         if (s == Screen.RENAME) { renameFrom = selectedName(); v.input.beginText(renameFrom == null ? "" : renameFrom, false); }
     }
@@ -69,6 +71,7 @@ final class Menus {
             case RENAME -> rename(g);
             case SETTINGS -> settings(g);
             case SOUND -> sound(g);
+            case SKIN -> { if (!skin.draw(g)) show(Screen.MAIN); }
         }
         Gui.text("Voxelin " + Voxelin.VERSION, 12, Gui.H - 22, 1.8f, 0.55f, 0.6f, 0.7f);
     }
@@ -120,8 +123,9 @@ final class Menus {
         }
         if (g.button("ОДИНОЧНА ГРА", x, y, w, 64) || (v.input.pressed(GLFW_KEY_ENTER) && last == null)) show(Screen.WORLDS);
         if (v.input.pressed(GLFW_KEY_ENTER) && last != null) { v.beginLoading(last); return; }
-        if (g.button("НАЛАШТУВАННЯ", x, y + 80, 195, 56)) { show(Screen.SETTINGS); return; }
-        if (g.button("ВИХІД", x + 205, y + 80, 195, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) v.quit();
+        if (g.button("НАЛАШТУВАННЯ", x, y + 80, 150, 56)) { show(Screen.SETTINGS); return; }
+        if (g.button("СКІН", x + 160, y + 80, 115, 56)) { show(Screen.SKIN); return; }
+        if (g.button("ВИХІД", x + 285, y + 80, 115, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) v.quit();
         Gui.text("Enter - " + (last != null ? "продовжити" : "грати") + "   Esc - вихід", Gui.W - 330, Gui.H - 22, 1.6f, 0.55f, 0.6f, 0.75f);
     }
 

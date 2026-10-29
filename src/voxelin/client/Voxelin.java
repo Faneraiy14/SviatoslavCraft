@@ -33,6 +33,7 @@ public final class Voxelin {
         float sky = -1f; // --sky 0..1: примусова яскравість неба (інакше - за часом доби)
         String dimension; // --dimension end: стартувати автосвіт у вимірі (для знімків)
         boolean noSound; // --no-sound
+        File skin; // --skin f.png: скін від лаунчера (формат Minecraft 64x64)
         File recordAudio; // --record-audio f.wav: мікшер пише у файл замість звукової карти (нічого не звучить)
         String open; // --open inventory: відкрити вікно на старті (для знімків)
         float showProgress = -1f; // --show-progress 0..1: показати тріщини цілі (для знімків)
@@ -63,6 +64,7 @@ public final class Voxelin {
                         case "--msaa" -> o.msaa = Math.max(0, Math.min(8, Integer.parseInt(a[++i])));
                         case "--no-vsync" -> o.vsync = false;
                         case "--no-sound" -> o.noSound = true;
+                        case "--skin" -> o.skin = new File(a[++i]);
                         case "--record-audio" -> o.recordAudio = new File(a[++i]);
                         case "--open" -> o.open = a[++i];
                         case "--dimension" -> o.dimension = a[++i];
@@ -116,7 +118,10 @@ public final class Voxelin {
     long tickNs, swapNs;
 
     Settings settings;
-    File settingsFile;
+    File settingsFile, lookFile;
+    /** Вигляд гравця (player.properties - пишуть гра й лаунчер) і модель із текстурами скіна. */
+    voxelin.client.look.PlayerLook look;
+    voxelin.client.look.PlayerModel playerModel;
     /** Рушій звуку (завжди є; без пристрою чи в тестових запусках - мовчить). */
     voxelin.client.audio.AudioEngine audio;
     private String audioState = "звук не запущено";
@@ -128,6 +133,9 @@ public final class Voxelin {
         File base = opts.saves.getAbsoluteFile().getParentFile();
         settingsFile = new File(base == null ? new File(".") : base, "settings.properties");
         settings = Settings.load(settingsFile);
+        lookFile = new File(settingsFile.getParentFile(), "player.properties");
+        look = voxelin.client.look.PlayerLook.load(lookFile);
+        if (opts.skin != null && !lookFile.isFile()) look.skin = "launcher"; // перший запуск з лаунчера - його скін
         applySettings();
         this.game = new Game(opts.saves, opts.mods);
         System.out.println("[Voxelin] " + VERSION + ", блоків: " + game.blocks.size() + ", модів: " + game.mods.mods().size() + ", saves=" + opts.saves.getAbsolutePath());
@@ -174,6 +182,10 @@ public final class Voxelin {
         gui = new Gui(window, input);
         textures = new voxelin.client.render.TextureArray(game.textures, textureSizeNow(), new File("textures"));
         menus = new Menus(this);
+        File gameDir = settingsFile.getAbsoluteFile().getParentFile();
+        playerModel = new voxelin.client.look.PlayerModel(new File(gameDir, "skins"), new File(gameDir, "capes"));
+        playerModel.launcherSkin = opts.skin;
+        playerModel.apply(look);
         startAudio();
         gui.onClick = () -> audio.play("voxelin:ui.click", null, 1f, 1f, voxelin.client.audio.AudioEngine.Cat.UI);
         if (opts.autoWorld != null) autoWorld();
@@ -239,7 +251,7 @@ public final class Voxelin {
         switch (state) {
             case MENU -> {
                 if (opts.menuScreen != null && frames == 2) { // dev: --menu worlds|create|rename
-                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); case "sound" -> menus.show(Menus.Screen.SOUND); default -> { } }
+                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); case "sound" -> menus.show(Menus.Screen.SOUND); case "skin" -> menus.show(Menus.Screen.SKIN); default -> { } }
                 }
                 glViewport(0, 0, window.fbWidth(), window.fbHeight());
                 glClearColor(0.08f, 0.11f, 0.22f, 1f);

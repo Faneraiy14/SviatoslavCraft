@@ -17,6 +17,10 @@ import java.util.Random;
  * блок наросту поглинає сусідній суцільний блок; у темряві швидше, на світлі й біля води повільніше. Зупинити: вилікувати (Зілля Шву - наріст
  * стає землею, ядро знову яйцем), спалити (Вогонь Шву - кратер назавжди, яйце втрачено), приручити (8 уламків лімініту - розростання стоїть,
  * наріст лишається). Наріст пам'ятається у infection.dat, тож очищення доходить і до чанків, що завантажаться пізніше.
+ * Мутації (blight): навколо нового наросту поверхня змінюється за біомом - ліс скам'яніває (колоди -> скам'яніла колода, листя обсипається),
+ * пустеля спікається (пісок -> спечений пісок, пісковик -> скло дюн), болото «дихає» (мул і трава -> дихальний мул, біля якого вода вже
+ * не стримує ріст), решта трави блідне, як у Тихих пустищах. Мутації пам'ятаються в blight.dat з оригінальним блоком: після лікування
+ * світ заживає поступово (~2 доби), після спалення й приручення зміни лишаються назавжди.
  */
 public final class Infection {
     public enum Phase { QUIET, ACTIVE, CRISIS }
@@ -32,11 +36,18 @@ public final class Infection {
 
     private final World w;
     final List<long[]> growth = new ArrayList<>();
+    /** Мутовані блоки: {x, y, z, id оригіналу, id мутації}. */
+    final List<long[]> blight = new ArrayList<>();
+    public static final int BLIGHT_CAP = 60_000, BLIGHT_REACH = 4, HEAL_DAYS = 2;
+    public static final String PETRIFIED = "voxelin:petrified_log", SEAM_MUD = "voxelin:seam_mud";
+    private double healOwed, healRate;
     private final Random rng;
 
     Infection(World w) { this.w = w; this.rng = new Random(w.info.seed ^ 0x5EA3L); load(); }
 
     public int growthCount() { return growth.size(); }
+
+    public int blightCount() { return blight.size(); }
 
     /** Номер дня зараження від 0. */
     public long day() { return Math.max(0, w.info.time - w.info.infStart) / w.dayTicks(); }
@@ -84,6 +95,7 @@ public final class Infection {
      */
     void tick(long tick, PlayerTarget target) {
         WorldInfo i = w.info;
+        if (i.infState == WorldInfo.InfState.CURED && !blight.isEmpty()) heal();
         if (i.infState == WorldInfo.InfState.CURED || i.infState == WorldInfo.InfState.BURNED) { if (!growth.isEmpty() && tick % 20 == 0) purge(); return; }
         if (i.infState != WorldInfo.InfState.ACTIVE) return;
         i.infOwed = Math.min(OWED_CAP, i.infOwed + rate());
@@ -124,6 +136,7 @@ public final class Infection {
         if (rng.nextDouble() >= chance(x, y, z)) return Step.FAILED;
         if (!w.setBlock(SRC, x, y, z, gt)) return Step.FAILED;
         growth.add(new long[]{x, y, z});
+        if (rng.nextInt(2) == 0) blightNear(x, y, z);
         return Step.GREW;
     }
 
@@ -149,7 +162,7 @@ public final class Infection {
             if (id > 0 && w.blocks.get(id).liquid) water = true;
         }
         double c = light > 7 ? 0.35 : 1.0;
-        return water ? c * 0.25 : c;
+        return water && !breathing(x, y, z) ? c * 0.25 : c; // дихальний мул поруч - болото вже не стримує
     }
 
     /** ПКМ по ядру. Повертає повідомлення (стан або результат дії) або null, якщо це не ядро. */
@@ -203,11 +216,13 @@ public final class Infection {
             else if (r2 <= (CRATER + 1) * (CRATER + 1) && id > 0 && scar != null) w.setBlock(SRC, x, y, z, scar); // обпалена оболонка кратера
         }
         purge();
+        blight.clear(); // шрами назавжди: мутації лишаються, пам'ятати їх більше нема потреби
         w.unlockRecord("voxelin:infection_end");
     }
 
     void tame() {
         w.info.infState = WorldInfo.InfState.TAMED;
+        blight.clear(); // приручена зона лишається зміненою - новий «біом»
         w.unlockRecord("voxelin:infection_end");
     }
 
@@ -225,11 +240,86 @@ public final class Infection {
         }
     }
 
+    // ------------------------------------------------------------------ мутації (blight)
+
+    private boolean breathing(long x, int y, long z) {
+        BlockType m = w.blocks.byName(SEAM_MUD);
+        if (m == null) return false;
+        for (int[] d : DIRS) if (w.blockId(x + d[0], y + d[1], z + d[2]) == m.id) return true;
+        return false;
+    }
+
+    /** Мутація блока за біомом, або null - не змінюється. */
+    public String mutation(String block, String biome) {
+        boolean swamp = "Болото".equals(biome); // World.biomeAt дає назву біома (TerrainGenerator.Biome.title)
+        return switch (block) {
+            case "voxelin:oak_log", "voxelin:birch_log", "voxelin:spruce_log", "voxelin:pale_log" -> PETRIFIED;
+            case "voxelin:oak_leaves", "voxelin:birch_leaves", "voxelin:spruce_leaves" -> BlockRegistry.AIR;
+            case "voxelin:sand" -> "voxelin:sintered_sand";
+            case "voxelin:sandstone" -> "voxelin:dune_glass";
+            case "voxelin:mud" -> SEAM_MUD;
+            case "voxelin:grass" -> swamp ? SEAM_MUD : "voxelin:pale_grass";
+            default -> null;
+        };
+    }
+
+    /** Мутувати одну колонку поряд із (x, y, z): усі придатні блоки від y-6 до y+12 (крона дерева, поверхня). */
+    void blightNear(long x, int y, long z) {
+        if (blight.size() >= BLIGHT_CAP) return;
+        long cx = x + rng.nextInt(2 * BLIGHT_REACH + 1) - BLIGHT_REACH, cz = z + rng.nextInt(2 * BLIGHT_REACH + 1) - BLIGHT_REACH;
+        blightColumn(cx, y, cz);
+    }
+
+    /** Мутувати колонку (cx, cz) від y-6 до y+12 у зоні ядра. */
+    public void blightColumn(long cx, int y, long cz) {
+        if (!inZone(cx, cz)) return;
+        if (mutateColumn(cx, y, cz, w.biomeAt(cx, cz), false)) // стовбур скам'янів - обсипається й крона навколо
+            for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) if ((dx != 0 || dz != 0) && inZone(cx + dx, cz + dz)) mutateColumn(cx + dx, y, cz + dz, "", true);
+    }
+
+    /** Повертає true, якщо скам'яніла хоч одна колода. leavesOnly - лише обсипати листя. */
+    private boolean mutateColumn(long cx, int y, long cz, String biome, boolean leavesOnly) {
+        boolean log = false;
+        BlockType petrified = w.blocks.byName(PETRIFIED);
+        for (int yy = Math.min(Chunk.HEIGHT - 1, y + 12); yy >= Math.max(1, y - 6); yy--) {
+            if (blight.size() >= BLIGHT_CAP) return log;
+            int id = w.blockId(cx, yy, cz);
+            if (id <= 0) continue;
+            String to = mutation(w.blocks.get(id).name, biome);
+            if (leavesOnly && !BlockRegistry.AIR.equals(to)) continue;
+            BlockType nb = to == null ? null : w.blocks.byName(to);
+            if (nb == null || !w.setBlock(SRC, cx, yy, cz, nb)) continue;
+            blight.add(new long[]{cx, yy, cz, id, nb.id});
+            log |= nb == petrified;
+        }
+        return log;
+    }
+
+    /** Після лікування: повертати оригінальні блоки поступово, щоб усе зажило за HEAL_DAYS діб. Блок, змінений гравцем, не чіпаємо. */
+    private void heal() {
+        if (healRate <= 0) healRate = blight.size() / (HEAL_DAYS * (double) w.dayTicks()); // ~HEAL_DAYS діб на все, незалежно від розміру
+        healOwed += healRate;
+        for (int k = blight.size() - 1; k >= 0 && healOwed >= 1; k--) {
+            long[] b = blight.get(k);
+            int id = w.blockId(b[0], (int) b[1], b[2]);
+            if (id < 0) continue; // незавантажено - пізніше
+            if (id == b[4]) w.setBlock(SRC, b[0], (int) b[1], b[2], w.blocks.get((int) b[3]));
+            blight.remove(k);
+            healOwed -= 1;
+        }
+        if (healOwed >= 1) healOwed = 0; // усе доступне вже зажило - не накопичуємо
+        if (blight.isEmpty()) healRate = 0;
+    }
+
+    /** Загоїти все одразу (тести, команди). */
+    public void healAll() { healRate = Double.MAX_VALUE / 4; heal(); healRate = 0; }
+
     // ------------------------------------------------------------------ збереження
 
     private File file() { return new File(w.dir, "infection.dat"); }
 
     void save() {
+        saveBlight();
         if (growth.isEmpty() && !file().isFile()) return;
         try {
             StringBuilder sb = new StringBuilder();
@@ -240,7 +330,39 @@ public final class Infection {
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати зараження: " + e); }
     }
 
+    /** blight.dat: «x y z оригінал мутація» назвами блоків (id реєстру між запусками можуть змінитись). */
+    private void saveBlight() {
+        File f = new File(w.dir, "blight.dat");
+        if (blight.isEmpty() && !f.isFile()) return;
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (long[] b : blight) sb.append(b[0]).append(' ').append(b[1]).append(' ').append(b[2]).append(' ')
+                    .append(w.blocks.get((int) b[3]).name).append(' ').append(w.blocks.get((int) b[4]).name).append('\n');
+            File tmp = new File(w.dir, "blight.dat.tmp");
+            Files.write(tmp.toPath(), sb.toString().getBytes(StandardCharsets.UTF_8));
+            Files2.replace(tmp, f);
+        } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати мутації: " + e); }
+    }
+
+    private void loadBlight() {
+        File f = new File(w.dir, "blight.dat");
+        if (!f.isFile()) return;
+        try {
+            for (String line : Files.readAllLines(f.toPath(), StandardCharsets.UTF_8)) {
+                String[] p = line.trim().split(" ");
+                if (p.length != 5 || blight.size() >= BLIGHT_CAP) continue;
+                BlockType from = w.blocks.byName(p[3]), to = w.blocks.byName(p[4]);
+                if (from == null || to == null) continue; // блок мода зник - забути
+                try {
+                    long x = Long.parseLong(p[0]), z = Long.parseLong(p[2]); int y = Integer.parseInt(p[1]);
+                    if (y >= 0 && y < Chunk.HEIGHT) blight.add(new long[]{x, y, z, from.id, to.id});
+                } catch (NumberFormatException e) { /* битий рядок */ }
+            }
+        } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось прочитати мутації: " + e); }
+    }
+
     private void load() {
+        loadBlight();
         File f = file();
         if (!f.isFile()) return;
         try {

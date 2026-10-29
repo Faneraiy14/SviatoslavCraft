@@ -54,7 +54,7 @@ public class VoxelinInfectionTest {
     public static void main(String[] a) throws Exception {
         File root = Files.createTempDirectory("vx-inf").toFile();
         g = new Game(new File(root, "saves"), null);
-        content(); start(); phases(); cataclysms(); spread(); tame(); cure(); burn(); persistence();
+        content(); start(); phases(); cataclysms(); spread(); tame(); cure(); burn(); persistence(); blight();
         System.out.println("VoxelinInfectionTest: " + n + " перевірок OK");
     }
 
@@ -263,5 +263,58 @@ public class VoxelinInfectionTest {
         World z = g.openWorld("r1");
         check(z.infection.growthCount() == 1, "биті рядки ігноруються");
         z.close();
+    }
+
+    static void blight() throws Exception {
+        World w = open("m1", WorldInfo.EggChoice.INFECTION);
+        int y = placeEgg(w);
+        // ріст наросту сам мутує поверхню (до того, як ставимо дерево: наріст міг би поглинути колоди)
+        for (int k = 0; k < 4000; k++) w.infection.spread();
+        check(w.infection.blightCount() > 0, "ріст тягне мутації: " + w.infection.blightCount());
+        // дерево, пісок, пісковик, мул і трава поруч із ядром
+        for (int k = 0; k < 4; k++) w.setBlock(P, 3, y + k, 0, b(w, "voxelin:oak_log"));
+        w.setBlock(P, 3, y + 4, 0, b(w, "voxelin:oak_leaves")); w.setBlock(P, 4, y + 3, 1, b(w, "voxelin:oak_leaves"));
+        w.setBlock(P, -3, y - 1, 0, b(w, "voxelin:sand")); w.setBlock(P, -3, y - 2, 0, b(w, "voxelin:sandstone"));
+        w.setBlock(P, 0, y - 1, 3, b(w, "voxelin:mud")); w.setBlock(P, 0, y - 1, -3, b(w, "voxelin:grass"));
+        w.setBlock(P, 2, y - 1, 2, b(w, "voxelin:stone"));
+        for (long[] c : new long[][]{{3, 0}, {-3, 0}, {0, 3}, {0, -3}, {2, 2}}) w.infection.blightColumn(c[0], y, c[1]);
+        for (int k = 0; k < 4; k++) check(at(w, 3, y + k, 0).equals(Infection.PETRIFIED), "колода скам'яніла " + k);
+        check(w.blockId(3, y + 4, 0) == 0 && w.blockId(4, y + 3, 1) == 0, "листя обсипалось, і крона навколо стовбура теж");
+        check(at(w, -3, y - 1, 0).equals("voxelin:sintered_sand") && at(w, -3, y - 2, 0).equals("voxelin:dune_glass"), "пустеля спеклась");
+        check(at(w, 0, y - 1, 3).equals(Infection.SEAM_MUD), "мул дихає");
+        check(at(w, 0, y - 1, -3).equals("voxelin:pale_grass"), "трава зблідла");
+        check(at(w, 2, y - 1, 2).equals("voxelin:stone"), "камінь не мутує");
+        check(w.infection.mutation("voxelin:grass", "Болото").equals(Infection.SEAM_MUD) && w.infection.mutation("voxelin:grass", "Ліс").equals("voxelin:pale_grass"), "трава в болоті стає мулом");
+        int n0 = w.infection.blightCount();
+        check(n0 >= 9, "мутації записано: " + n0);
+        w.infection.blightColumn(Infection.RADIUS + 10, y, 0);
+        check(w.infection.blightCount() == n0, "поза зоною не мутує");
+        // гравець зламав одну скам'янілу колоду - вона не відновлюється в колоду
+        w.setBlock(P, 3, y + 3, 0, b(w, "voxelin:air"));
+        // збереження
+        int saved = w.infection.blightCount();
+        w.close();
+        World r = g.openWorld("m1"); load(r);
+        check(r.infection.blightCount() == saved, "мутації збережено: " + r.infection.blightCount() + " vs " + saved);
+        // лікування: заживає поступово, не одразу
+        r.infection.use(inv(r, Infection.CURE, 1), 0, y, 0, false);
+        check(r.info.infState == WorldInfo.InfState.CURED && r.infection.blightCount() == saved, "одразу після лікування мутації ще є");
+        long ticks = 0, day = r.dayTicks();
+        while (r.infection.blightCount() > 0 && ticks < day * 3) { r.tick(); ticks++; }
+        check(r.infection.blightCount() == 0, "зажило за ~2 доби: лишилось " + r.infection.blightCount());
+        check(ticks > day, "заживало поступово, тіків: " + ticks + " (доба " + day + ")");
+        check(at(r, 3, y, 0).equals("voxelin:oak_log") && at(r, 3, y + 4, 0).equals("voxelin:oak_leaves"), "дерево повернулось");
+        check(r.blockId(3, y + 3, 0) == 0, "зламане гравцем не відновлюється");
+        check(at(r, -3, y - 1, 0).equals("voxelin:sand") && at(r, 0, y - 1, 3).equals("voxelin:mud") && at(r, 0, y - 1, -3).equals("voxelin:grass"), "пісок, мул і трава повернулись");
+        r.close();
+        // спалене - мутації назавжди
+        World s = open("m2", WorldInfo.EggChoice.INFECTION);
+        int sy = placeEgg(s);
+        s.setBlock(P, 8, sy, 0, b(s, "voxelin:oak_log"));
+        s.infection.blightColumn(8, sy, 0);
+        s.infection.use(inv(s, Infection.FIRE, 1), 0, sy, 0, false);
+        for (int k = 0; k < 200; k++) s.tick();
+        check(at(s, 8, sy, 0).equals(Infection.PETRIFIED) && s.infection.blightCount() == 0, "спалене: скам'яніле лишається назавжди");
+        s.close();
     }
 }

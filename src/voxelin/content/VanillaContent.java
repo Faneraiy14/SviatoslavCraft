@@ -61,6 +61,7 @@ public final class VanillaContent implements VoxelinMod {
         tex("oak_log_top", TextureGen.oakLogTop()); tex("birch_log_top", TextureGen.birchLogTop()); tex("spruce_log_top", TextureGen.spruceLogTop()); tex("pale_log_top", TextureGen.paleLogTop());
         tex("cactus_top", TextureGen.cactusTop());
         tex("dragon_egg", ItemTextureGen.dragonEgg());
+        tex("petrified_log", TextureGen.petrifiedLog()); tex("petrified_log_top", TextureGen.petrifiedLogTop()); tex("seam_mud", TextureGen.seamMud());
         tex("seam_core", ItemTextureGen.seamCore()); tex("seam_growth", ItemTextureGen.seamGrowth()); tex("seam_scar", ItemTextureGen.seamScar());
         tex("threshold_stone", ItemTextureGen.thresholdStone()); tex("seam_thread", ItemTextureGen.seamThread()); tex("seam_rift", ItemTextureGen.rift());
         tex("threshold_bloom", ItemTextureGen.thresholdBloom()); tex("threshold_key", ItemTextureGen.thresholdKey());
@@ -123,6 +124,9 @@ public final class VanillaContent implements VoxelinMod {
         block("dragon_egg", new BlockSettings().texture("dragon_egg").color(0x24103A).light(6).title("Яйце дракона").hardness(3f));
         block("seam_core", new BlockSettings().texture("seam_core").color(0x3A1458).light(9).noItem().title("Ядро Шву").hardness(-1f));
         block("seam_growth", new BlockSettings().texture("seam_growth").color(0x4A3458).light(1).tool(ToolKind.SHOVEL).noDrops().title("Наріст Шву").hardness(1.2f));
+        // мутації від Зараження (Infection.blight): ліс скам'яніває, болото «дихає» (пустеля спікається в уже наявні спечений пісок і скло дюн)
+        block("petrified_log", new BlockSettings().textures("petrified_log_top", "petrified_log", "petrified_log_top").color(0x706C72).tool(ToolKind.PICKAXE).minTier(1).title("Скам'яніла колода").hardness(2.5f));
+        block("seam_mud", new BlockSettings().texture("seam_mud").color(0x3E2E40).light(1).tool(ToolKind.SHOVEL).drops("mud").title("Дихальний мул").hardness(0.6f));
         block("seam_scar", new BlockSettings().texture("seam_scar").color(0x2A2628).tool(ToolKind.PICKAXE).minTier(1).title("Шрам Шву").hardness(2.5f));
         block("threshold_stone", new BlockSettings().texture("threshold_stone").color(0x8A8894).light(2).tool(ToolKind.PICKAXE).minTier(1).title("Пороговий камінь").hardness(2.5f));
         block("seam_thread", new BlockSettings().texture("seam_thread").color(0x9A88C8).light(3).tool(ToolKind.AXE).title("Нитка Шву").hardness(1.5f));

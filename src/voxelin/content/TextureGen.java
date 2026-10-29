@@ -193,6 +193,20 @@ public final class TextureGen {
         return rnd(38, x, y / 2) < 0.1 ? shade(c, -34) : c;
     }); }
     public static int[] paleLogTop() { return logTop(150, 142, 128); }
+    /** Скам'яніла колода (мутація лісу від Зараження): сірий камінь із прожилками кори й фіолетовими жилками Шву. */
+    public static int[] petrifiedLog() { return make((x, y) -> {
+        int c = speck(rgb(112, 108, 114), 9, 41, x, 0);
+        c = shade(c, (int) ((rnd(42, x, y / 5) - 0.5) * 30));
+        return rnd(43, x, y / 3) < 0.05 ? rgb(120, 70, 170) : c;
+    }); }
+    public static int[] petrifiedLogTop() { return logTop(138, 132, 140); }
+    /** Дихальний мул (мутація болота): темний мул із фіолетовими «порами». */
+    public static int[] seamMud() { return make((x, y) -> {
+        int c = speck(rgb(62, 46, 64), 8, 44, x, y);
+        double d = rnd(45, x / 3, y / 3);
+        if (d < 0.14 && (x + y) % 3 == 0) c = rgb(150, 90, 190);
+        return c;
+    }); }
 
     private static int[] planks(int r, int g, int b) { return make((x, y) -> {
         int c = speck(rgb(r, g, b), 7, 40, x, y);

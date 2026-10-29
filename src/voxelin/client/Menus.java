@@ -51,6 +51,13 @@ final class Menus {
         for (int n = 1; ; n++) { String s = "Світ " + n; if (!new File(v.game.savesDir, s).exists()) return s; }
     }
 
+    /** Налаштування чи звук поверх гри (з меню паузи). false - гравець натиснув «Готово»/Esc, треба повернутись у паузу. */
+    boolean overlay(Gui g) {
+        Gui.rect(0, 0, Gui.W, Gui.H, 0.04f, 0.05f, 0.1f, 0.88f);
+        switch (screen) { case SETTINGS -> settings(g); case SOUND -> sound(g); default -> { } }
+        return screen == Screen.SETTINGS || screen == Screen.SOUND;
+    }
+
     void frame() {
         Gui g = v.gui;
         Gui.rect(0, 0, Gui.W, Gui.H, 0.08f, 0.11f, 0.22f, 1f);

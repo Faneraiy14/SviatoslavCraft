@@ -98,6 +98,7 @@ final class PlayScreen {
         java.util.function.Consumer<Inventory.Stack> dropper = st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); };
         invScreen = InventoryScreen.craft("ІНВЕНТАР", new CraftMenu(world.itemTypes, v.game.recipes, inv, 2), inv, world, icons, dropper);
         benchScreen = InventoryScreen.craft("ВЕРСТАК", new CraftMenu(world.itemTypes, v.game.recipes, inv, 3), inv, world, icons, dropper);
+        invScreen.vitals = vt;
         activeScreen = invScreen;
         prevHealth = vt.health();
         long[] land = world.findLand(0, 0); // не з'являтись у морі
@@ -122,6 +123,7 @@ final class PlayScreen {
         debug = v.opts.debug;
         grab(!v.opts.quiet()); // автоперевірки не захоплюють справжній курсор користувача
         if ("inventory".equals(v.opts.open)) invOpen = true;
+        if ("pause".equals(v.opts.open)) paused = true;
         if ("workbench".equals(v.opts.open)) { activeScreen = benchScreen; invOpen = true; }
         if ("chest".equals(v.opts.open)) { // лише для знімків: скриня з жеребом здобичі
             ChestEntity demo = new ChestEntity(0, 0, 0);
@@ -170,6 +172,7 @@ final class PlayScreen {
     // ------------------------------------------------------------------ тік
 
     void tick() {
+        if (paused) return; // одиночна гра: пауза зупиняє світ
         ticks++;
         Input in = v.input;
         boolean active = grabbed && !chatOpen && !invOpen && !vt.dead();
@@ -217,19 +220,21 @@ final class PlayScreen {
         Input in = v.input;
         if (leaving) return false;
         if (invOpen && openedBlock && !openedKind.equals(world.blocks.get(Math.max(0, world.blockId(openedX, openedY, openedZ))).interact)) closeInventory(); // блок зламано/зник
+        if (pauseSettings) return true; // Esc обробляє екран налаштувань
+        boolean searching = invOpen && journal == null && keeper == null && trade == null && activeScreen.typing(); // пошук в інвентарі забирає клавіатуру
         if (in.pressed(GLFW_KEY_ESCAPE) && !vt.dead()) {
-            if (chatOpen) closeChat(); else if (invOpen) { closeInventory(); } else return false;
+            if (chatOpen) closeChat(); else if (searching) activeScreen.stopTyping(); else if (invOpen) { closeInventory(); } else if (paused) resume(); else pause();
         }
         if (in.pressed(GLFW_KEY_F3)) debug = !debug;
         if (in.pressed(GLFW_KEY_F1)) hud = !hud;
         if (in.pressed(GLFW_KEY_F5)) cam.cycle();
-        if (!chatOpen && !vt.dead()) {
+        if (!chatOpen && !vt.dead() && !searching) {
             if (in.pressed(GLFW_KEY_E)) { if (invOpen) closeInventory(); else { activeScreen = invScreen; invOpen = true; grab(false); } }
             if (in.pressed(GLFW_KEY_J) && !invOpen) { journal = new JournalScreen(world); invOpen = true; grab(false); }
             if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); }
         }
         if (chatOpen) { in.updateText(); if (in.pressed(GLFW_KEY_ENTER)) sendChat(); } // не залежить від F1 (HUD)
-        boolean play = grabbed && !chatOpen && !invOpen && !vt.dead();
+        boolean play = grabbed && !chatOpen && !invOpen && !vt.dead() && !paused;
         if (play) {
             float sens = v.settings.mouseSensitivity;
             player.rotate((float) in.mouseDX() * sens, (float) -in.mouseDY() * sens);
@@ -299,6 +304,7 @@ final class PlayScreen {
         // інтерфейс
         v.gui.begin();
         if (hud) hud(v.gui);
+        if (paused) pauseMenu(v.gui);
         v.gui.end();
         guiNs = System.nanoTime() - t2;
         devHooks();
@@ -744,6 +750,37 @@ final class PlayScreen {
     private float vitalsTop() {
         float ph = 8 * ICON_PX + 12, py = Gui.H - 54 - 14 - 16 - ph;
         return inv.armorPoints(world.itemTypes) > 0 || vt.air() < Vitals.MAX_AIR ? py - ph - 4 : py;
+    }
+
+    // ------------------------------------------------------------------ пауза (Esc)
+
+    private boolean paused, pauseSettings;
+
+    private void pause() { paused = true; grab(false); v.input.clearPressed(); }
+
+    private void resume() { paused = false; pauseSettings = false; grab(true); }
+
+    /** Меню паузи поверх гри; налаштування й звук - ті самі екрани, що в головному меню. */
+    private void pauseMenu(Gui g) {
+        if (pauseSettings) {
+            if (!v.menus.overlay(g)) { pauseSettings = false; applyLiveSettings(); }
+            return;
+        }
+        Gui.rect(0, 0, Gui.W, Gui.H, 0.02f, 0.03f, 0.08f, 0.6f);
+        Gui.textCentered("ПАУЗА", Gui.W / 2f, 130, 6f, 1f, 0.85f, 0.35f);
+        Gui.textCentered(world.info.name + "  -  день " + world.dayNumber(), Gui.W / 2f, 200, 2.2f, 0.7f, 0.74f, 0.88f);
+        float x = Gui.W / 2f - 210, w = 420, h = 54, y = 250;
+        if (g.button("ПРОДОВЖИТИ", x, y, w, h)) { resume(); return; }
+        if (g.button("НАЛАШТУВАННЯ", x, y += 66, w, h)) { pauseSettings = true; v.menus.show(Menus.Screen.SETTINGS); return; }
+        if (g.button("ЗВУК", x, y += 66, w, h)) { pauseSettings = true; v.menus.show(Menus.Screen.SOUND); return; }
+        if (g.button("ЗБЕРЕГТИ Й ВИЙТИ В МЕНЮ", x, y += 66 + 20, w, h)) leaving = true;
+    }
+
+    /** Після налаштувань у грі: застосувати те, що можна без перезаходу (дальність, поле зору, контури). */
+    private void applyLiveSettings() {
+        rend.renderDistance = v.opts.renderDistance;
+        rend.outlines = v.settings.outlines;
+        cam.fov = v.settings.fov;
     }
 
     private void deathScreen(Gui g) {

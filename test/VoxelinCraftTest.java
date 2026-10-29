@@ -22,7 +22,7 @@ public class VoxelinCraftTest {
 
     public static void main(String[] a) throws Exception {
         g = new Game(new File("nope"), null);
-        recipes(); matching(); repair(); menu(); validation(); ambiguity();
+        recipes(); matching(); repair(); menu(); hotkeys(); validation(); ambiguity();
         System.out.println("VoxelinCraftTest: " + n + " перевірок OK");
     }
 
@@ -123,6 +123,46 @@ public class VoxelinCraftTest {
     }
 
     static int total(Inventory inv, String item) { int t = 0; for (int i = 0; i < 36; i++) if (inv.get(i) != null && inv.get(i).item.equals(item)) t += inv.get(i).count; return t; }
+
+    /** Клавіші в інвентарі: 1-9 над слотом (обмін із хотбаром), Q (викинути), підрахунок усього предмета. */
+    static void hotkeys() {
+        Inventory inv = new Inventory(g.items);
+        CraftMenu m = new CraftMenu(g.items, g.recipes, inv, 2);
+        inv.set(20, new Inventory.Stack("voxelin:stone", 10));
+        inv.set(3, new Inventory.Stack("voxelin:dirt", 5));
+        m.swapHotbar(20, 3);
+        check(inv.get(3).item.equals("voxelin:stone") && inv.get(20).item.equals("voxelin:dirt"), "1-9: обмін зі слотом хотбару");
+        m.swapHotbar(20, 7);
+        check(inv.get(7).item.equals("voxelin:dirt") && inv.get(20) == null, "обмін з порожнім слотом хотбару - перенос");
+        m.swapHotbar(3, 3); m.swapHotbar(3, 9); m.swapHotbar(-1, 0); m.swapHotbar(999, 0);
+        check(inv.get(3).count == 10 && inv.get(7).count == 5, "сам із собою / поза межами - нічого");
+        inv.set(0, new Inventory.Stack("voxelin:iron_chestplate", 1));
+        m.swapHotbar(m.armorBase, 0);
+        check(inv.get(0) != null && inv.armor(1) == null && inv.armor(0) == null, "камінь/нагрудник не лягає в слот шолома");
+        m.swapHotbar(m.armorBase + 1, 0);
+        check(inv.armor(1) != null && inv.armor(1).item.equals("voxelin:iron_chestplate") && inv.get(0) == null, "нагрудник з хотбару - у слот нагрудника");
+        inv.set(0, new Inventory.Stack("voxelin:stone", 1));
+        m.swapHotbar(m.armorBase + 1, 0);
+        check(inv.armor(1) != null && inv.get(0).item.equals("voxelin:stone"), "камінь не міняється з бронею");
+        inv.set(5, new Inventory.Stack("voxelin:oak_log", 2));
+        m.click(5, 0, false); m.click(CraftMenu.GRID, 1, false); m.click(5, 0, false);
+        check(m.result() != null, "є результат крафту");
+        m.swapHotbar(CraftMenu.RESULT, 3);
+        check(inv.get(3).item.equals("voxelin:stone") && m.result() != null, "результат не йде в зайнятий слот хотбару");
+        m.swapHotbar(CraftMenu.RESULT, 8);
+        check(inv.get(8) != null && inv.get(8).item.equals("voxelin:oak_planks") && m.gridStack(0) == null, "результат у порожній слот хотбару - крафт витратив інгредієнт");
+        m.click(3, 0, false);
+        m.swapHotbar(20, 1);
+        check(inv.get(1) == null && m.cursor() != null, "поки щось у курсорі - клавіші не діють");
+        m.click(3, 0, false);
+        Inventory.Stack one = m.drop(3, false);
+        check(one.count == 1 && inv.get(3).count == 9, "Q - один предмет");
+        Inventory.Stack all = m.drop(3, true);
+        check(all.count == 9 && inv.get(3) == null, "Ctrl+Q - увесь стек");
+        check(m.drop(3, false) == null && m.drop(CraftMenu.RESULT, true) == null, "порожній слот і результат - нічого не викидається");
+        inv.set(10, new Inventory.Stack("voxelin:dirt", 64)); 
+        check(m.total("voxelin:dirt") == 69 && m.total("voxelin:diamond") == 0, "усього предмета у вікні: " + m.total("voxelin:dirt"));
+    }
 
     static void validation() {
         boolean threw = false;

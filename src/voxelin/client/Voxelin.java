@@ -100,7 +100,7 @@ public final class Voxelin {
     Window window;
     Input input;
     Gui gui;
-    private Menus menus;
+    Menus menus;
     voxelin.client.render.TextureArray textures;
     private State state = State.MENU;
     private boolean running = true;

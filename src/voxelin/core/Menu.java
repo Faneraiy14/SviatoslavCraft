@@ -166,6 +166,38 @@ public class Menu {
         }
     }
 
+    /**
+     * Клавіша 1-9 над слотом i: обміняти його вміст зі слотом хотбару hot. Обидва слоти мають прийняти чужий стек (броня - лише броню);
+     * слот «лише брати» (результат, вихід печі) віддає стек тільки в порожній слот хотбару. Поки щось у курсорі - нічого.
+     */
+    public void swapHotbar(int i, int hot) {
+        if (cursor != null || i < 0 || i >= slots.size() || hot < 0 || hot >= Inventory.HOTBAR || i == hot) return;
+        Slot a = slots.get(i), h = slots.get(hot);
+        Inventory.Stack sa = a.get(), sh = h.get();
+        if (sa == null && sh == null) return;
+        if (a.takeOnly()) { if (sa != null && sh == null) { h.set(sa); a.set(null); a.onTake(sa); } return; }
+        if ((sh != null && !a.canPlace(sh)) || (sa != null && !h.canPlace(sa))) return;
+        a.set(sh); h.set(sa);
+    }
+
+    /** Викинути зі слота (клавіша Q): один предмет або весь стек. Повертає викинуте або null. Зі слота «лише брати» - нічого. */
+    public Inventory.Stack drop(int i, boolean all) {
+        if (i < 0 || i >= slots.size()) return null;
+        Slot s = slots.get(i);
+        Inventory.Stack st = s.get();
+        if (st == null || s.takeOnly()) return null;
+        if (all || st.count == 1) { s.set(null); return st; }
+        st.count--; s.set(st);
+        return new Inventory.Stack(st.item, 1, st.damage);
+    }
+
+    /** Скільки цього предмета в усіх слотах вікна (крім «лише брати»). */
+    public int total(String item) {
+        int n = 0;
+        for (Slot s : slots) { Inventory.Stack x = s.get(); if (x != null && !s.takeOnly() && x.item.equals(item)) n += x.count; }
+        return n;
+    }
+
     /** Забрати стек з курсора (клік поза вікном: викинути). one=true - лише один предмет. null - курсор порожній. */
     public Inventory.Stack takeCursor(boolean one) {
         if (cursor == null) return null;

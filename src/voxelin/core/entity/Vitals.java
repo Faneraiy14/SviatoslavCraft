@@ -12,6 +12,8 @@ public final class Vitals implements Vitality {
     public static final int REGEN_TICKS = 80, INVULN_TICKS = 10, RESPAWN_INVULN = 60;
 
     private double health = MAX, hunger = MAX, saturation = 5, exhaustion;
+    /** Правило «naturalRegeneration»: чи відновлюється здоров'я від ситості. */
+    public boolean regen = true;
     private int air = (int) MAX_AIR, foodTimer, invuln;
     private boolean dead;
     private boolean god;
@@ -73,7 +75,7 @@ public final class Vitals implements Vitality {
             exhaustion -= 4;
             if (saturation > 0) saturation = Math.max(0, saturation - 1); else hunger = Math.max(0, hunger - 1);
         }
-        if (hunger >= 18 && health < MAX) {
+        if (hunger >= 18 && health < MAX && regen) {
             if (++foodTimer >= REGEN_TICKS) { foodTimer = 0; heal(1); exhaust(6); }
         } else if (hunger <= 0) {
             if (++foodTimer >= REGEN_TICKS) { foodTimer = 0; if (health > 1) hurt(1, true); }

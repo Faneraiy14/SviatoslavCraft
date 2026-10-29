@@ -1,6 +1,7 @@
 package voxelin.client;
 
 import voxelin.client.ui.Gui;
+import voxelin.core.GameRules;
 import voxelin.core.WorldInfo;
 
 import java.io.File;
@@ -20,6 +21,10 @@ final class Menus {
     private String status = "";
     private boolean flat;
     private WorldInfo.Cataclysms cataclysms = WorldInfo.Cataclysms.ON;
+    /** Екран «Новий світ»: режим, чити, правила гри, зерно; more - відкрито підекран «Ще налаштування» (зерно, чити, правила). */
+    private boolean creative, cheats, more;
+    private final java.util.Map<String, Boolean> rules = new java.util.TreeMap<>();
+    private String nameText = "", seedText = "";
     private String renameFrom;
     private SkinScreen skin;
 
@@ -32,7 +37,7 @@ final class Menus {
         v.input.endText();
         if (s == Screen.WORLDS) refresh();
         if (s == Screen.SKIN) skin = new SkinScreen(v);
-        if (s == Screen.CREATE) { flat = false; cataclysms = WorldInfo.Cataclysms.ON; v.input.beginText(autoName(), false); }
+        if (s == Screen.CREATE) { flat = false; cataclysms = WorldInfo.Cataclysms.ON; creative = cheats = more = false; rules.clear(); seedText = ""; v.input.beginText(autoName(), false); }
         if (s == Screen.RENAME) { renameFrom = selectedName(); v.input.beginText(renameFrom == null ? "" : renameFrom, false); }
     }
 
@@ -227,23 +232,36 @@ final class Menus {
         Gui.text(t, 406, 266, 3.6f, 1, 1, 1);
     }
 
+    /** Зерно з поля: порожнє - випадкове, число - як є, текст - його хеш (як у Minecraft). */
+    static long parseSeed(String s) {
+        s = s.trim();
+        if (s.isEmpty()) return System.nanoTime() ^ (System.currentTimeMillis() << 20);
+        try { return Long.parseLong(s); } catch (NumberFormatException e) { return s.hashCode(); }
+    }
+
     private void create(Gui g) {
+        if (more) { createMore(g); return; }
         Gui.textCentered("НОВИЙ СВІТ", Gui.W / 2f, 60, 5f, 1f, 0.85f, 0.3f);
         nameField(g, "Назва світу");
-        if (g.button("ЗВИЧАЙНИЙ", 390, 330, 245, 56, !flat, true)) flat = false;
-        if (g.button("ПЛОСКИЙ", 645, 330, 245, 56, flat, true)) flat = true;
+        if (g.button("ЗВИЧАЙНИЙ", 390, 322, 245, 50, !flat, true)) flat = false;
+        if (g.button("ПЛОСКИЙ", 645, 322, 245, 50, flat, true)) flat = true;
+        if (g.button("ВИЖИВАННЯ", 390, 380, 245, 50, !creative, true)) creative = false;
+        if (g.button("ТВОРЧИЙ", 645, 380, 245, 50, creative, true) && !creative) { creative = true; cheats = true; } // як у Minecraft: творчий вмикає чити (можна вимкнути)
         // «Катаклізми»: чи може гра зламати світ Зараженням (DESIGN, відповідь 6)
-        Gui.text("Катаклізми", 390, 400, 2.4f, 0.8f, 0.8f, 0.85f);
-        if (g.button("УВІМКНЕНО", 390, 428, 160, 50, cataclysms == WorldInfo.Cataclysms.ON, true)) cataclysms = WorldInfo.Cataclysms.ON;
-        if (g.button("ПОМІРНІ", 560, 428, 160, 50, cataclysms == WorldInfo.Cataclysms.MILD, true)) cataclysms = WorldInfo.Cataclysms.MILD;
-        if (g.button("ВИМКНЕНО", 730, 428, 160, 50, cataclysms == WorldInfo.Cataclysms.OFF, true)) cataclysms = WorldInfo.Cataclysms.OFF;
+        Gui.text("Катаклізми", 390, 440, 2.4f, 0.8f, 0.8f, 0.85f);
+        if (g.button("УВІМКНЕНО", 390, 466, 160, 46, cataclysms == WorldInfo.Cataclysms.ON, true)) cataclysms = WorldInfo.Cataclysms.ON;
+        if (g.button("ПОМІРНІ", 560, 466, 160, 46, cataclysms == WorldInfo.Cataclysms.MILD, true)) cataclysms = WorldInfo.Cataclysms.MILD;
+        if (g.button("ВИМКНЕНО", 730, 466, 160, 46, cataclysms == WorldInfo.Cataclysms.OFF, true)) cataclysms = WorldInfo.Cataclysms.OFF;
         Gui.textCentered(switch (cataclysms) {
             case ON -> "Зараження можливе повністю: криза й прорив на 30-й день";
             case MILD -> "Зараження можливе, але зупиняється на активній порі";
             case OFF -> "Зараження вимкнено: після дракона лише Ритуал";
-        }, Gui.W / 2f, 490, 2f, 0.65f, 0.65f, 0.7f);
-        boolean ok = g.button("СТВОРИТИ", 390, 530, 245, 60) || v.input.pressed(GLFW_KEY_ENTER);
-        if (g.button("НАЗАД", 645, 530, 245, 60) || v.input.pressed(GLFW_KEY_ESCAPE)) { show(Screen.WORLDS); return; }
+        }, Gui.W / 2f, 524, 2f, 0.65f, 0.65f, 0.7f);
+        Gui.textCentered("Чити: " + (cheats ? "так" : "ні") + "   Зерно: " + (seedText.isBlank() ? "випадкове" : seedText) + (rules.isEmpty() ? "" : "   Змінених правил: " + rules.size()),
+                Gui.W / 2f, 550, 2f, 0.6f, 0.75f, 0.9f);
+        boolean ok = g.button("СТВОРИТИ", 390, 580, 160, 56) || v.input.pressed(GLFW_KEY_ENTER);
+        if (g.button("ЩЕ...", 560, 580, 160, 56)) { openMore(); return; }
+        if (g.button("НАЗАД", 730, 580, 160, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { show(Screen.WORLDS); return; }
         if (ok) {
             String name = v.input.text().trim();
             if (name.isEmpty()) name = autoName();
@@ -251,12 +269,40 @@ final class Menus {
             else if (new File(v.game.savesDir, name).exists()) { status = "Світ із такою назвою вже є"; }
             else {
                 try {
-                    v.game.createWorld(name, System.nanoTime() ^ (System.currentTimeMillis() << 20), flat ? WorldInfo.Type.FLAT : WorldInfo.Type.NORMAL, cataclysms);
+                    v.game.createWorld(name, parseSeed(seedText), flat ? WorldInfo.Type.FLAT : WorldInfo.Type.NORMAL, cataclysms,
+                            creative ? WorldInfo.Mode.CREATIVE : WorldInfo.Mode.SURVIVAL, cheats, rules);
                     show(Screen.WORLDS); select(name); return;
                 } catch (IOException e) { status = "Не вдалося створити: " + e.getMessage(); }
             }
         }
-        if (!status.isEmpty()) Gui.textCentered(status, Gui.W / 2f, 615, 2.4f, 1f, 0.5f, 0.4f);
+        if (!status.isEmpty()) Gui.textCentered(status, Gui.W / 2f, 660, 2.4f, 1f, 0.5f, 0.4f);
+    }
+
+    void openMore() { nameText = v.input.text(); more = true; v.input.beginText(seedText, false); }
+
+    /** Підекран «Ще налаштування»: зерно, чити, правила гри. У створеному світі правила міняє лише /gamerule, і тільки з читами. */
+    private void createMore(Gui g) {
+        Gui.textCentered("НАЛАШТУВАННЯ СВІТУ", Gui.W / 2f, 40, 4f, 1f, 0.85f, 0.3f);
+        v.input.updateText();
+        Gui.text("Зерно (порожньо - випадкове)", 290, 96, 2.2f, 0.8f, 0.8f, 0.85f);
+        Gui.rect(290, 122, 700, 50, 0.05f, 0.05f, 0.1f, 1f);
+        Gui.frame(290, 122, 700, 50, 2, 1, 1, 1);
+        Gui.text(v.input.text() + ((System.currentTimeMillis() / 500) % 2 == 0 ? "_" : ""), 304, 134, 3f, 1, 1, 1);
+        Gui.text("Чити (команди)", 290, 196, 2.4f, 0.8f, 0.8f, 0.85f);
+        if (g.button("ТАК", 700, 186, 140, 42, cheats, true)) cheats = true;
+        if (g.button("НІ", 850, 186, 140, 42, !cheats, true)) cheats = false;
+        Gui.text("Правила гри", 290, 248, 2.6f, 1f, 0.85f, 0.3f);
+        int y = 280;
+        for (GameRules.Rule r : GameRules.ALL) {
+            boolean on = rules.getOrDefault(r.id(), r.def());
+            Gui.text(r.title(), 290, y + 10, 2.2f, 0.85f, 0.85f, 0.9f);
+            if (g.button(on ? "ТАК" : "НІ", 850, y, 140, 40, on, true)) { if (!on == r.def()) rules.remove(r.id()); else rules.put(r.id(), !on); }
+            y += 46;
+        }
+        Gui.textCentered("Після створення правила змінює лише /gamerule - і тільки якщо чити ввімкнено", Gui.W / 2f, y + 8, 2f, 0.6f, 0.65f, 0.7f);
+        if (g.button("ГОТОВО", 515, 640, 250, 56) || v.input.pressed(GLFW_KEY_ESCAPE) || v.input.pressed(GLFW_KEY_ENTER)) {
+            seedText = v.input.text().trim(); more = false; v.input.beginText(nameText, false); v.input.clearPressed();
+        }
     }
 
     private void rename(Gui g) {

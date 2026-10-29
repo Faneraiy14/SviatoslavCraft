@@ -74,10 +74,18 @@ public final class Game {
     public void createWorld(String name, long seed, WorldInfo.Type type) throws IOException { createWorld(name, seed, type, WorldInfo.Cataclysms.ON); }
 
     public void createWorld(String name, long seed, WorldInfo.Type type, WorldInfo.Cataclysms cataclysms) throws IOException {
+        createWorld(name, seed, type, cataclysms, WorldInfo.Mode.SURVIVAL, true, java.util.Map.of());
+    }
+
+    /** Новий світ з усіма налаштуваннями екрана «Новий світ»: катаклізми, режим, чити, правила гри (лише ті, що відрізняються від типових). */
+    public void createWorld(String name, long seed, WorldInfo.Type type, WorldInfo.Cataclysms cataclysms, WorldInfo.Mode mode, boolean cheats,
+                            java.util.Map<String, Boolean> rules) throws IOException {
         File d = worldDir(name);
         if (d.exists()) throw new IOException("тека світу вже існує: " + d);
         WorldInfo w = WorldInfo.create(d, name, seed, type);
-        if (cataclysms != WorldInfo.Cataclysms.ON) { w.cataclysms = cataclysms; w.save(d); }
+        w.cataclysms = cataclysms; w.mode = mode; w.cheats = cheats;
+        for (java.util.Map.Entry<String, Boolean> e : rules.entrySet()) w.setRule(e.getKey(), e.getValue());
+        w.save(d);
     }
 
     public World openWorld(String name) throws IOException {

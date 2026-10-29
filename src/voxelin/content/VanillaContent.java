@@ -513,7 +513,23 @@ public final class VanillaContent implements VoxelinMod {
             if (now && !was && h != null) for (String s : STARTER) h.give(s, 64);
             k.reply("Режим гри: " + k.world().gameMode());
         });
-        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /summon, /killall, /locate, /tp, /wear, /help. Назви блоків: voxelin:stone, voxelin:grass, ..."));
+        c.register("gamerule", "[правило] [true|false]", 2, k -> {
+            if (!(k.world() instanceof voxelin.core.World)) throw new Commands.CommandException("Недоступно");
+            voxelin.core.WorldInfo info = ((voxelin.core.World) k.world()).info;
+            if (k.args().isEmpty()) { for (voxelin.core.GameRules.Rule r : voxelin.core.GameRules.ALL) k.reply(r.id() + " = " + info.rule(r.id()) + "  (" + r.title() + ")"); return; }
+            voxelin.core.GameRules.Rule r = voxelin.core.GameRules.find(k.args().get(0));
+            if (r == null) throw new Commands.CommandException("Невідоме правило: " + k.args().get(0) + ". /gamerule - список");
+            if (k.args().size() == 1) { k.reply(r.id() + " = " + info.rule(r.id())); return; }
+            String v = k.args().get(1).toLowerCase(java.util.Locale.ROOT);
+            if (k.args().size() > 2 || !(v.equals("true") || v.equals("false"))) throw new Commands.CommandException("Значення: true або false");
+            info.setRule(r.id(), v.equals("true"));
+            k.reply(r.id() + " = " + info.rule(r.id()));
+        });
+        c.register("seed", "", 0, k -> { // зерно - не чит, його видно й без читів
+            if (!(k.world() instanceof voxelin.core.World)) throw new Commands.CommandException("Недоступно");
+            k.reply("Зерно світу: " + ((voxelin.core.World) k.world()).info.seed);
+        });
+        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /gamerule, /summon, /killall, /locate, /tp, /wear, /seed, /help (усі, крім /seed і /help, - лише з читами). Назви блоків: voxelin:stone, voxelin:grass, ..."));
     }
 
     /** Назва блока з аргументу команди: "stone" = "voxelin:stone". */

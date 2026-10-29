@@ -53,6 +53,15 @@ public final class WorldInfo {
     public long bedX, bedZ; public int bedY;
     public EggChoice eggChoice = EggChoice.NONE;
     public Cataclysms cataclysms = Cataclysms.ON;
+    /** Чити (команди): вибираються при створенні світу. Старі світи без поля - з читами (як у них грали). */
+    public boolean cheats = true;
+    /** Правила гри, що відрізняються від типових (GameRules); зсув часу доби, коли зміну дня вимкнено. */
+    public final java.util.Map<String, Boolean> rules = new java.util.TreeMap<>();
+    public long dayShift;
+
+    public boolean rule(String id) { Boolean v = rules.get(id); if (v != null) return v; GameRules.Rule r = GameRules.find(id); return r == null || r.def(); }
+
+    public void setRule(String id, boolean v) { GameRules.Rule r = GameRules.find(id); if (r == null) return; if (v == r.def()) rules.remove(r.id()); else rules.put(r.id(), v); }
     /** Ритуал: 0 не розпочато, 1 боси в Енді, 2 виконано. */
     public int ritualStage;
     /** Ритуал: хто з босів уже впав (1 - Ткач, 2 - Розплітач). */
@@ -123,6 +132,9 @@ public final class WorldInfo {
         try { w.bedX = Long.parseLong(p.getProperty("bedX").trim()); w.bedY = Integer.parseInt(p.getProperty("bedY").trim()); w.bedZ = Long.parseLong(p.getProperty("bedZ").trim()); w.hasBed = w.bedY >= 0 && w.bedY < Chunk.HEIGHT; }
         catch (RuntimeException e) { w.hasBed = false; }
         try { w.eggChoice = EggChoice.valueOf(p.getProperty("eggChoice", "NONE").trim()); } catch (IllegalArgumentException e) { w.eggChoice = EggChoice.NONE; }
+        w.cheats = !"false".equals(p.getProperty("cheats"));
+        for (GameRules.Rule r : GameRules.ALL) { String v = p.getProperty("rule." + r.id()); if (v != null) w.setRule(r.id(), "true".equals(v.trim())); }
+        try { w.dayShift = Long.parseLong(p.getProperty("dayShift", "0").trim()); } catch (NumberFormatException e) { w.dayShift = 0; }
         try { w.cataclysms = Cataclysms.valueOf(p.getProperty("cataclysms", "ON").trim()); } catch (IllegalArgumentException e) { w.cataclysms = Cataclysms.ON; }
         try { w.infState = InfState.valueOf(p.getProperty("infState", "NONE").trim()); } catch (IllegalArgumentException e) { w.infState = InfState.NONE; }
         if (w.infState != InfState.NONE) {
@@ -174,6 +186,9 @@ public final class WorldInfo {
         if (hasBed) { p.setProperty("bedX", String.valueOf(bedX)); p.setProperty("bedY", String.valueOf(bedY)); p.setProperty("bedZ", String.valueOf(bedZ)); }
         if (eggChoice != EggChoice.NONE) p.setProperty("eggChoice", eggChoice.name());
         if (cataclysms != Cataclysms.ON) p.setProperty("cataclysms", cataclysms.name());
+        p.setProperty("cheats", String.valueOf(cheats));
+        for (java.util.Map.Entry<String, Boolean> e : rules.entrySet()) p.setProperty("rule." + e.getKey(), String.valueOf(e.getValue()));
+        if (dayShift != 0) p.setProperty("dayShift", String.valueOf(dayShift));
         if (infState != InfState.NONE) { p.setProperty("infState", infState.name()); p.setProperty("infX", String.valueOf(infX)); p.setProperty("infY", String.valueOf(infY)); p.setProperty("infZ", String.valueOf(infZ)); p.setProperty("infStart", String.valueOf(infStart)); p.setProperty("infOwed", String.valueOf(infOwed));
             if (infVillage) { p.setProperty("infVx", String.valueOf(infVx)); p.setProperty("infVz", String.valueOf(infVz)); if (infFrontSeeded) p.setProperty("infFront", "true"); } }
         if (ritualKills != 0) p.setProperty("ritualKills", String.valueOf(ritualKills));
@@ -207,6 +222,7 @@ public final class WorldInfo {
         creditsShown |= o.creditsShown;
         if (o.eggChoice != EggChoice.NONE) eggChoice = o.eggChoice;
         cataclysms = o.cataclysms; // налаштування одне на всі виміри світу
+        cheats = o.cheats; rules.clear(); rules.putAll(o.rules);
         ritualStage = Math.max(ritualStage, o.ritualStage);
         if (o.dragonDead && type == Type.END) dragonDead = true;
         if (type == Type.BETWEEN && o.type != Type.END && o.type != Type.BETWEEN) overInf = o.infState;

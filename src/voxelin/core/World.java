@@ -97,8 +97,10 @@ public final class World implements WorldAccess {
     @Override public long time() { return info.time; }
     @Override public void setTime(long t) { info.time = Math.max(0, t); }
     @Override public long dayTicks() { return DayCycle.dayTicks(info.dayMinutes); }
-    public double dayPhase() { return DayCycle.phase(info.time, dayTicks()); }
-    public long dayNumber() { return DayCycle.day(info.time, dayTicks()); }
+    /** Час доби = ігровий час + зсув: коли зміну дня вимкнено, зсув тримає сонце на місці, а ігровий час (зараження, визрівання) іде далі. */
+    public double dayPhase() { return DayCycle.phase(info.time + info.dayShift, dayTicks()); }
+    public long dayNumber() { return DayCycle.day(info.time + info.dayShift, dayTicks()); }
+    public boolean rule(String id) { return info.rule(id); }
     /** Яскравість неба 0.12..1 за часом доби; в Енді стала. */
     public double skyLevel() { return info.type == WorldInfo.Type.END ? END_SKY : info.type == WorldInfo.Type.BETWEEN ? BETWEEN_SKY : DayCycle.sky(dayPhase()); }
     public static final double END_SKY = 0.35, BETWEEN_SKY = 0.6;
@@ -370,6 +372,7 @@ public final class World implements WorldAccess {
         if (m.type.boss && m.type.name.equals("voxelin:ender_dragon")) { info.dragonDead = true; unlockRecord("voxelin:dragon"); keeperPending = true; } // смерть дракона записується у світ (не відроджується)
         if (m.type.name.equals(WEAVER) || m.type.name.equals(UNRAVELER)) ritualBossDied(m);
         for (voxelin.api.BlockSettings.Drop d : m.type.drops) {
+            if (!m.type.boss && !info.rule(GameRules.MOB_LOOT)) break; // сюжетна здобич босів падає завжди - інакше гру не пройти
             if (d.chance < 1f && mobRng.nextFloat() >= d.chance) continue;
             int n = d.min + (d.max > d.min ? mobRng.nextInt(d.max - d.min + 1) : 0);
             Pos at = m.type.boss && m.home != null ? new Pos(m.home.cx, m.home.cz, m.home.x, m.home.y + 2, m.home.z) : new Pos(m.pos.cx, m.pos.cz, m.pos.x, m.pos.y + m.type.height / 2, m.pos.z); // здобич боса - на землі біля дому, а не в повітрі
@@ -380,7 +383,7 @@ public final class World implements WorldAccess {
     private boolean keeperPending;
 
     private void tickMobs() {
-        if (naturalSpawning) spawner.tick(this, target, mobRng, tick);
+        if (naturalSpawning && info.rule(GameRules.MOB_SPAWNING)) spawner.tick(this, target, mobRng, tick);
         Pos pc = target == null ? null : target.body();
         for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
             Mob m = it.next();
@@ -732,6 +735,7 @@ public final class World implements WorldAccess {
     public void tick() {
         tick++;
         info.time++;
+        if (!info.rule(GameRules.DAYLIGHT)) info.dayShift--;
         tickItems();
         tickBlockEntities();
         tickMobs();

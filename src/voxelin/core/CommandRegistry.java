@@ -37,7 +37,10 @@ public final class CommandRegistry {
         List<String> parts = new ArrayList<>(Arrays.asList(s.split("\\s+")));
         Entry e = map.get(parts.remove(0).toLowerCase(Locale.ROOT));
         if (e == null) { out.add("Невідома команда. /help - список."); return out; }
-        if (src.permission() < e.permission) { out.add("Недостатньо прав для /" + e.name); return out; }
+        int perm = src.permission();
+        boolean noCheats = src.kind() == Source.Kind.PLAYER && world instanceof World w && !w.info.cheats;
+        if (noCheats) perm = 0; // світ без читів: гравцю - лише безпечні команди
+        if (perm < e.permission) { out.add(noCheats ? "Чити в цьому світі вимкнено: /" + e.name + " недоступна" : "Недостатньо прав для /" + e.name); return out; }
         final List<String> args = Collections.unmodifiableList(parts);
         Commands.Context ctx = new Commands.Context() {
             public Source source() { return src; }

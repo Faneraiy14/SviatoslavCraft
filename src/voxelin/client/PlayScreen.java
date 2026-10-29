@@ -195,12 +195,13 @@ final class PlayScreen {
             if (player.jumped) vt.exhaust(sprinting ? 0.2 : 0.05);
             double fell = player.takeLanded();
             sounds.land(player, fell);
-            vt.land(fell);
+            vt.land(world.rule(GameRules.FALL_DAMAGE) ? fell : 0);
             if (world.info.type == WorldInfo.Type.BETWEEN && Math.abs(player.pos.blockX() - voxelin.core.gen.BetweenGenerator.HOUSE_X) <= 3 && Math.abs(player.pos.blockZ() - voxelin.core.gen.BetweenGenerator.HOUSE_Z) <= 3
                     && player.pos.y > voxelin.core.gen.BetweenGenerator.TOP && player.pos.y < voxelin.core.gen.BetweenGenerator.TOP + 6) { world.unlockRecord("voxelin:keeper_home"); world.unlockRecord("voxelin:threads"); } // зайшов у Дім Сторожа
             double imp = player.takeImpact();
             if (imp > 0) vt.hurt(imp, false);
             if (player.gliding && world.tickCount() % 20 == 0 && !world.creative()) inv.wearWings(world.itemTypes);
+            vt.regen = world.rule(GameRules.REGENERATION);
             vt.tick(player.headInWater);
         }
         if (trade != null) trade.mob.talkTicks = 6; // житель слухає
@@ -212,7 +213,7 @@ final class PlayScreen {
         }
         if (!vt.dead() && !v.opts.freeze && world.collectItems(bodyPos(), inv) > 0) sounds.self("voxelin:item.pickup", 0.6f);
         sounds.tick(player, !vt.dead());
-        if (vt.dead() && !deadHandled && !world.creative()) {
+        if (vt.dead() && !deadHandled && !world.creative() && !world.rule(GameRules.KEEP_INVENTORY)) {
             Pos at = bodyPos();
             for (Inventory.Stack st : inv.drain()) world.spawnItem(at, st.item, st.count, st.damage, true);
         }

@@ -260,8 +260,8 @@ public final class Voxelin {
     private void frame(float alpha) {
         switch (state) {
             case MENU -> {
-                if (opts.menuScreen != null && frames == 2) { // dev: --menu worlds|create|rename
-                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); case "sound" -> menus.show(Menus.Screen.SOUND); case "skin" -> menus.show(Menus.Screen.SKIN); default -> { } }
+                if (opts.menuScreen != null && frames == 2) { // dev: --menu worlds|create|create-more|rename
+                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "create-more" -> { menus.show(Menus.Screen.CREATE); menus.openMore(); } case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); case "sound" -> menus.show(Menus.Screen.SOUND); case "skin" -> menus.show(Menus.Screen.SKIN); default -> { } }
                 }
                 glViewport(0, 0, window.fbWidth(), window.fbHeight());
                 glClearColor(0.08f, 0.11f, 0.22f, 1f);

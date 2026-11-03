@@ -40,6 +40,15 @@ public final class Mob {
     private Pos threat; // звідки вдарили (для втечі)
     /** Ціль-істота (вибирає World раз на 10 тіків): ворог - житель чи Вартовий, Вартовий - ворог. */
     public Mob prey;
+    /** Шлях (Pathfinder): точки [x,y,z, ...] ніг, поточна - pathIdx. Перераховується не частіше REPATH тіків. */
+    private long[] path;
+    private int pathIdx, repathTimer, stuckTicks;
+    private long goalX, goalZ;
+    private int goalY;
+    private boolean noPath, pathJump;
+    public static final int REPATH = 20, STUCK = 30;
+    /** Поточний шлях (для тестів і налагодження) або null. */
+    public long[] path() { return path; }
 
     /** Тікати від точки (житель бачить ворога). */
     /** Налякати будь-яку істоту (і ворожу): тікає від from ticks тіків. */
@@ -82,6 +91,7 @@ public final class Mob {
         if (dying) return;
 
         double dirX = 0, dirZ = 0, speed = 0, faceX = 0, faceZ = 0;
+        pathJump = false;
         boolean face = false;
         boolean infected = w.infection != null && w.infection.affects(bx, bz);
         if (infected && type.passive() && fleeTicks == 0 && rng.nextInt(40) == 0) { fleeTicks = 60; threat = w.infection.corePos(); } // тварини тікають від ядра
@@ -106,10 +116,16 @@ public final class Mob {
             double fx = threat == null ? rng.nextDouble() - 0.5 : pos.x - threat.relX(pos.cx), fz = threat == null ? rng.nextDouble() - 0.5 : pos.z - threat.relZ(pos.cz);
             double l = Math.hypot(fx, fz);
             if (l > 1e-6) { dirX = fx / l; dirZ = fz / l; speed = type.speed * 1.6; }
+            if (speed > 0 && onGround && cliffAhead(w, dirX, dirZ)) { // тікати в прірву - ні: убік уздовж краю
+                double sx = -dirZ, sz = dirX;
+                if (!cliffAhead(w, sx, sz)) { dirX = sx; dirZ = sz; } else if (!cliffAhead(w, -sx, -sz)) { dirX = -sx; dirZ = -sz; } else speed = 0;
+            }
         } else if (prey != null && pdist <= type.detect && (!aggressive || pdist < tdist)) { // істота-ціль ближча за гравця
             double l = Math.hypot(pdx, pdz);
             if (l > 1e-6) { dirX = pdx / l; dirZ = pdz / l; }
             speed = l > type.reach * 0.6 ? type.speed : 0;
+            if (speed > 0 && steer(w, prey.pos.blockX(), feetY(prey.pos.y), prey.pos.blockZ(), l, dir)) { dirX = dir[0]; dirZ = dir[1]; }
+            else if (speed > 0 && noPath) speed = 0;
             if (pdist <= type.reach + (type.width + prey.type.width) / 2 && attackCooldown == 0 && type.attackDamage > 0) {
                 attackCooldown = type.cooldownTicks;
                 prey.damage(type.attackDamage * (infected ? 1.5 : 1), dirX, dirZ, pos);
@@ -125,13 +141,20 @@ public final class Mob {
             double l = Math.hypot(tdx, tdz);
             if (l > 1e-6) { dirX = tdx / l; dirZ = tdz / l; }
             speed = l > type.reach * 0.6 ? type.speed : 0;
+            Pos tb = target.body();
+            if (speed > 0 && steer(w, tb.blockX(), feetY(tb.y - PLAYER_HALF), tb.blockZ(), l, dir)) { dirX = dir[0]; dirZ = dir[1]; }
+            else if (speed > 0 && noPath) speed = 0; // замкнено: стоїть, а не б'ється об стіну
             if (tdist <= type.reach + type.width / 2 && Math.abs(target.body().y - (pos.y + type.height / 2)) < 1.6 && attackCooldown == 0 && type.attackDamage > 0) {
                 attackCooldown = type.cooldownTicks;
                 target.hurt(type.attackDamage * (infected ? 1.5 : 1), dirX, dirZ, type.armorPierce); // у зараженій зоні вороги сильніші
             }
         } else if (night && type.villager() && home != null) { // вночі житель іде додому й стоїть там
             double hx = home.relX(pos.cx) - pos.x, hz = home.relZ(pos.cz) - pos.z, hd = Math.hypot(hx, hz);
-            if (hd > 0.8) { dirX = hx / hd; dirZ = hz / hd; speed = type.speed * 0.8; }
+            if (hd > 0.8) {
+                dirX = hx / hd; dirZ = hz / hd; speed = type.speed * 0.8;
+                if (steer(w, home.blockX(), feetY(home.y), home.blockZ(), hd, dir)) { dirX = dir[0]; dirZ = dir[1]; }
+                else if (noPath) speed = 0;
+            }
         } else {
             if (wanderTicks <= 0) { // нова мить блукання: пауза або іти в випадковому напрямі
                 if (rng.nextInt(10) < 4) { wanderDx = wanderDz = 0; wanderTicks = 40 + rng.nextInt(60); }
@@ -143,13 +166,14 @@ public final class Mob {
                 if (hd > type.homeRadius) { wanderDx = hx / hd; wanderDz = hz / hd; wanderTicks = Math.max(wanderTicks, 10); }
             }
             dirX = wanderDx; dirZ = wanderDz; speed = (dirX != 0 || dirZ != 0) ? type.speed * 0.6 : 0;
+            if (speed > 0 && onGround && cliffAhead(w, dirX, dirZ)) { speed = 0; wanderTicks = 0; } // урвище: стоп і новий напрям
         }
         if (speed > 0) yaw = (float) Math.toDegrees(Math.atan2(dirX, -dirZ));
         if (face) yaw = (float) Math.toDegrees(Math.atan2(faceX, -faceZ)); // стрілець дивиться на гравця, навіть коли відходить
         double tvx = dirX * speed * (inWater ? 0.6 : 1), tvz = dirZ * speed * (inWater ? 0.6 : 1);
         double k = Math.min(1.0, (onGround ? 10.0 : 2.0) * DT);
         vx += (tvx - vx) * k; vz += (tvz - vz) * k;
-        if (speed > 0 && onGround && blockedAhead(w, dirX, dirZ)) { vy = JUMP; onGround = false; }
+        if (speed > 0 && onGround && (pathJump || blockedAhead(w, dirX, dirZ))) { vy = JUMP; onGround = false; }
         if (inWater) vy = Math.max(-2.0, Math.min(2.5, vy + 8.0 * DT)); else vy = Math.max(-40.0, vy - GRAVITY * DT);
         double x0 = pos.relX(pos.cx), z0 = pos.relZ(pos.cz);
         moveY(w, vy * DT);
@@ -157,6 +181,62 @@ public final class Mob {
         pos.normalize();
         walk += Math.hypot(pos.relX(pos.cx) - x0, pos.relZ(pos.cz) - z0);
         if (pos.y < -30) { health = 0; dying = true; deathTicks = (int) DEATH_TICKS; }
+    }
+
+    private final double[] dir = new double[2];
+    /** Від центру тіла гравця (PlayerTarget.body) до ніг. */
+    static final double PLAYER_HALF = 0.9;
+
+    private static int feetY(double y) { return (int) Math.floor(y + 0.05); }
+
+    /**
+     * Напрям до цілі (блок ніг gx,gy,gz) обхідним шляхом - у out. true - є напрям; false - або йти навпростець (noPath == false:
+     * шлях ще не пораховано, бо вичерпано ліміт пошуків, чи ціль поруч), або стояти (noPath == true: дійти нікуди).
+     */
+    private boolean steer(World w, long gx, int gy, long gz, double dist, double[] out) {
+        int fy = feetY(pos.y);
+        if (repathTimer > 0) repathTimer--;
+        if (dist < 1.5 && Math.abs(gy - fy) <= 1) { noPath = false; return false; } // поруч - навпростець (удар)
+        double mdx = gx - goalX, mdz = gz - goalZ;
+        boolean moved = mdx * mdx + mdz * mdz > 2.25 || Math.abs(gy - goalY) > 1;
+        boolean done = path == null || pathIdx * 3 >= path.length;
+        boolean newGoal = mdx * mdx + mdz * mdz > 64; // зовсім інша ціль (інша гілка поведінки) - не чекаємо таймера
+        if ((onGround || inWater) && (path == null && !noPath || newGoal || repathTimer <= 0 && (moved || done || stuckTicks > STUCK)) && w.takePathBudget()) {
+            path = Pathfinder.find(w, pos.blockX(), fy, pos.blockZ(), gx, gy, gz, (int) Math.ceil(type.height), Pathfinder.DEFAULT_NODES);
+            pathIdx = 0; goalX = gx; goalY = gy; goalZ = gz; repathTimer = REPATH; stuckTicks = 0;
+            noPath = path == null && Pathfinder.standable(w, pos.blockX(), fy, pos.blockZ(), (int) Math.ceil(type.height));
+            if (path == null) return false;
+        }
+        if (path == null) return false;
+        long ox = pos.cx * 16, oz = pos.cz * 16;
+        int n = path.length / 3;
+        while (pathIdx < n) { // дійшли до точки - наступна
+            double wx = path[pathIdx * 3] - ox + 0.5 - pos.x, wz = path[pathIdx * 3 + 2] - oz + 0.5 - pos.z;
+            if (wx * wx + wz * wz < 0.16 && Math.abs(path[pathIdx * 3 + 1] - pos.y) < 1.2) pathIdx++; else break;
+        }
+        if (pathIdx >= n) { // кінець шляху: це ціль - навпростець; найближча досяжна точка - стоїмо
+            long lx = path[(n - 1) * 3], lz = path[(n - 1) * 3 + 2];
+            boolean reached = Math.abs(lx - gx) <= 1 && Math.abs(lz - gz) <= 1 && Math.abs(path[(n - 1) * 3 + 1] - gy) <= 1;
+            noPath = !reached;
+            return false;
+        }
+        noPath = false;
+        double wx = path[pathIdx * 3] - ox + 0.5 - pos.x, wz = path[pathIdx * 3 + 2] - oz + 0.5 - pos.z, l = Math.hypot(wx, wz);
+        if (l < 1e-6) return false;
+        out[0] = wx / l; out[1] = wz / l;
+        if (path[pathIdx * 3 + 1] > fy && l < 1.5) pathJump = true; // наступна клітинка вище - стрибок
+        if (Math.hypot(vx, vz) < type.speed * 0.15) stuckTicks++; else stuckTicks = 0;
+        return true;
+    }
+
+    /** Попереду падіння глибше за Pathfinder.MAX_DROP (і внизу не вода) - не ступати. */
+    private boolean cliffAhead(World w, double dx, double dz) {
+        double reach = type.width / 2 + 0.35;
+        long fx = Pos.blockOf(pos.cx, pos.x + dx * reach), fz = Pos.blockOf(pos.cz, pos.z + dz * reach);
+        int fy = feetY(pos.y);
+        if (w.isSolid(fx, fy, fz)) return false;
+        for (int d = 1; d <= Pathfinder.MAX_DROP + 1; d++) if (w.isSolid(fx, fy - d, fz) || w.isLiquid(fx, fy - d, fz)) return false;
+        return true;
     }
 
     /** Ближче за це стрілець відходить. */

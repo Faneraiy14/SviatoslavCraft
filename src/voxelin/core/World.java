@@ -804,6 +804,7 @@ public final class World implements WorldAccess {
     /** Тік гри (20/с). */
     public void tick() {
         tick++;
+        pathBudget = Pathfinder.BUDGET_PER_TICK;
         info.time++;
         if (!info.rule(GameRules.DAYLIGHT)) info.dayShift--;
         tickItems();
@@ -820,6 +821,12 @@ public final class World implements WorldAccess {
     }
 
     public long tickCount() { return tick; }
+
+    private int pathBudget = Pathfinder.BUDGET_PER_TICK;
+    /** Чи можна ще шукати шлях у цьому тіку (усім істотам разом - не більше Pathfinder.BUDGET_PER_TICK). */
+    public boolean takePathBudget() { if (pathBudget <= 0) return false; pathBudget--; return true; }
+    /** Скільки пошуків шляху лишилось у цьому тіку (для тестів). */
+    public int pathBudgetLeft() { return pathBudget; }
 
     public void autosave() {
         syncPlayerData();

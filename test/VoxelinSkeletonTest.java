@@ -88,7 +88,9 @@ public class VoxelinSkeletonTest {
         night(w);
         int y0 = surface(w, 5, 0) + 1;
         BlockType stone = g.blocks.byName("voxelin:stone");
-        for (int z = -6; z <= 6; z++) for (int y = y0; y < y0 + 6; y++) w.setBlock(P, 5, y, z, stone);
+        // закритий двір навколо скелета (x 5..17, z -6..6): обійти нема як
+        for (int z = -6; z <= 6; z++) for (int y = y0; y < y0 + 6; y++) { w.setBlock(P, 5, y, z, stone); w.setBlock(P, 17, y, z, stone); }
+        for (int x = 5; x <= 17; x++) for (int y = y0; y < y0 + 6; y++) { w.setBlock(P, x, y, -6, stone); w.setBlock(P, x, y, 6, stone); }
         Fake f = player(w, 0.5, 0.5);
         Mob s = skeleton(w, 11.5, 0.5);
         for (int i = 0; i < 20 * 6; i++) { night(w); w.tick(); }
@@ -96,6 +98,10 @@ public class VoxelinSkeletonTest {
         check(f.hits == 0, "крізь стіну не влучає: " + f.hits);
         int arrows = 0; for (Arrows.Arrow a : w.arrows.all()) if (a.hostile()) arrows++;
         check(arrows == 0, "за стіною не стріляє: " + arrows);
+        // відкрити двір з боку +z: скелет обходить стіну (пошук шляху) і таки стріляє
+        for (int x = 6; x <= 16; x++) for (int y = y0; y < y0 + 6; y++) w.setBlock(P, x, y, 6, g.blocks.byName("voxelin:air"));
+        for (int i = 0; i < 20 * 20 && f.hits == 0; i++) { night(w); w.tick(); }
+        check(f.hits > 0, "з відкритим боком обходить стіну й влучає");
     }
 
     static void retreat() throws Exception {

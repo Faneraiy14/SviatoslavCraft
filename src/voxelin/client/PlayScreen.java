@@ -477,6 +477,10 @@ final class PlayScreen {
             else say("Іскри гаснуть: потрібна рамка з обсидіану (усередині щонайменше 2x3, порожньо).");
             return;
         }
+        if (t.name.equals(Growth.BONE_MEAL) && hit != null) { // кістяне борошно: земля -> дерен, дерен -> часом дерево
+            if (Growth.apply(world, hit.x(), hit.y(), hit.z(), new java.util.Random())) { sounds.self("voxelin:item.pickup", 0.5f); if (!world.creative()) inv.takeSelected(); }
+            return;
+        }
         if (t.armorSlot != null) { inv.equipSelected(world.itemTypes); return; } // ПКМ з бронею в руці - надягти
         if (t.name.equals(EndPortal.EYE) && eyeCompass()) return; // Око Енду в повітря - напрям до Брами (не витрачається)
         if (t.food > 0) {

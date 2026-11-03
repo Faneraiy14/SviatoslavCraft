@@ -293,6 +293,8 @@ public final class World implements WorldAccess {
 
     public List<Mob> mobs() { return Collections.unmodifiableList(mobs); }
     public void setPlayerTarget(PlayerTarget t) { target = t; }
+    /** Гравець для ШІ, стріл і спавнера (може бути null). */
+    public PlayerTarget playerTarget() { return target; }
     public Random mobRandom() { return mobRng; }
     public MobSpawner spawner() { return spawner; }
 
@@ -661,6 +663,23 @@ public final class World implements WorldAccess {
     }
 
     /** Чи є тут суцільний блок (незавантажений чанк вважається суцільним - гравець не провалиться крізь ще не готовий світ). */
+    /** Чи нема суцільних блоків на прямій від a до b (крок 0.25 блока; клітинки самих кінців не рахуються). Для стрільців. */
+    public boolean lineOfSight(Pos a, Pos b) {
+        double dx = b.relX(a.cx) - a.x, dy = b.y - a.y, dz = b.relZ(a.cz) - a.z;
+        double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (!(len < 256)) return false;
+        int steps = (int) Math.ceil(len / 0.25);
+        Pos p = a.copy();
+        long ax = a.blockX(), az = a.blockZ(), bx = b.blockX(), bz = b.blockZ(); int ay = a.blockY(), by = b.blockY();
+        for (int i = 1; i < steps; i++) {
+            p.add(dx / steps, dy / steps, dz / steps);
+            long x = p.blockX(), z = p.blockZ(); int y = p.blockY();
+            if ((x == ax && y == ay && z == az) || (x == bx && y == by && z == bz)) continue;
+            if (isSolid(x, y, z)) return false;
+        }
+        return true;
+    }
+
     public boolean isSolid(long x, int y, long z) {
         int id = blockId(x, y, z);
         return id < 0 || blocks.get(id).solid;

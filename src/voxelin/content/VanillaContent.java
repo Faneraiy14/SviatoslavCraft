@@ -284,6 +284,7 @@ public final class VanillaContent implements VoxelinMod {
 
         // --- їжа й здобич з істот
         tex("raw_chicken", ItemTextureGen.drumstick(0xE8A890)); tex("cooked_chicken", ItemTextureGen.drumstick(0xC98A4A)); tex("raw_beef", ItemTextureGen.steak(0xC0504A, false)); tex("steak", ItemTextureGen.steak(0x8A4F2A, true));
+        tex("bone", ItemTextureGen.bone()); tex("bone_meal", ItemTextureGen.boneMeal());
         tex("rotten_flesh", ItemTextureGen.rottenFlesh()); tex("leather", ItemTextureGen.leather()); tex("feather", ItemTextureGen.feather()); tex("string", ItemTextureGen.stringItem());
         r.item("raw_chicken", new ItemSettings().color(0xE8B8A0).food(2).texture("raw_chicken").title("Сире куряче м'ясо"));
         r.item("cooked_chicken", new ItemSettings().color(0xC98A4A).food(6).texture("cooked_chicken").title("Смажена курка"));
@@ -291,6 +292,9 @@ public final class VanillaContent implements VoxelinMod {
         r.item("steak", new ItemSettings().color(0x7A4A2A).food(8).texture("steak").title("Стейк"));
         r.item("rotten_flesh", new ItemSettings().color(0x6B7A3A).food(1).texture("rotten_flesh").title("Гнила плоть"));
         r.item("leather", new ItemSettings().color(0x8A5A32).texture("leather").title("Шкіра"));
+        r.item("bone", new ItemSettings().color(0xE8E2D0).texture("bone").title("Кістка"));
+        r.item("bone_meal", new ItemSettings().color(0xF0ECE0).texture("bone_meal").title("Кістяне борошно"));
+        r.recipe("bone_meal", RecipeSettings.shapeless("bone").result("bone_meal", 3));
         r.item("feather", new ItemSettings().color(0xF0F0F0).texture("feather").title("Пір'я"));
         r.item("string", new ItemSettings().color(0xDDDDCC).texture("string").title("Нитка"));
         tex("ember", ItemTextureGen.ember()); tex("ember_crystal", ItemTextureGen.emberCrystal()); tex("flint", ItemTextureGen.flint()); tex("flint_and_steel", ItemTextureGen.flintAndSteel());
@@ -349,6 +353,19 @@ public final class VanillaContent implements VoxelinMod {
         float[] legZ = {-0.25f, -0.05f, 0.15f, 0.35f};
         for (int i = 0; i < 4; i++) { spider.legPart(-0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 == 0); spider.legPart(0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 != 0); }
         r.mob("spider", spider);
+
+        // Скелет-стрілець: горить на сонці, тримається за 6..15 блоків і стріляє, поки бачить гравця (MobSettings.ranged)
+        int bn = 0xD8D4C8, bnd = 0xA8A498;
+        r.mob("skeleton", new MobSettings().health(20).speed(2.2f).size(0.6f, 1.95f).behavior(MobSettings.Behavior.HOSTILE).attack(2, 1.2f, 1f).detect(16).burnsInSun(true)
+                .ranged(15, 2.0f, 1.6f).title("Скелет")
+                .drops("arrow", 0, 2, 1f).drops("bone", 0, 2, 1f).drops("bow", 1, 1, 0.05f)
+                .legPart(-0.12f, 0, 0, 0.12f, 0.85f, 0.12f, bn, false).legPart(0.12f, 0, 0, 0.12f, 0.85f, 0.12f, bn, true)
+                .part(0, 0.85f, 0, 0.42f, 0.12f, 0.2f, bnd).part(0, 0.97f, 0, 0.1f, 0.55f, 0.1f, bn)
+                .part(0, 1.1f, 0, 0.4f, 0.06f, 0.18f, bn).part(0, 1.25f, 0, 0.4f, 0.06f, 0.18f, bn).part(0, 1.4f, 0, 0.42f, 0.1f, 0.2f, bn)
+                .part(-0.3f, 0.95f, -0.1f, 0.1f, 0.5f, 0.1f, bn).part(0.3f, 1.25f, -0.3f, 0.1f, 0.1f, 0.5f, bn)
+                .part(0.3f, 0.95f, -0.58f, 0.06f, 0.7f, 0.06f, 0x5A3A1E)
+                .part(0, 1.5f, 0, 0.48f, 0.46f, 0.48f, 0xE4E0D4).part(-0.11f, 1.66f, -0.245f, 0.1f, 0.09f, 0.02f, 0x1A1A1A).part(0.11f, 1.66f, -0.245f, 0.1f, 0.09f, 0.02f, 0x1A1A1A)
+                .part(0, 1.54f, -0.245f, 0.24f, 0.05f, 0.02f, 0x2A2A2A));
 
         // --- Вартовий села: стоїть біля колодязя, б'є ворогів поблизу, гравця не чіпає. Будується: Т із 4 залізних блоків + лампа зверху (core/Guard)
         r.mob("village_guard", new MobSettings().health(100).speed(1.8f).size(0.9f, 1.95f).behavior(MobSettings.Behavior.GUARD).attack(9, 1.6f, 1.5f).detect(16)

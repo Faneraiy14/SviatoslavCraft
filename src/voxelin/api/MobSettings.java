@@ -76,6 +76,17 @@ public final class MobSettings {
     /** Частка броні гравця, яку пробиває удар (0 - броня діє повністю, 1 - ігнорується). Для босів. */
     public MobSettings armorPierce(float f) { armorPierce = Float.isNaN(f) ? 0 : Math.max(0, Math.min(1, f)); return this; }
     float armorPierce;
+    float rangedRange, rangedCooldown = 2f, rangedSpeed = 1.6f;
+    /** Стрілець (скелет): тримає дистанцію й стріляє стрілами, поки бачить гравця. range - найдальша відстань пострілу (блоків),
+     *  cooldownSeconds - пауза між пострілами, arrowSpeed - швидкість стріли (блоків за тік; повний натяг гравця - 3). 0 - не стрілець. */
+    public MobSettings ranged(float range, float cooldownSeconds, float arrowSpeed) {
+        rangedRange = Float.isNaN(range) ? 0 : Math.max(0, Math.min(64, range));
+        rangedCooldown = Float.isNaN(cooldownSeconds) ? 2f : Math.max(0.25f, Math.min(60, cooldownSeconds));
+        rangedSpeed = Float.isNaN(arrowSpeed) ? 1.6f : Math.max(0.3f, Math.min(4, arrowSpeed)); return this;
+    }
+    public float rangedRangeValue() { return rangedRange; }
+    public float rangedCooldownValue() { return rangedCooldown; }
+    public float rangedSpeedValue() { return rangedSpeed; }
     String dimension;
     /** Вимір, де вид з'являється природно ("between" тощо); null - звичайний світ. */
     public MobSettings dimension(String d) { dimension = d; return this; }
@@ -100,6 +111,7 @@ public final class MobSettings {
         s.health = health; s.speed = speed; s.width = width; s.height = height; s.behavior = behavior; s.attackDamage = attackDamage; s.reach = reach; s.cooldown = cooldown;
         s.homeRadius = homeRadius; s.persistent = persistent; s.flying = flying; s.boss = boss; s.armorPierce = armorPierce; s.dimension = dimension; s.invulnerable = invulnerable; s.dialog = dialog; s.greetings.addAll(greetings);
         for (Trade t : trades) s.trades.add(new Trade(t.in.indexOf(':') >= 0 ? t.in : modId + ":" + t.in, t.inCount, t.out.indexOf(':') >= 0 ? t.out : modId + ":" + t.out, t.outCount));
+        s.rangedRange = rangedRange; s.rangedCooldown = rangedCooldown; s.rangedSpeed = rangedSpeed;
         s.detect = detect; s.burnsInSun = burnsInSun; s.fireproof = fireproof; s.title = title; s.parts.addAll(parts);
         for (BlockSettings.Drop d : drops) s.drops.add(new BlockSettings.Drop(d.item.indexOf(':') >= 0 ? d.item : modId + ":" + d.item, d.min, d.max, d.chance));
         for (String b : spawnOn) s.spawnOn.add(b.indexOf(':') >= 0 ? b : modId + ":" + b);

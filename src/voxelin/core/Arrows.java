@@ -26,8 +26,11 @@ public final class Arrows {
         public int age;
         /** Повний натяг: +2 шкоди. */
         public final boolean full;
+        /** Хто випустив: null - гравець; істота - ворожа стріла (б'є гравця, не б'є свого стрільця, не підбирається). */
+        public final Mob owner;
         long sx, sz; int sy; // клітинка, у якій застрягла
-        Arrow(Pos pos, double vx, double vy, double vz, boolean pickup, boolean full) { this.pos = pos; this.vx = vx; this.vy = vy; this.vz = vz; this.pickup = pickup; this.full = full; }
+        Arrow(Pos pos, double vx, double vy, double vz, boolean pickup, boolean full, Mob owner) { this.pos = pos; this.vx = vx; this.vy = vy; this.vz = vz; this.pickup = pickup; this.full = full; this.owner = owner; }
+        public boolean hostile() { return owner != null; }
         public double speed() { return Math.sqrt(vx * vx + vy * vy + vz * vz); }
     }
 
@@ -47,7 +50,17 @@ public final class Arrows {
     /** Випустити стрілу з точки (очі) в напрямку (yaw, pitch) зі швидкістю speed блоків/тік. */
     public Arrow shoot(Pos from, float yaw, float pitch, double speed, boolean pickup) {
         double[] d = Raycast.dir(yaw, pitch);
-        Arrow a = new Arrow(from.copy(), d[0] * speed, d[1] * speed, d[2] * speed, pickup, speed >= FULL_SPEED * 0.99);
+        return add(new Arrow(from.copy(), d[0] * speed, d[1] * speed, d[2] * speed, pickup, speed >= FULL_SPEED * 0.99, null));
+    }
+
+    /** Стріла істоти-стрільця з точки from у напрямку (dx,dy,dz) (не обов'язково нормованому). Не підбирається. */
+    public Arrow shootFrom(Mob owner, Pos from, double dx, double dy, double dz, double speed) {
+        double l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (!(l > 1e-9)) return null;
+        return add(new Arrow(from.copy(), dx / l * speed, dy / l * speed, dz / l * speed, false, false, owner));
+    }
+
+    private Arrow add(Arrow a) {
         list.add(a);
         if (list.size() > MAX) list.remove(0);
         return a;
@@ -73,6 +86,14 @@ public final class Arrows {
         int steps = Math.max(1, (int) Math.ceil(len / STEP));
         double dx = a.vx / steps, dy = a.vy / steps, dz = a.vz / steps, seg = len / steps;
         for (int i = 0; i < steps; i++) {
+            if (a.hostile() && hitsPlayer(a, dx, dy, dz, seg)) {
+                PlayerTarget t = w.playerTarget();
+                double kx = a.vx, kz = a.vz, h = Math.hypot(kx, kz);
+                if (h < 1e-6) { kx = 0; kz = -1; } else { kx /= h; kz /= h; }
+                t.hurt(damage(len, false), kx * 0.5, kz * 0.5); // броня й зношування - як від удару; поштовх слабший за меч
+                w.sound.play("voxelin:arrow.hit", a.pos, 0.8f, 1.1f);
+                return true;
+            }
             Mob m = mobOnSegment(a, dx, dy, dz, seg);
             if (m != null) {
                 double kx = a.vx, kz = a.vz, h = Math.hypot(kx, kz);
@@ -103,12 +124,22 @@ public final class Arrows {
         Mob best = null; double bestT = Double.POSITIVE_INFINITY;
         double ux = dx / seg, uy = dy / seg, uz = dz / seg;
         for (Mob m : w.mobs()) {
-            if (m.dying || !m.alive()) continue;
+            if (m.dying || !m.alive() || m == a.owner) continue;
             double hw = m.type.width / 2, mx = m.pos.relX(a.pos.cx), mz = m.pos.relZ(a.pos.cz);
             double t = Combat.rayBox(a.pos.x, a.pos.y, a.pos.z, ux, uy, uz, mx - hw, m.pos.y, mz - hw, mx + hw, m.pos.y + m.type.height, mz + hw);
             if (t >= 0 && t <= seg && t < bestT) { bestT = t; best = m; }
         }
         return best;
+    }
+
+    /** Чи влучає крок стріли в гравця (коробка 0.6 x 1.8 навколо центру тіла). У творчому й мертвого - ні. */
+    private boolean hitsPlayer(Arrow a, double dx, double dy, double dz, double seg) {
+        PlayerTarget t = w.playerTarget();
+        if (t == null || !t.alive() || t.creative() || seg < 1e-9) return false;
+        Pos b = t.body();
+        double bx = b.relX(a.pos.cx), bz = b.relZ(a.pos.cz);
+        double r = Combat.rayBox(a.pos.x, a.pos.y, a.pos.z, dx / seg, dy / seg, dz / seg, bx - 0.3, b.y - 0.9, bz - 0.3, bx + 0.3, b.y + 0.9, bz + 0.3);
+        return r >= 0 && r <= seg;
     }
 
     private boolean inSolid(Pos p) {

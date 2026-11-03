@@ -315,6 +315,24 @@ public final class ItemTextureGen {
         return outlined(a);
     }
 
+    /** Кістка: навскіс, з потовщеннями на кінцях. */
+    public static int[] bone() {
+        int[] a = new int[256];
+        int c = 0xFFE8E2D0, sh = 0xFFB8B09A;
+        for (int i = 0; i < 9; i++) { px(a, 4 + i, 11 - i, c); px(a, 5 + i, 11 - i, sh); }
+        int[][] ends = {{3, 11}, {4, 12}, {3, 12}, {2, 11}, {4, 13}, {12, 3}, {13, 4}, {12, 2}, {13, 3}, {11, 2}, {14, 4}};
+        for (int[] e : ends) px(a, e[0], e[1], c);
+        px(a, 2, 12, sh); px(a, 14, 3, sh);
+        return outlined(a);
+    }
+
+    /** Кістяне борошно: купка білого порошку. */
+    public static int[] boneMeal() {
+        int[] a = new int[256];
+        ellipse(a, 8, 10, 5.2, 3.4, (x, y, nx, ny) -> hash(x, y, 33) % 4 == 0 ? 0xFFC8C4B8 : (ny < -0.3 ? 0xFFFFFFFF : 0xFFEAE6DA));
+        return outlined(a);
+    }
+
     public static int[] feather() {
         int[] a = new int[256];
         line(a, 3, 13, 12, 3, 0xFFD8D8D8);

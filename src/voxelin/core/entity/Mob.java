@@ -33,6 +33,9 @@ public final class Mob {
     /** Пройдена відстань - для анімації ходьби. */
     public double walk;
     private double wanderDx, wanderDz;
+    /** Стрілець: чи бачить гравця (перевіряється раз на 4 тіки, бо промінь не безкоштовний). */
+    public boolean seesTarget;
+    private int losTimer;
     private int burnTimer;
     private Pos threat; // звідки вдарили (для втечі)
     /** Ціль-істота (вибирає World раз на 10 тіків): ворог - житель чи Вартовий, Вартовий - ворог. */
@@ -78,7 +81,8 @@ public final class Mob {
         sunBurn(w);
         if (dying) return;
 
-        double dirX = 0, dirZ = 0, speed = 0;
+        double dirX = 0, dirZ = 0, speed = 0, faceX = 0, faceZ = 0;
+        boolean face = false;
         boolean infected = w.infection != null && w.infection.affects(bx, bz);
         if (infected && type.passive() && fleeTicks == 0 && rng.nextInt(40) == 0) { fleeTicks = 60; threat = w.infection.corePos(); } // тварини тікають від ядра
         boolean aggressive = type.hostile() || (type.behavior == voxelin.api.MobSettings.Behavior.NEUTRAL_DAY && (provoked || !daylight(w)));
@@ -110,6 +114,13 @@ public final class Mob {
                 attackCooldown = type.cooldownTicks;
                 prey.damage(type.attackDamage * (infected ? 1.5 : 1), dirX, dirZ, pos);
             }
+        } else if (aggressive && type.ranged() && tdist <= type.detect && sees(w, target)) { // стрілець: тримає дистанцію й стріляє
+            double l = Math.hypot(tdx, tdz);
+            double fx = l > 1e-6 ? tdx / l : 0, fz = l > 1e-6 ? tdz / l : 0;
+            face = true; faceX = fx; faceZ = fz;
+            if (tdist < KEEP_AWAY) { dirX = -fx; dirZ = -fz; speed = type.speed * 0.9; }
+            else if (tdist > type.rangedRange) { dirX = fx; dirZ = fz; speed = type.speed; }
+            if (tdist <= type.rangedRange && attackCooldown == 0) { attackCooldown = type.rangedCooldownTicks; shoot(w, target, rng); }
         } else if (aggressive && tdist <= type.detect) {
             double l = Math.hypot(tdx, tdz);
             if (l > 1e-6) { dirX = tdx / l; dirZ = tdz / l; }
@@ -134,6 +145,7 @@ public final class Mob {
             dirX = wanderDx; dirZ = wanderDz; speed = (dirX != 0 || dirZ != 0) ? type.speed * 0.6 : 0;
         }
         if (speed > 0) yaw = (float) Math.toDegrees(Math.atan2(dirX, -dirZ));
+        if (face) yaw = (float) Math.toDegrees(Math.atan2(faceX, -faceZ)); // стрілець дивиться на гравця, навіть коли відходить
         double tvx = dirX * speed * (inWater ? 0.6 : 1), tvz = dirZ * speed * (inWater ? 0.6 : 1);
         double k = Math.min(1.0, (onGround ? 10.0 : 2.0) * DT);
         vx += (tvx - vx) * k; vz += (tvz - vz) * k;
@@ -145,6 +157,28 @@ public final class Mob {
         pos.normalize();
         walk += Math.hypot(pos.relX(pos.cx) - x0, pos.relZ(pos.cz) - z0);
         if (pos.y < -30) { health = 0; dying = true; deathTicks = (int) DEATH_TICKS; }
+    }
+
+    /** Ближче за це стрілець відходить. */
+    public static final double KEEP_AWAY = 6.0;
+
+    private boolean sees(World w, PlayerTarget t) {
+        if (losTimer-- <= 0) { losTimer = 4; seesTarget = w.lineOfSight(eye(), t.body()); }
+        return seesTarget;
+    }
+
+    /** Очі істоти (звідки летить стріла). */
+    public Pos eye() { Pos e = pos.copy(); e.y += type.height * 0.85; return e; }
+
+    /** Постріл у груди гравця: ціль трохи вище на падіння стріли (~0.5·g·t², t = d/v) і невеликий розкид. */
+    private void shoot(World w, PlayerTarget t, Random rng) {
+        Pos from = eye(), to = t.body();
+        double dx = to.relX(from.cx) - from.x, dy = to.y + 0.2 - from.y, dz = to.relZ(from.cz) - from.z;
+        double d = Math.sqrt(dx * dx + dy * dy + dz * dz), v = type.arrowSpeed;
+        dy += 0.5 * Arrows.GRAVITY * (d / v) * (d / v) * 1.1; // 1.1 - на опір повітря
+        double spread = 0.03 * d;
+        dx += rng.nextGaussian() * spread; dy += rng.nextGaussian() * spread * 0.5; dz += rng.nextGaussian() * spread;
+        if (w.arrows.shootFrom(this, from, dx, dy, dz, v) != null) w.sound.play("voxelin:bow.shoot", from, 0.7f, 0.9f + rng.nextFloat() * 0.2f);
     }
 
     /** Під час розмови лише гасимо ковзання й падаємо (гравітація). */

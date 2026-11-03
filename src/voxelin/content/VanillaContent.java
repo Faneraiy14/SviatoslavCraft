@@ -494,7 +494,12 @@ public final class VanillaContent implements VoxelinMod {
         r.structure("seam_gate", Structures.SEAM_GATE);
         r.structure("keeper_home", Structures.KEEPER_HOME);
         r.structure("keeper_camp", Structures.KEEPER_CAMP);
+        r.structure("forest_shrine", Structures.FOREST_SHRINE);
+        r.structure("sunken_ruin", Structures.SUNKEN_RUIN);
         r.structure("nether_fortress", Structures.NETHER_FORTRESS);
+        r.loot("forest_shrine", new LootSettings().rolls(3, 5).entry("apple", 2, 5, 8).entry("arrow", 4, 12, 7).entry("bone_meal", 3, 8, 6).entry("iron_ingot", 1, 4, 6).entry("gold_ingot", 1, 3, 5).entry("bow", 1, 1, 2).entry("diamond", 1, 1, 1));
+        r.loot("forest_shrine_hidden", new LootSettings().rolls(2, 3).entry("diamond", 1, 3, 5).entry("gold_ingot", 3, 6, 6).entry("liminite_shard", 1, 3, 4).entry("end_eye", 1, 1, 1).entry("iron_chestplate", 1, 1, 2)); // схованка під плитою: варто копати
+        r.loot("sunken_ruin", new LootSettings().rolls(3, 5).entry("gold_ingot", 2, 5, 8).entry("copper_ingot", 3, 8, 7).entry("iron_ingot", 2, 5, 6).entry("diamond", 1, 2, 3).entry("liminite_shard", 1, 2, 2).entry("leather", 2, 5, 4));
         r.loot("keeper_note", new LootSettings().rolls(1, 1).entry("keeper_note", 1, 1, 1)); // одна записка на стоянку - гарантовано
         r.loot("keeper_camp", new LootSettings().rolls(2, 4).entry("liminite_shard", 1, 2, 4).entry("apple", 1, 3, 6).entry("torch", 2, 6, 6).entry("pale_planks", 2, 6, 5).entry("bone", 1, 3, 4));
         r.loot("keeper_home", new LootSettings().rolls(3, 5).entry("liminite_shard", 2, 5, 10).entry("threshold_bloom", 1, 2, 6).entry("echo_dust", 1, 3, 6).entry("diamond", 1, 2, 3).entry("lamp", 1, 2, 4).entry("apple", 1, 3, 5));

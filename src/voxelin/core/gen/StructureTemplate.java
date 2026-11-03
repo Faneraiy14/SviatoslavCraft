@@ -12,7 +12,8 @@ import java.util.*;
  */
 public final class StructureTemplate {
     /** MANUAL - сам не розкидається по світу, його ставить генератор виміру (Дім Сторожа). */
-    public enum Place { SURFACE, UNDERGROUND, MANUAL }
+    /** SEABED - на дні моря: увесь відбиток щонайменше на 4 блоки під рівнем води ('.' лишає воду). */
+    public enum Place { SURFACE, UNDERGROUND, MANUAL, SEABED }
 
     public static final class StructureException extends Exception {
         public StructureException(int line, String msg) { super("рядок " + line + ": " + msg); }
@@ -102,7 +103,7 @@ public final class StructureTemplate {
         }
         Place place;
         String pl = head.getOrDefault("place", role != null ? "surface" : "");
-        if (pl.equals("surface")) place = Place.SURFACE; else if (pl.equals("underground")) place = Place.UNDERGROUND; else if (pl.equals("manual")) place = Place.MANUAL; else throw new StructureException(1, "place: має бути surface, underground або manual");
+        if (pl.equals("surface")) place = Place.SURFACE; else if (pl.equals("underground")) place = Place.UNDERGROUND; else if (pl.equals("manual")) place = Place.MANUAL; else if (pl.equals("seabed")) place = Place.SEABED; else throw new StructureException(1, "place: має бути surface, underground, seabed або manual");
         int spacing = (role != null || place == Place.MANUAL) && !head.containsKey("spacing") ? 64 : intOf(head, "spacing", 16, 4096);
         double chance;
         if ((role != null && !head.containsKey("chance")) || place == Place.MANUAL) chance = 0;
@@ -110,7 +111,7 @@ public final class StructureTemplate {
             try { chance = Double.parseDouble(head.getOrDefault("chance", "")); } catch (NumberFormatException e) { throw new StructureException(1, "chance: не число"); }
             if (!(chance >= 0 && chance <= 1)) throw new StructureException(1, "chance: від 0 до 1");
         }
-        int sink = place == Place.SURFACE && head.containsKey("sink") ? intOf(head, "sink", 0, 8) : 0, dmin = 0, dmax = 0;
+        int sink = (place == Place.SURFACE || place == Place.SEABED) && head.containsKey("sink") ? intOf(head, "sink", 0, 8) : 0, dmin = 0, dmax = 0;
         if (place == Place.UNDERGROUND) {
             String[] d = head.getOrDefault("depth", "").split("\\s+");
             try { dmin = Integer.parseInt(d[0]); dmax = Integer.parseInt(d[1]); } catch (RuntimeException e) { throw new StructureException(1, "depth: потрібні два числа «мін макс»"); }

@@ -32,7 +32,7 @@ public class VoxelinStructureTest {
     }
 
     static void parsing() throws Exception {
-        check(g.structures.templates().stream().filter(t -> t.role == null && t.place != voxelin.core.gen.StructureTemplate.Place.MANUAL).count() == 7, "сім ванільних окремих структур (руїни, підземелля, шахта, храм, фортеця, брама Шву, стоянка Сторожа)");
+        check(g.structures.templates().stream().filter(t -> t.role == null && t.place != voxelin.core.gen.StructureTemplate.Place.MANUAL).count() == 9, "дев'ять ванільних окремих структур (руїни, підземелля, шахта, храм, фортеця, брама Шву, стоянка Сторожа, лісове святилище, затонулі руїни)");
         for (String nm : new String[]{"ruins", "dungeon", "mine"}) check(g.structures.find(nm) != null && g.structures.find("voxelin:" + nm) != null, "шаблон " + nm);
         StructureTemplate t = parse(TINY);
         check(t.sx == 3 && t.sz == 2 && t.sy == 2 && t.place == StructureTemplate.Place.SURFACE && t.spacing == 40 && t.chance == 1 && t.sink == 1, "розміри й заголовок");
@@ -339,7 +339,7 @@ public class VoxelinStructureTest {
         StructureTemplate ruins = g3.structures.find("ruins");
         check(ruins != null && ruins.sx == 3 && ruins.spacing == 40, "файл гравця перекрив ванільні руїни");
         check(g3.structures.find("extra") != null && g3.structures.find("broken") == null && g3.structures.find("bad name") == null, "новий вид додано, зламані пропущено");
-        check(g3.structures.templates().stream().filter(t -> t.role == null && t.place != StructureTemplate.Place.MANUAL).count() == 8, "ванільні dungeon+mine+temple+fortress+seam_gate+keeper_camp + руїни з файла + extra");
+        check(g3.structures.templates().stream().filter(t -> t.role == null && t.place != StructureTemplate.Place.MANUAL).count() == 10, "ванільні dungeon+mine+temple+fortress+seam_gate+keeper_camp+forest_shrine+sunken_ruin + руїни з файла + extra");
     }
 
     static void perf() throws Exception {

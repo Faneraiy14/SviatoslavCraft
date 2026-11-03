@@ -1057,6 +1057,180 @@ BBBBBBBBBBB
 """;
 
     /** Дім Сторожа в міжсвітті (ставить генератор міжсвіття біля острова прибуття; у звичайному світі не з'являється - роль). Двері на +z. */
+    // --- лісове святилище: кам'яна цегла під дубовою кроною, вівтар-моноліт і скриня; під плитою перед вівтарем - схованка з другою скринею; двоє павуків-вартових
+    public static final String FOREST_SHRINE = """
+place: surface
+spacing: 224
+chance: 0.5
+sink: 2
+biomes: forest birch taiga
+legend:
+  B = stone_bricks
+  C = cobblestone
+  L = oak_log
+  F = oak_leaves
+  M = monolith
+  K = chest loot=forest_shrine
+  H = chest loot=forest_shrine_hidden
+  A = lamp
+  S = mob spider
+  _ = air
+layers:
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+---
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+BBB___BBB
+BBB_H_BBB
+BBB___BBB
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+---
+CBBBBBBBC
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+BBBBCBBBB
+BBBBBBBBB
+BBBBBBBBB
+BBBBBBBBB
+CBBBBBBBC
+---
+L_______L
+__S___S__
+___MMM___
+___MKM___
+_________
+_________
+_________
+_________
+L_______L
+---
+L_______L
+_________
+____M____
+_________
+_________
+_________
+_________
+_________
+L_______L
+---
+L___A___L
+_________
+____M____
+_________
+_________
+_________
+_________
+_________
+L_______L
+---
+FFFFFFFFF
+FBBBBBBBF
+FB_____BF
+FB_____BF
+FB_____BF
+FB_____BF
+FB_____BF
+FBBBBBBBF
+FFFFFFFFF
+---
+.FFFFFFF.
+FFFFFFFFF
+FFFFFFFFF
+FFFFFFFFF
+FFFFFFFFF
+FFFFFFFFF
+FFFFFFFFF
+FFFFFFFFF
+.FFFFFFF.
+---
+...FFF...
+..FFFFF..
+.FFFFFFF.
+.FFFFFFF.
+.FFFFFFF.
+.FFFFFFF.
+.FFFFFFF.
+..FFFFF..
+...FFF...
+""";
+
+    // --- затонулі руїни: на дні моря (place: seabed), обвалені стіни з кам'яної цегли й бруківки, скло вікон, скриня в уцілілому куті
+    public static final String SUNKEN_RUIN = """
+place: seabed
+spacing: 160
+chance: 0.55
+sink: 1
+biomes: ocean
+legend:
+  B = stone_bricks
+  C = cobblestone
+  G = glass
+  K = chest loot=sunken_ruin
+layers:
+CCCCCCCCC
+CBBBBBBBC
+CBBBBBBBC
+CBBBBBBBC
+CBBBBBBBC
+CBBBBBBBC
+CBBBBBBBC
+CBBBBBBBC
+CCCCCCCCC
+---
+BBBB.BBBB
+B.......B
+B.K.....B
+B.......B
+.........
+B.......B
+B.......C
+B.......B
+BBB..BBBB
+---
+BGBB..BGB
+B.......B
+B.......B
+G........
+.........
+.........
+B........
+B.......B
+BB....B.B
+---
+BBB....BB
+B.......B
+.........
+.........
+.........
+.........
+.........
+.........
+B.......B
+---
+BB......B
+B........
+.........
+.........
+.........
+.........
+.........
+.........
+.........
+""";
+
     // --- покинута стоянка Сторожа в Тихих пустищах: напівзруйнована хатина з блідих дощок біля моноліту; скриня з запискою (core/Story) і скриня припасів
     public static final String KEEPER_CAMP = """
 place: surface

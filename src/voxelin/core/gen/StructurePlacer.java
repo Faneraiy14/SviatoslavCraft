@@ -79,6 +79,10 @@ public final class StructurePlacer {
             if (min <= sea + 1 || max - min > 4) return null;
             oy = min + 1 - t.sink;
             if (oy < 2 || oy + t.sy > 254) return null;
+        } else if (t.place == StructureTemplate.Place.SEABED) { // дно моря: усе під водою щонайменше на 4 блоки, дно досить рівне
+            if (max > sea - 4 || max - min > 4) return null;
+            oy = min + 1 - t.sink;
+            if (oy < 2) return null;
         } else {
             oy = t.depthMin + (int) ((h4 >>> 8) % (t.depthMax - t.depthMin + 1));
             if (oy + t.sy + 4 >= min || oy < 3) return null; // має лишатись під поверхнею з запасом
@@ -245,7 +249,7 @@ public final class StructurePlacer {
             String mob = t.mobAt(x, y, z);
             if (mob != null) c.pending.add(new Chunk.Pending("mob", wx, wy, wz, mob, Noise.mix(p.seed ^ (wx * 31 + wy * 131 + wz * 17) ^ 0x30B5L)));
             if (loot != null) c.pending.add(new Chunk.Pending("chest", wx, wy, wz, loot, Noise.mix(p.seed ^ (wx * 31 + wy * 131 + wz * 17))));
-            if (y == 0 && t.place == StructureTemplate.Place.SURFACE && id > 0) { // фундамент під нерівним місцем
+            if (y == 0 && (t.place == StructureTemplate.Place.SURFACE || t.place == StructureTemplate.Place.SEABED) && id > 0) { // фундамент під нерівним місцем (і під водою)
                 for (int fy = wy - 1; fy >= Math.max(1, wy - 8); fy--) {
                     int cur = c.get(lx, fy, lz);
                     if (cur > 0 && !isLiquid(cur)) break;

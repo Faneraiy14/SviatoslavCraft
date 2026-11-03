@@ -32,6 +32,10 @@ public final class Mob {
     public boolean dying, onGround, provoked, inWater, burning, lootDropped;
     /** Пройдена відстань - для анімації ходьби. */
     public double walk;
+    /** Для малювання: тіло плавно доповертається до yaw; голова - відносно тіла (+-60) і нахил; змах руки (тіки, що лишились). */
+    public float bodyYaw, headYaw, headPitch;
+    public int swingTicks;
+    public static final int SWING = 8;
     private double wanderDx, wanderDz;
     /** Стрілець: чи бачить гравця (перевіряється раз на 4 тіки, бо промінь не безкоштовний). */
     public boolean seesTarget;
@@ -60,6 +64,9 @@ public final class Mob {
         this.type = type; this.pos = at.copy(); this.health = type.health;
     }
 
+    /** Повернути одразу (поява, телепорт): тіло й голова без доповороту. */
+    public void setYaw(float y) { yaw = y; bodyYaw = y; headYaw = 0; }
+
     public boolean removable() { return dying && deathTicks >= (type.boss ? 80 : DEATH_TICKS); }
     public boolean alive() { return !dying; }
 
@@ -83,8 +90,8 @@ public final class Mob {
         if (invuln > 0) invuln--;
         if (attackCooldown > 0) attackCooldown--;
         if (dying) { deathTicks++; return; }
-        if (type.flying) { flyTick(w, target, rng); return; }
-        if (talkTicks > 0) { talkTicks--; vx *= 0.5; vz *= 0.5; moveHOnly(w); return; }
+        if (type.flying) { flyTick(w, target, rng); bodyYaw = yaw; return; }
+        if (talkTicks > 0) { talkTicks--; vx *= 0.5; vz *= 0.5; moveHOnly(w); look(target, null); return; }
         long bx = pos.blockX(), bz = pos.blockZ();
         inWater = w.isLiquid(bx, pos.blockY(), bz);
         sunBurn(w);
@@ -127,7 +134,7 @@ public final class Mob {
             if (speed > 0 && steer(w, prey.pos.blockX(), feetY(prey.pos.y), prey.pos.blockZ(), l, dir)) { dirX = dir[0]; dirZ = dir[1]; }
             else if (speed > 0 && noPath) speed = 0;
             if (pdist <= type.reach + (type.width + prey.type.width) / 2 && attackCooldown == 0 && type.attackDamage > 0) {
-                attackCooldown = type.cooldownTicks;
+                attackCooldown = type.cooldownTicks; swingTicks = SWING;
                 prey.damage(type.attackDamage * (infected ? 1.5 : 1), dirX, dirZ, pos);
             }
         } else if (aggressive && type.ranged() && tdist <= type.detect && sees(w, target)) { // стрілець: тримає дистанцію й стріляє
@@ -136,7 +143,7 @@ public final class Mob {
             face = true; faceX = fx; faceZ = fz;
             if (tdist < KEEP_AWAY) { dirX = -fx; dirZ = -fz; speed = type.speed * 0.9; }
             else if (tdist > type.rangedRange) { dirX = fx; dirZ = fz; speed = type.speed; }
-            if (tdist <= type.rangedRange && attackCooldown == 0) { attackCooldown = type.rangedCooldownTicks; shoot(w, target, rng); }
+            if (tdist <= type.rangedRange && attackCooldown == 0) { attackCooldown = type.rangedCooldownTicks; swingTicks = SWING; shoot(w, target, rng); }
         } else if (aggressive && tdist <= type.detect) {
             double l = Math.hypot(tdx, tdz);
             if (l > 1e-6) { dirX = tdx / l; dirZ = tdz / l; }
@@ -145,7 +152,7 @@ public final class Mob {
             if (speed > 0 && steer(w, tb.blockX(), feetY(tb.y - PLAYER_HALF), tb.blockZ(), l, dir)) { dirX = dir[0]; dirZ = dir[1]; }
             else if (speed > 0 && noPath) speed = 0; // замкнено: стоїть, а не б'ється об стіну
             if (tdist <= type.reach + type.width / 2 && Math.abs(target.body().y - (pos.y + type.height / 2)) < 1.6 && attackCooldown == 0 && type.attackDamage > 0) {
-                attackCooldown = type.cooldownTicks;
+                attackCooldown = type.cooldownTicks; swingTicks = SWING;
                 target.hurt(type.attackDamage * (infected ? 1.5 : 1), dirX, dirZ, type.armorPierce); // у зараженій зоні вороги сильніші
             }
         } else if (night && type.villager() && home != null) { // вночі житель іде додому й стоїть там
@@ -180,6 +187,7 @@ public final class Mob {
         moveH(w, vx * DT, vz * DT);
         pos.normalize();
         walk += Math.hypot(pos.relX(pos.cx) - x0, pos.relZ(pos.cz) - z0);
+        look(target, prey != null && pdist < tdist ? prey : null);
         if (pos.y < -30) { health = 0; dying = true; deathTicks = (int) DEATH_TICKS; }
     }
 
@@ -238,6 +246,24 @@ public final class Mob {
         for (int d = 1; d <= Pathfinder.MAX_DROP + 1; d++) if (w.isSolid(fx, fy - d, fz) || w.isLiquid(fx, fy - d, fz)) return false;
         return true;
     }
+
+    /** Анімація: тіло доповертається до yaw (до 18 градусів за тік), голова дивиться на ціль у 10 блоках (гравця або істоту-ціль). */
+    private void look(PlayerTarget t, Mob other) {
+        if (swingTicks > 0) swingTicks--;
+        float diff = wrap(yaw - bodyYaw);
+        bodyYaw = wrap(bodyYaw + Math.max(-18f, Math.min(18f, diff)));
+        double lx = 0, ly = 0, lz = 0; boolean has = false;
+        if (other != null) { lx = other.pos.relX(pos.cx) - pos.x; ly = other.pos.y + other.type.height * 0.85 - (pos.y + type.height * 0.85); lz = other.pos.relZ(pos.cz) - pos.z; has = true; }
+        else if (t != null && t.alive()) { Pos b = t.body(); lx = b.relX(pos.cx) - pos.x; ly = b.y + 0.7 - (pos.y + type.height * 0.85); lz = b.relZ(pos.cz) - pos.z; has = lx * lx + lz * lz < 100; }
+        float wantYaw = 0, wantPitch = 0;
+        if (has && lx * lx + lz * lz > 1e-4) {
+            float rel = wrap((float) Math.toDegrees(Math.atan2(lx, -lz)) - bodyYaw);
+            if (Math.abs(rel) <= 100) { wantYaw = Math.max(-60f, Math.min(60f, rel)); wantPitch = (float) Math.max(-40, Math.min(40, Math.toDegrees(Math.atan2(ly, Math.hypot(lx, lz))))); }
+        }
+        headYaw += (wantYaw - headYaw) * 0.3f; headPitch += (wantPitch - headPitch) * 0.3f;
+    }
+
+    private static float wrap(float a) { a %= 360f; if (a >= 180f) a -= 360f; if (a < -180f) a += 360f; return a; }
 
     /** Ближче за це стрілець відходить. */
     public static final double KEEP_AWAY = 6.0;

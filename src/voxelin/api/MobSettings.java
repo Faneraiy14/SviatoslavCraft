@@ -18,11 +18,27 @@ public final class MobSettings {
         GUARD
     }
 
-    /** Одна коробка моделі: центр по x/z, низ по y, розміри, колір; swing 0 - нерухома, 1/2 - хитається в протифазі при ході (ноги). */
+    /**
+     * Одна коробка моделі: центр по x/z, низ по y, розміри, колір. swing: 0 - нерухома, 1/2 - нога (хитається в протифазі при ході),
+     * 3/4 - крило (ліве/праве), 5/6 - рука (ліва/права: хитається при ході й змахує при ударі).
+     * role - що це: тіло, голова (повертається за ціллю), кінцівка, крило. pattern - візерунок текстури (див. PATTERNS), null - рівний.
+     * face - на передній грані цієї частини малюється обличчя (лише головна частина голови).
+     */
     public static final class Part {
-        public final float cx, y0, cz, w, h, d; public final int rgb, swing;
-        public Part(float cx, float y0, float cz, float w, float h, float d, int rgb, int swing) { this.cx = cx; this.y0 = y0; this.cz = cz; this.w = w; this.h = h; this.d = d; this.rgb = rgb & 0xFFFFFF; this.swing = Math.max(0, Math.min(4, swing)); }
+        public static final int BODY = 0, HEAD = 1, LIMB = 2, WING = 3;
+        public final float cx, y0, cz, w, h, d; public final int rgb, swing, role; public final String pattern; public final boolean face;
+        public Part(float cx, float y0, float cz, float w, float h, float d, int rgb, int swing) { this(cx, y0, cz, w, h, d, rgb, swing, -1, null, false); }
+        public Part(float cx, float y0, float cz, float w, float h, float d, int rgb, int swing, int role, String pattern, boolean face) {
+            this.cx = cx; this.y0 = y0; this.cz = cz; this.w = w; this.h = h; this.d = d; this.rgb = rgb & 0xFFFFFF; this.swing = Math.max(0, Math.min(6, swing));
+            this.role = role >= BODY && role <= WING ? role : this.swing == 0 ? BODY : this.swing <= 2 || this.swing >= 5 ? LIMB : WING;
+            this.pattern = pattern == null || !PATTERNS.contains(pattern) ? null : pattern; this.face = face && this.role == HEAD;
+        }
+        Part with(int role, String pattern, boolean face) { return new Part(cx, y0, cz, w, h, d, rgb, swing, role, pattern, face); }
+        public boolean arm() { return swing == 5 || swing == 6; }
     }
+
+    /** Візерунки текстур частин: хутро, шкіра, кістка, тканина, вичинена шкіра, луска, панцир, камінь, сяйво. */
+    public static final java.util.Set<String> PATTERNS = java.util.Set.of("fur", "skin", "bone", "cloth", "leather", "scale", "shell", "stone", "glow");
 
     /** Угода жителя: віддай inCount x in - отримай outCount x out. */
     public static final class Trade {
@@ -104,6 +120,18 @@ public final class MobSettings {
     /** Мирна істота з'являється лише на цих блоках («voxelin:grass»); порожньо - на будь-якій твердій опорі. */
     public MobSettings spawnOn(String... blocks) { spawnOn.addAll(Arrays.asList(blocks)); return this; }
     public MobSettings part(float cx, float y0, float cz, float w, float h, float d, int rgb) { parts.add(new Part(cx, y0, cz, w, h, d, rgb, 0)); return this; }
+    /** Голова: повертається за ціллю (до +-60 градусів), на передній грані - обличчя (див. face). Обертається навколо низу цієї коробки. */
+    public MobSettings head(float cx, float y0, float cz, float w, float h, float d, int rgb) { parts.add(new Part(cx, y0, cz, w, h, d, rgb, 0, Part.HEAD, null, true)); return this; }
+    /** Остання додана частина - на голові (роги, капелюх, дзьоб): повертається разом із головою. */
+    public MobSettings onHead() { if (!parts.isEmpty()) { Part p = parts.get(parts.size() - 1); parts.set(parts.size() - 1, p.with(Part.HEAD, p.pattern, false)); } return this; }
+    /** Рука: хитається при ході (ліва в протифазі до лівої ноги) і змахує вперед при ударі; обертається від плеча (верх коробки, а для витягнутої вперед - задній край). */
+    public MobSettings armPart(float cx, float y0, float cz, float w, float h, float d, int rgb, boolean left) { parts.add(new Part(cx, y0, cz, w, h, d, rgb, left ? 5 : 6)); return this; }
+    /** Візерунок текстури останньої доданої частини (одна з PATTERNS; невідома назва - рівний колір). */
+    public MobSettings pattern(String name) { if (!parts.isEmpty()) { Part p = parts.get(parts.size() - 1); parts.set(parts.size() - 1, p.with(p.role, name, p.face)); } return this; }
+    int eyes = -1;
+    /** Колір очей обличчя (на голові з head()); без виклику - темні очі. */
+    public MobSettings face(int eyeRgb) { eyes = eyeRgb & 0xFFFFFF; return this; }
+    public int eyeColor() { return eyes; }
     public MobSettings legPart(float cx, float y0, float cz, float w, float h, float d, int rgb, boolean opposite) { parts.add(new Part(cx, y0, cz, w, h, d, rgb, opposite ? 2 : 1)); return this; }
 
     public MobSettings qualified(String modId) {
@@ -112,7 +140,7 @@ public final class MobSettings {
         s.homeRadius = homeRadius; s.persistent = persistent; s.flying = flying; s.boss = boss; s.armorPierce = armorPierce; s.dimension = dimension; s.invulnerable = invulnerable; s.dialog = dialog; s.greetings.addAll(greetings);
         for (Trade t : trades) s.trades.add(new Trade(t.in.indexOf(':') >= 0 ? t.in : modId + ":" + t.in, t.inCount, t.out.indexOf(':') >= 0 ? t.out : modId + ":" + t.out, t.outCount));
         s.rangedRange = rangedRange; s.rangedCooldown = rangedCooldown; s.rangedSpeed = rangedSpeed;
-        s.detect = detect; s.burnsInSun = burnsInSun; s.fireproof = fireproof; s.title = title; s.parts.addAll(parts);
+        s.detect = detect; s.burnsInSun = burnsInSun; s.fireproof = fireproof; s.title = title; s.parts.addAll(parts); s.eyes = eyes;
         for (BlockSettings.Drop d : drops) s.drops.add(new BlockSettings.Drop(d.item.indexOf(':') >= 0 ? d.item : modId + ":" + d.item, d.min, d.max, d.chance));
         for (String b : spawnOn) s.spawnOn.add(b.indexOf(':') >= 0 ? b : modId + ":" + b);
         return s;

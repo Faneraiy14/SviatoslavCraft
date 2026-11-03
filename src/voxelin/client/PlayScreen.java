@@ -43,6 +43,7 @@ final class PlayScreen {
     private long[] gateHint;
     private long gateHintUntil, goalFlashAt, sleepAt;
     private IconAtlas icons;
+    private voxelin.client.render.MobSkins skins;
     private boolean invOpen, chatOpen, debug, hud = true, grabbed;
     private Raycast.Hit hit;
     private long ticks;
@@ -103,6 +104,7 @@ final class PlayScreen {
         if (world.dimension().equals("end")) { world.populateEnd(); world.unlockRecord("voxelin:end_arrival"); }
         if (world.dimension().equals(Dimensions.BETWEEN)) world.unlockRecord("voxelin:between");
         icons = new IconAtlas(v.textures, world);
+        skins = new voxelin.client.render.MobSkins(world.mobTypes.all(), new java.io.File("textures"));
         java.util.function.Consumer<Inventory.Stack> dropper = st -> { if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); };
         invScreen = InventoryScreen.craft("ІНВЕНТАР", new CraftMenu(world.itemTypes, v.game.recipes, inv, 2), inv, world, icons, dropper);
         benchScreen = InventoryScreen.craft("ВЕРСТАК", new CraftMenu(world.itemTypes, v.game.recipes, inv, 3), inv, world, icons, dropper);
@@ -652,11 +654,17 @@ final class PlayScreen {
         }
     }
 
-    /** Істоти: коробчаті моделі з анімацією ходьби (ноги), червоним відтінком при ударі, нахилом на бік при смерті; світло - з рушія світла в точці. */
+    /**
+     * Істоти: коробки з текстурами MobSkins (візерунок частини, обличчя на голові). Тіло плавно повертається (bodyYaw), голова - за ціллю,
+     * ноги й руки хитаються при ході, рука змахує при ударі; червоний відтінок при ударі, нахил на бік при смерті; світло - з рушія світла в точці.
+     * Частини з візерунком «glow» світяться самі (не темніють уночі).
+     */
     private void drawMobs(float s) {
         java.util.List<Mob> list = world.mobs();
         if (list.isEmpty()) return;
         glDisable(GL_CULL_FACE);
+        glEnable(GL_TEXTURE_2D);
+        skins.bind();
         int drawn = 0;
         for (Mob m : list) {
             double dx = m.pos.relX(cam.eye.cx) - cam.eye.x, dz = m.pos.relZ(cam.eye.cz) - cam.eye.z, dy = m.pos.y - cam.eye.y;
@@ -670,36 +678,65 @@ final class PlayScreen {
             else if (m.burning) { tr = 1f; tg = 0.75f; tb = 0.4f; }
             double speed = Math.hypot(m.vx, m.vz);
             float swing = (float) (Math.sin(m.walk * 3.2) * 38 * Math.min(1, speed / 1.5));
+            float attack = m.swingTicks > 0 ? (float) Math.sin((1 - m.swingTicks / (float) Mob.SWING) * Math.PI) : 0;
+            java.util.List<voxelin.api.MobSettings.Part> parts = m.type.parts;
+            float hx = 0, hy = 0, hz = 0; boolean hasHead = false; // шия: низ головної частини голови
+            for (voxelin.api.MobSettings.Part p : parts) if (p.role == voxelin.api.MobSettings.Part.HEAD && (p.face || !hasHead)) { hx = p.cx; hy = p.y0; hz = p.cz; hasHead = true; if (p.face) break; }
             glPushMatrix();
             glTranslatef((float) (m.pos.relX(cam.eye.cx) * s), (float) (m.pos.y * s), (float) (m.pos.relZ(cam.eye.cz) * s));
             glScalef(s, s, s);
-            glRotatef(-m.yaw, 0, 1, 0);
+            glRotatef(-m.bodyYaw, 0, 1, 0);
             if (m.dying) { float roll = (float) Math.min(90, m.deathTicks / Mob.DEATH_TICKS * 90); glTranslatef((float) m.type.width / 2, 0, 0); glRotatef(-roll, 0, 0, 1); glTranslatef((float) -m.type.width / 2, 0, 0); }
-            for (voxelin.api.MobSettings.Part p : m.type.parts) {
-                float r = ((p.rgb >> 16) & 255) / 255f * light * tr, g = ((p.rgb >> 8) & 255) / 255f * light * tg, b = (p.rgb & 255) / 255f * light * tb;
+            for (int i = 0; i < parts.size(); i++) {
+                voxelin.api.MobSettings.Part p = parts.get(i);
+                float lk = "glow".equals(p.pattern) ? 1f : light;
+                float r = lk * tr, g = lk * tg, b = lk * tb;
                 glPushMatrix();
-                if (p.swing == 1 || p.swing == 2) { glTranslatef(p.cx, p.y0 + p.h, p.cz); glRotatef(p.swing == 1 ? swing : -swing, 1, 0, 0); glTranslatef(-p.cx, -(p.y0 + p.h), -p.cz); }
+                if (p.role == voxelin.api.MobSettings.Part.HEAD) { glTranslatef(hx, hy, hz); glRotatef(-m.headYaw, 0, 1, 0); glRotatef(m.headPitch, 1, 0, 0); glTranslatef(-hx, -hy, -hz); }
+                else if (p.swing == 1 || p.swing == 2) { glTranslatef(p.cx, p.y0 + p.h, p.cz); glRotatef(p.swing == 1 ? swing : -swing, 1, 0, 0); glTranslatef(-p.cx, -(p.y0 + p.h), -p.cz); }
+                else if (p.arm()) { // плече: верх для звислої руки, задній край для витягнутої вперед
+                    boolean hang = p.h >= p.d;
+                    float py = hang ? p.y0 + p.h : p.y0 + p.h / 2, pz = hang ? p.cz : p.cz + p.d / 2;
+                    float a = (p.swing == 5 ? -swing : swing) * (hang ? 0.7f : 0.15f) + (hang ? attack * 80 : -attack * 40);
+                    glTranslatef(p.cx, py, pz); glRotatef(a, 1, 0, 0); glTranslatef(-p.cx, -py, -pz);
+                }
                 else if (p.swing >= 3) { // крило: махає навколо осі вперед від внутрішнього краю
-                    float px0 = p.cx - Math.signum(p.cx) * p.w / 2f, flap = (float) (Math.sin(m.age * 0.3 + (p.swing == 3 ? 0 : 0)) * 32);
+                    float px0 = p.cx - Math.signum(p.cx) * p.w / 2f, flap = (float) (Math.sin(m.age * 0.3) * 32);
                     glTranslatef(px0, p.y0 + p.h / 2, p.cz); glRotatef(p.swing == 3 ? -flap : flap, 0, 0, 1); glTranslatef(-px0, -(p.y0 + p.h / 2), -p.cz);
                 }
-                box(p.cx, p.y0, p.cz, p.w, p.h, p.d, r, g, b);
+                skinBox(p, skins.tile(m.type, i, false), skins.tile(m.type, i, true), r, g, b);
                 glPopMatrix();
             }
             glPopMatrix();
         }
+        glDisable(GL_TEXTURE_2D);
         glEnable(GL_CULL_FACE);
     }
 
-    private static void box(float cx, float y0, float cz, float w, float h, float d, float r, float g, float b) {
-        float x0 = cx - w / 2, x1 = cx + w / 2, y1 = y0 + h, z0 = cz - d / 2, z1 = cz + d / 2;
+    private final float[] uvTmp = new float[4];
+
+    /** Коробка частини з текстурою: 32 пікселі плитки на блок (дрібна частина бере шматок плитки), обличчя - на всю передню грань. */
+    private void skinBox(voxelin.api.MobSettings.Part p, int tile, int face, float r, float g, float b) {
+        float x0 = p.cx - p.w / 2, x1 = p.cx + p.w / 2, y0 = p.y0, y1 = p.y0 + p.h, z0 = p.cz - p.d / 2, z1 = p.cz + p.d / 2;
+        float fw = Math.min(1, Math.max(0.0625f, p.w * 2)), fh = Math.min(1, Math.max(0.0625f, p.h * 2)), fd = Math.min(1, Math.max(0.0625f, p.d * 2));
+        float[] t = uvTmp;
         glBegin(GL_QUADS);
-        glColor3f(r, g, b); glVertex3f(x0, y1, z0); glVertex3f(x0, y1, z1); glVertex3f(x1, y1, z1); glVertex3f(x1, y1, z0); // верх
-        glColor3f(r * 0.5f, g * 0.5f, b * 0.5f); glVertex3f(x0, y0, z0); glVertex3f(x1, y0, z0); glVertex3f(x1, y0, z1); glVertex3f(x0, y0, z1);
-        glColor3f(r * 0.8f, g * 0.8f, b * 0.8f); glVertex3f(x0, y0, z0); glVertex3f(x0, y1, z0); glVertex3f(x1, y1, z0); glVertex3f(x1, y0, z0); // перед (-z)
-        glVertex3f(x0, y0, z1); glVertex3f(x1, y0, z1); glVertex3f(x1, y1, z1); glVertex3f(x0, y1, z1);
-        glColor3f(r * 0.65f, g * 0.65f, b * 0.65f); glVertex3f(x0, y0, z0); glVertex3f(x0, y0, z1); glVertex3f(x0, y1, z1); glVertex3f(x0, y1, z0);
-        glVertex3f(x1, y0, z0); glVertex3f(x1, y1, z0); glVertex3f(x1, y1, z1); glVertex3f(x1, y0, z1);
+        if (tile < 0) t[0] = t[1] = t[2] = t[3] = 0;
+        // верх (u - x, v - z) і низ
+        if (tile >= 0) skins.uv(tile, fw, fd, t);
+        glColor3f(r, g, b); glTexCoord2f(t[0], t[1]); glVertex3f(x0, y1, z0); glTexCoord2f(t[0], t[3]); glVertex3f(x0, y1, z1); glTexCoord2f(t[2], t[3]); glVertex3f(x1, y1, z1); glTexCoord2f(t[2], t[1]); glVertex3f(x1, y1, z0);
+        glColor3f(r * 0.5f, g * 0.5f, b * 0.5f); glTexCoord2f(t[0], t[1]); glVertex3f(x0, y0, z0); glTexCoord2f(t[2], t[1]); glVertex3f(x1, y0, z0); glTexCoord2f(t[2], t[3]); glVertex3f(x1, y0, z1); glTexCoord2f(t[0], t[3]); glVertex3f(x0, y0, z1);
+        // перед (-z): обличчя на всю грань; зліва направо для того, хто дивиться в обличчя - від x1 до x0
+        if (face >= 0) skins.uv(face, 1, 1, t); else if (tile >= 0) skins.uv(tile, fw, fh, t);
+        glColor3f(r * 0.8f, g * 0.8f, b * 0.8f);
+        glTexCoord2f(t[2], t[3]); glVertex3f(x0, y0, z0); glTexCoord2f(t[2], t[1]); glVertex3f(x0, y1, z0); glTexCoord2f(t[0], t[1]); glVertex3f(x1, y1, z0); glTexCoord2f(t[0], t[3]); glVertex3f(x1, y0, z0);
+        if (tile >= 0) skins.uv(tile, fw, fh, t);
+        glTexCoord2f(t[0], t[3]); glVertex3f(x0, y0, z1); glTexCoord2f(t[2], t[3]); glVertex3f(x1, y0, z1); glTexCoord2f(t[2], t[1]); glVertex3f(x1, y1, z1); glTexCoord2f(t[0], t[1]); glVertex3f(x0, y1, z1);
+        // боки (u - z, v - y)
+        if (tile >= 0) skins.uv(tile, fd, fh, t);
+        glColor3f(r * 0.65f, g * 0.65f, b * 0.65f);
+        glTexCoord2f(t[0], t[3]); glVertex3f(x0, y0, z0); glTexCoord2f(t[2], t[3]); glVertex3f(x0, y0, z1); glTexCoord2f(t[2], t[1]); glVertex3f(x0, y1, z1); glTexCoord2f(t[0], t[1]); glVertex3f(x0, y1, z0);
+        glTexCoord2f(t[2], t[3]); glVertex3f(x1, y0, z0); glTexCoord2f(t[2], t[1]); glVertex3f(x1, y1, z0); glTexCoord2f(t[0], t[1]); glVertex3f(x1, y1, z1); glTexCoord2f(t[0], t[3]); glVertex3f(x1, y0, z1);
         glEnd();
     }
 
@@ -1115,6 +1152,7 @@ final class PlayScreen {
         world.info.setPlayer(player.pos, player.yaw, player.pitch);
         rend.close();
         icons.close();
+        skins.close();
         world.close();
         grab(false);
         v.input.endText();

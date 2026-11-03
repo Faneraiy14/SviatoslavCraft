@@ -345,44 +345,52 @@ public final class VanillaContent implements VoxelinMod {
         r.recipe("cook_chicken", RecipeSettings.smelting("raw_chicken", 10).result("cooked_chicken", 1));
         r.recipe("cook_beef", RecipeSettings.smelting("raw_beef", 10).result("steak", 1));
 
-        // --- істоти (моделі - прості коробки; своє й текстуровані - пізніше)
+        // --- істоти. Модель - коробки: part (тіло), head (голова з обличчям, дивиться на ціль), onHead (рухається з головою), legPart/armPart/wingPart;
+        // pattern - візерунок текстури (client/render/MobSkins), «glow» світиться в темряві. Свої PNG: textures/voxelin/mobs/<моб>_<номер частини>.png
         r.mob("chicken", new MobSettings().health(4).speed(1.6f).size(0.4f, 0.75f).behavior(MobSettings.Behavior.PASSIVE).spawnOn("grass").title("Курка")
                 .drops("raw_chicken", 1, 1, 1f).drops("feather", 0, 2, 1f)
-                .part(0, 0.25f, 0, 0.36f, 0.30f, 0.5f, 0xF2F2F2).part(0, 0.5f, -0.3f, 0.2f, 0.3f, 0.2f, 0xF2F2F2).part(0, 0.52f, -0.43f, 0.1f, 0.07f, 0.08f, 0xF0A030)
-                .part(0, 0.78f, -0.3f, 0.06f, 0.07f, 0.1f, 0xD03030).part(0, 0.4f, 0.28f, 0.2f, 0.2f, 0.08f, 0xE6E6E6)
+                .part(0, 0.25f, 0, 0.36f, 0.30f, 0.5f, 0xF2F2F2).pattern("fur").head(0, 0.5f, -0.3f, 0.2f, 0.3f, 0.2f, 0xF2F2F2).pattern("fur").face(0x111111)
+                .part(0, 0.56f, -0.44f, 0.1f, 0.07f, 0.08f, 0xF0A030).onHead().part(0, 0.8f, -0.3f, 0.06f, 0.07f, 0.1f, 0xD03030).onHead().part(0, 0.4f, 0.28f, 0.2f, 0.2f, 0.08f, 0xE6E6E6).pattern("fur")
+                .part(-0.2f, 0.32f, 0, 0.04f, 0.2f, 0.32f, 0xE6E6E6).pattern("fur").part(0.2f, 0.32f, 0, 0.04f, 0.2f, 0.32f, 0xE6E6E6).pattern("fur")
                 .legPart(-0.09f, 0, 0, 0.06f, 0.25f, 0.06f, 0xF0A030, false).legPart(0.09f, 0, 0, 0.06f, 0.25f, 0.06f, 0xF0A030, true));
         r.mob("cow", new MobSettings().health(10).speed(1.5f).size(0.9f, 1.4f).behavior(MobSettings.Behavior.PASSIVE).spawnOn("grass").title("Корова")
                 .drops("raw_beef", 1, 3, 1f).drops("leather", 0, 2, 1f)
-                .part(0, 0.55f, 0, 0.8f, 0.7f, 1.2f, 0x6B4A2B).part(0, 1.0f, 0.1f, 0.5f, 0.06f, 0.6f, 0xE8E0D0)
-                .part(0, 0.95f, -0.75f, 0.5f, 0.5f, 0.4f, 0x5C3E22).part(0, 0.9f, -0.97f, 0.3f, 0.2f, 0.08f, 0xE8B0B0)
-                .part(-0.22f, 1.4f, -0.7f, 0.06f, 0.15f, 0.06f, 0xDDDDDD).part(0.22f, 1.4f, -0.7f, 0.06f, 0.15f, 0.06f, 0xDDDDDD)
-                .legPart(-0.28f, 0, -0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, false).legPart(0.28f, 0, -0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, true)
-                .legPart(-0.28f, 0, 0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, true).legPart(0.28f, 0, 0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, false));
+                .part(0, 0.55f, 0, 0.8f, 0.7f, 1.2f, 0x6B4A2B).pattern("fur").part(0, 1.0f, 0.1f, 0.5f, 0.06f, 0.6f, 0xE8E0D0).pattern("fur")
+                .part(0, 0.62f, 0.3f, 0.3f, 0.06f, 0.3f, 0xE8B0B0)
+                .head(0, 0.95f, -0.75f, 0.5f, 0.5f, 0.4f, 0x5C3E22).pattern("fur").face(0x140C06).part(0, 0.97f, -0.97f, 0.3f, 0.2f, 0.06f, 0xE8B0B0).onHead()
+                .part(-0.22f, 1.42f, -0.7f, 0.06f, 0.15f, 0.06f, 0xDDDDDD).pattern("bone").onHead().part(0.22f, 1.42f, -0.7f, 0.06f, 0.15f, 0.06f, 0xDDDDDD).pattern("bone").onHead()
+                .legPart(-0.28f, 0, -0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, false).pattern("fur").legPart(0.28f, 0, -0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, true).pattern("fur")
+                .legPart(-0.28f, 0, 0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, true).pattern("fur").legPart(0.28f, 0, 0.4f, 0.2f, 0.55f, 0.2f, 0x4E3520, false).pattern("fur"));
         r.mob("zombie", new MobSettings().health(20).speed(2.4f).size(0.6f, 1.8f).behavior(MobSettings.Behavior.HOSTILE).attack(3, 1.2f, 1f).detect(16).burnsInSun(true).title("Зомбі")
                 .drops("rotten_flesh", 0, 2, 1f)
-                .legPart(-0.14f, 0, 0, 0.25f, 0.8f, 0.25f, 0x2B3F8F, false).legPart(0.14f, 0, 0, 0.25f, 0.8f, 0.25f, 0x2B3F8F, true)
-                .part(0, 0.8f, 0, 0.5f, 0.7f, 0.25f, 0x2F8F8F)
-                .part(-0.38f, 1.0f, -0.25f, 0.2f, 0.2f, 0.6f, 0x5B8F3A).part(0.38f, 1.0f, -0.25f, 0.2f, 0.2f, 0.6f, 0x5B8F3A)
-                .part(0, 1.5f, 0, 0.5f, 0.5f, 0.5f, 0x5B8F3A));
+                .legPart(-0.14f, 0, 0, 0.25f, 0.8f, 0.25f, 0x2B3F8F, false).pattern("cloth").legPart(0.14f, 0, 0, 0.25f, 0.8f, 0.25f, 0x2B3F8F, true).pattern("cloth")
+                .part(0, 0.8f, 0, 0.5f, 0.7f, 0.25f, 0x2F8F8F).pattern("cloth")
+                .armPart(-0.38f, 1.3f, -0.25f, 0.2f, 0.2f, 0.6f, 0x5B8F3A, true).pattern("skin").armPart(0.38f, 1.3f, -0.25f, 0.2f, 0.2f, 0.6f, 0x5B8F3A, false).pattern("skin")
+                .head(0, 1.5f, 0, 0.5f, 0.5f, 0.5f, 0x5B8F3A).pattern("skin").face(0x1A2A12));
         r.item("echo_dust", new ItemSettings().color(0xB8B8C8).texture("echo_dust").title("Пил відлуння"));
         r.mob("echo", new MobSettings().health(14).speed(1.8f).size(0.6f, 1.9f).behavior(MobSettings.Behavior.HOSTILE).attack(4, 1.2f, 1.2f).detect(18).dimension("between").title("Відлуння")
                 .drops("echo_dust", 0, 2, 1f)
-                .legPart(-0.14f, 0, 0, 0.22f, 0.85f, 0.22f, 0x9A9AA8, false).legPart(0.14f, 0, 0, 0.22f, 0.85f, 0.22f, 0x9A9AA8, true)
-                .part(0, 0.85f, 0, 0.48f, 0.7f, 0.24f, 0xB0B0BE).part(-0.34f, 1.0f, 0, 0.16f, 0.65f, 0.16f, 0xA4A4B2).part(0.34f, 1.0f, 0, 0.16f, 0.65f, 0.16f, 0xA4A4B2)
-                .part(0, 1.55f, 0, 0.46f, 0.46f, 0.46f, 0xC4C4D0).part(-0.1f, 1.6f, -0.24f, 0.08f, 0.06f, 0.02f, 0x2A2A3A).part(0.1f, 1.6f, -0.24f, 0.08f, 0.06f, 0.02f, 0x2A2A3A));
+                .legPart(-0.14f, 0, 0, 0.22f, 0.85f, 0.22f, 0x9A9AA8, false).pattern("cloth").legPart(0.14f, 0, 0, 0.22f, 0.85f, 0.22f, 0x9A9AA8, true).pattern("cloth")
+                .part(0, 0.85f, 0, 0.48f, 0.7f, 0.24f, 0xB0B0BE).pattern("cloth")
+                .armPart(-0.34f, 0.9f, 0, 0.16f, 0.65f, 0.16f, 0xA4A4B2, true).pattern("cloth").armPart(0.34f, 0.9f, 0, 0.16f, 0.65f, 0.16f, 0xA4A4B2, false).pattern("cloth")
+                .head(0, 1.55f, 0, 0.46f, 0.46f, 0.46f, 0xC4C4D0).pattern("glow").face(0x2A2A3A));
         // Жарняк - істота Незеру: не горить у лаві, вартує фортеці; з нього жарини й зрідка жаровий кристал
         r.mob("ember_wraith", new MobSettings().health(22).speed(2.6f).size(0.6f, 1.9f).behavior(MobSettings.Behavior.HOSTILE).attack(5, 1.2f, 1.1f).detect(20).dimension("nether").fireproof().title("Жарняк")
                 .drops("ember", 1, 3, 1f).drops("ember_crystal", 1, 1, 0.1f)
-                .legPart(-0.14f, 0, 0, 0.24f, 0.85f, 0.24f, 0x3A1A16, false).legPart(0.14f, 0, 0, 0.24f, 0.85f, 0.24f, 0x3A1A16, true)
-                .part(0, 0.85f, 0, 0.52f, 0.72f, 0.28f, 0x4A201A).part(0, 1.05f, -0.15f, 0.2f, 0.3f, 0.02f, 0xF08020)
-                .part(-0.36f, 1.0f, 0, 0.18f, 0.68f, 0.18f, 0x3A1A16).part(0.36f, 1.0f, 0, 0.18f, 0.68f, 0.18f, 0x3A1A16)
-                .part(0, 1.58f, 0, 0.46f, 0.46f, 0.46f, 0x2A1210).part(-0.1f, 1.62f, -0.24f, 0.09f, 0.06f, 0.02f, 0xFFB030).part(0.1f, 1.62f, -0.24f, 0.09f, 0.06f, 0.02f, 0xFFB030));
+                .legPart(-0.14f, 0, 0, 0.24f, 0.85f, 0.24f, 0x3A1A16, false).pattern("stone").legPart(0.14f, 0, 0, 0.24f, 0.85f, 0.24f, 0x3A1A16, true).pattern("stone")
+                .part(0, 0.85f, 0, 0.52f, 0.72f, 0.28f, 0x4A201A).pattern("stone").part(0, 1.05f, -0.15f, 0.2f, 0.3f, 0.02f, 0xF08020).pattern("glow")
+                .armPart(-0.36f, 0.89f, 0, 0.18f, 0.68f, 0.18f, 0x3A1A16, true).pattern("stone").armPart(0.36f, 0.89f, 0, 0.18f, 0.68f, 0.18f, 0x3A1A16, false).pattern("stone")
+                .part(0, 1.58f, 0, 0.46f, 0.46f, 0.46f, 0x2A1210).pattern("stone").onHead()
+                .part(-0.1f, 1.74f, -0.24f, 0.09f, 0.06f, 0.02f, 0xFFB030).pattern("glow").onHead().part(0.1f, 1.74f, -0.24f, 0.09f, 0.06f, 0.02f, 0xFFB030).pattern("glow").onHead()
+                .part(-0.17f, 2.04f, 0, 0.06f, 0.14f, 0.06f, 0xF08020).pattern("glow").onHead().part(0.17f, 2.04f, 0, 0.06f, 0.14f, 0.06f, 0xF08020).pattern("glow").onHead());
         MobSettings spider = new MobSettings().health(16).speed(3.2f).size(1.0f, 0.6f).behavior(MobSettings.Behavior.NEUTRAL_DAY).attack(2, 1.3f, 0.8f).detect(12).title("Павук")
                 .drops("string", 0, 2, 1f)
-                .part(0, 0.25f, 0.15f, 0.6f, 0.35f, 0.6f, 0x2A2420).part(0, 0.28f, -0.4f, 0.4f, 0.3f, 0.35f, 0x3A302A)
-                .part(-0.1f, 0.4f, -0.58f, 0.07f, 0.07f, 0.04f, 0xCC2020).part(0.1f, 0.4f, -0.58f, 0.07f, 0.07f, 0.04f, 0xCC2020);
+                .part(0, 0.25f, 0.15f, 0.6f, 0.35f, 0.6f, 0x2A2420).pattern("fur").part(0, 0.28f, -0.4f, 0.4f, 0.3f, 0.35f, 0x3A302A).pattern("fur").onHead()
+                .part(-0.1f, 0.42f, -0.58f, 0.07f, 0.07f, 0.04f, 0xCC2020).pattern("glow").onHead().part(0.1f, 0.42f, -0.58f, 0.07f, 0.07f, 0.04f, 0xCC2020).pattern("glow").onHead()
+                .part(-0.05f, 0.33f, -0.58f, 0.04f, 0.04f, 0.04f, 0xCC2020).pattern("glow").onHead().part(0.05f, 0.33f, -0.58f, 0.04f, 0.04f, 0.04f, 0xCC2020).pattern("glow").onHead()
+                .part(-0.08f, 0.22f, -0.6f, 0.04f, 0.1f, 0.04f, 0x6A5A50).pattern("bone").onHead().part(0.08f, 0.22f, -0.6f, 0.04f, 0.1f, 0.04f, 0x6A5A50).pattern("bone").onHead(); // очі й жвали
         float[] legZ = {-0.25f, -0.05f, 0.15f, 0.35f};
-        for (int i = 0; i < 4; i++) { spider.legPart(-0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 == 0); spider.legPart(0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 != 0); }
+        for (int i = 0; i < 4; i++) { spider.legPart(-0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 == 0).pattern("fur"); spider.legPart(0.55f, 0.2f, legZ[i], 0.5f, 0.08f, 0.08f, 0x1E1A17, i % 2 != 0).pattern("fur"); }
         r.mob("spider", spider);
 
         // Скелет-стрілець: горить на сонці, тримається за 6..15 блоків і стріляє, поки бачить гравця (MobSettings.ranged)
@@ -390,21 +398,23 @@ public final class VanillaContent implements VoxelinMod {
         r.mob("skeleton", new MobSettings().health(20).speed(2.2f).size(0.6f, 1.95f).behavior(MobSettings.Behavior.HOSTILE).attack(2, 1.2f, 1f).detect(16).burnsInSun(true)
                 .ranged(15, 2.0f, 1.6f).title("Скелет")
                 .drops("arrow", 0, 2, 1f).drops("bone", 0, 2, 1f).drops("bow", 1, 1, 0.05f)
-                .legPart(-0.12f, 0, 0, 0.12f, 0.85f, 0.12f, bn, false).legPart(0.12f, 0, 0, 0.12f, 0.85f, 0.12f, bn, true)
-                .part(0, 0.85f, 0, 0.42f, 0.12f, 0.2f, bnd).part(0, 0.97f, 0, 0.1f, 0.55f, 0.1f, bn)
-                .part(0, 1.1f, 0, 0.4f, 0.06f, 0.18f, bn).part(0, 1.25f, 0, 0.4f, 0.06f, 0.18f, bn).part(0, 1.4f, 0, 0.42f, 0.1f, 0.2f, bn)
-                .part(-0.3f, 0.95f, -0.1f, 0.1f, 0.5f, 0.1f, bn).part(0.3f, 1.25f, -0.3f, 0.1f, 0.1f, 0.5f, bn)
-                .part(0.3f, 0.95f, -0.58f, 0.06f, 0.7f, 0.06f, 0x5A3A1E)
-                .part(0, 1.5f, 0, 0.48f, 0.46f, 0.48f, 0xE4E0D4).part(-0.11f, 1.66f, -0.245f, 0.1f, 0.09f, 0.02f, 0x1A1A1A).part(0.11f, 1.66f, -0.245f, 0.1f, 0.09f, 0.02f, 0x1A1A1A)
-                .part(0, 1.54f, -0.245f, 0.24f, 0.05f, 0.02f, 0x2A2A2A));
+                .legPart(-0.12f, 0, 0, 0.12f, 0.85f, 0.12f, bn, false).pattern("bone").legPart(0.12f, 0, 0, 0.12f, 0.85f, 0.12f, bn, true).pattern("bone")
+                .part(0, 0.85f, 0, 0.42f, 0.12f, 0.2f, bnd).pattern("bone").part(0, 0.97f, 0, 0.1f, 0.55f, 0.1f, bn).pattern("bone")
+                .part(0, 1.1f, 0, 0.4f, 0.06f, 0.18f, bn).part(0, 1.25f, 0, 0.4f, 0.06f, 0.18f, bn).part(0, 1.4f, 0, 0.42f, 0.1f, 0.2f, bn).pattern("bone")
+                .armPart(-0.3f, 0.95f, -0.1f, 0.1f, 0.5f, 0.1f, bn, true).pattern("bone").part(0.3f, 1.25f, -0.3f, 0.1f, 0.1f, 0.5f, bn).pattern("bone")
+                .part(0.3f, 0.95f, -0.58f, 0.06f, 0.7f, 0.06f, 0x5A3A1E).pattern("leather").part(0.3f, 0.95f, -0.55f, 0.01f, 0.7f, 0.01f, 0xE8E8E8) // лук і тятива
+                .part(0, 1.5f, 0, 0.48f, 0.46f, 0.48f, 0xE4E0D4).pattern("bone").onHead()
+                .part(-0.11f, 1.66f, -0.245f, 0.1f, 0.09f, 0.02f, 0x1A1A1A).onHead().part(0.11f, 1.66f, -0.245f, 0.1f, 0.09f, 0.02f, 0x1A1A1A).onHead()
+                .part(0, 1.54f, -0.245f, 0.24f, 0.05f, 0.02f, 0x2A2A2A).onHead());
 
         // --- Вартовий села: стоїть біля колодязя, б'є ворогів поблизу, гравця не чіпає. Будується: Т із 4 залізних блоків + лампа зверху (core/Guard)
         r.mob("village_guard", new MobSettings().health(100).speed(1.8f).size(0.9f, 1.95f).behavior(MobSettings.Behavior.GUARD).attack(9, 1.6f, 1.5f).detect(16)
                 .homeRadius(20).persistent(true).title("Вартовий").drops("iron_ingot", 2, 4, 1f)
-                .legPart(-0.2f, 0, 0, 0.32f, 0.75f, 0.32f, 0x8A8A90, false).legPart(0.2f, 0, 0, 0.32f, 0.75f, 0.32f, 0x8A8A90, true)
-                .part(0, 0.75f, 0, 0.85f, 0.8f, 0.5f, 0xB4B4BA).part(0, 1.1f, -0.26f, 0.3f, 0.3f, 0.04f, 0x7A4AD0)
-                .legPart(-0.56f, 0.55f, 0, 0.24f, 1.0f, 0.26f, 0xA0A0A6, true).legPart(0.56f, 0.55f, 0, 0.24f, 1.0f, 0.26f, 0xA0A0A6, false)
-                .part(0, 1.55f, 0, 0.5f, 0.4f, 0.45f, 0xC4C4CA).part(-0.12f, 1.7f, -0.23f, 0.1f, 0.06f, 0.02f, 0xFFD27A).part(0.12f, 1.7f, -0.23f, 0.1f, 0.06f, 0.02f, 0xFFD27A));
+                .legPart(-0.2f, 0, 0, 0.32f, 0.75f, 0.32f, 0x8A8A90, false).pattern("shell").legPart(0.2f, 0, 0, 0.32f, 0.75f, 0.32f, 0x8A8A90, true).pattern("shell")
+                .part(0, 0.75f, 0, 0.85f, 0.8f, 0.5f, 0xB4B4BA).pattern("shell").part(0, 1.1f, -0.26f, 0.3f, 0.3f, 0.04f, 0x7A4AD0).pattern("glow")
+                .armPart(-0.56f, 0.55f, 0, 0.24f, 1.0f, 0.26f, 0xA0A0A6, true).pattern("shell").armPart(0.56f, 0.55f, 0, 0.24f, 1.0f, 0.26f, 0xA0A0A6, false).pattern("shell")
+                .part(0, 1.55f, 0, 0.5f, 0.4f, 0.45f, 0xC4C4CA).pattern("shell").onHead()
+                .part(-0.12f, 1.7f, -0.23f, 0.1f, 0.06f, 0.02f, 0xFFD27A).pattern("glow").onHead().part(0.12f, 1.7f, -0.23f, 0.1f, 0.06f, 0.02f, 0xFFD27A).pattern("glow").onHead());
 
         // --- жителі (S6): мирні, живуть біля дому, торгують за золотий злиток; модель - коробки, колір одягу за професією
         int[][] pal = {{0x8B5A2B, 0xE0C060}, {0x444A55, 0x2B2B30}, {0xE8E4D8, 0xC9C9C9}, {0x7A7068, 0xA89F94}, {0x3E5A2A, 0x6B4A2B}, {0x5A3A6A, 0xB8A0D0}}; // одяг, капелюх/борода/фартух
@@ -412,15 +422,15 @@ public final class VanillaContent implements VoxelinMod {
                 vTitle = {"Житель-фермер", "Житель-коваль", "Старійшина", "Житель-каменяр", "Житель-мисливець", "Знахарка"};
         for (int i = 0; i < 6; i++) {
             MobSettings v = new MobSettings().health(20).speed(1.4f).size(0.6f, 1.8f).behavior(MobSettings.Behavior.PASSIVE).homeRadius(24).persistent(true).title(vTitle[i])
-                    .legPart(-0.13f, 0, 0, 0.24f, 0.8f, 0.24f, 0x5A4630, false).legPart(0.13f, 0, 0, 0.24f, 0.8f, 0.24f, 0x5A4630, true)
-                    .part(0, 0.8f, 0, 0.5f, 0.75f, 0.3f, pal[i][0]).part(0, 1.05f, -0.2f, 0.5f, 0.2f, 0.18f, pal[i][0])
-                    .part(0, 1.5f, 0, 0.45f, 0.5f, 0.45f, 0xD9A87A).part(0, 1.58f, -0.26f, 0.1f, 0.2f, 0.1f, 0xC4906A);
-            if (i == 0) v.part(0, 1.95f, 0, 0.75f, 0.06f, 0.75f, pal[i][1]).part(0, 1.99f, 0, 0.42f, 0.14f, 0.42f, pal[i][1]);
-            if (i == 1) v.part(0, 0.8f, -0.17f, 0.46f, 0.5f, 0.06f, pal[i][1]);
-            if (i == 2) v.part(0, 1.2f, -0.24f, 0.32f, 0.35f, 0.08f, pal[i][1]);
-            if (i == 3) v.part(0, 0.75f, -0.17f, 0.46f, 0.55f, 0.06f, pal[i][1]).part(0.3f, 1.1f, 0, 0.12f, 0.12f, 0.12f, 0x8A8A8A); // фартух і камінь у руці
-            if (i == 4) v.part(0, 1.78f, 0.04f, 0.5f, 0.16f, 0.5f, pal[i][1]).part(0.2f, 1.0f, 0.2f, 0.14f, 0.55f, 0.12f, 0x6B4A2B); // каптур і сагайдак
-            if (i == 5) v.part(0, 1.15f, -0.17f, 0.5f, 0.08f, 0.06f, pal[i][1]).part(-0.18f, 0.9f, -0.18f, 0.12f, 0.16f, 0.1f, 0xB8E0B0); // пасок і торбинка з травами
+                    .legPart(-0.13f, 0, 0, 0.24f, 0.8f, 0.24f, 0x5A4630, false).pattern("cloth").legPart(0.13f, 0, 0, 0.24f, 0.8f, 0.24f, 0x5A4630, true).pattern("cloth")
+                    .part(0, 0.8f, 0, 0.5f, 0.75f, 0.3f, pal[i][0]).pattern("cloth").part(0, 1.05f, -0.2f, 0.5f, 0.2f, 0.18f, pal[i][0]).pattern("cloth") // складені руки
+                    .head(0, 1.5f, 0, 0.45f, 0.5f, 0.45f, 0xD9A87A).pattern("skin").face(0x3A2A1A).part(0, 1.58f, -0.26f, 0.1f, 0.2f, 0.1f, 0xC4906A).onHead();
+            if (i == 0) v.part(0, 1.97f, 0, 0.75f, 0.06f, 0.75f, pal[i][1]).pattern("cloth").onHead().part(0, 2.01f, 0, 0.42f, 0.14f, 0.42f, pal[i][1]).pattern("cloth").onHead(); // солом'яний капелюх
+            if (i == 1) v.part(0, 0.8f, -0.17f, 0.46f, 0.5f, 0.06f, pal[i][1]).pattern("leather");
+            if (i == 2) v.part(0, 1.25f, -0.24f, 0.32f, 0.35f, 0.08f, pal[i][1]).pattern("fur").onHead(); // борода
+            if (i == 3) v.part(0, 0.75f, -0.17f, 0.46f, 0.55f, 0.06f, pal[i][1]).pattern("leather").part(0.3f, 1.1f, 0, 0.12f, 0.12f, 0.12f, 0x8A8A8A).pattern("stone"); // фартух і камінь у руці
+            if (i == 4) v.part(0, 1.8f, 0.04f, 0.5f, 0.24f, 0.5f, pal[i][1]).pattern("cloth").onHead().part(0.2f, 1.0f, 0.2f, 0.14f, 0.55f, 0.12f, 0x6B4A2B).pattern("leather"); // каптур і сагайдак
+            if (i == 5) v.part(0, 1.15f, -0.17f, 0.5f, 0.08f, 0.06f, pal[i][1]).pattern("leather").part(-0.18f, 0.9f, -0.18f, 0.12f, 0.16f, 0.1f, 0xB8E0B0).pattern("cloth"); // пасок і торбинка з травами
             if (i == 0) v.greeting("Добрий день! Маю свіже м'ясо, якщо маєш чим розплатитись.", "Яблука з дерев - то найкращі, що я куштував.", "Золото любить тих, хто вміє торгувати.")
                     .trade("apple", 8, "gold_ingot", 1).trade("raw_beef", 6, "gold_ingot", 1).trade("raw_chicken", 6, "gold_ingot", 1)
                     .trade("gold_ingot", 1, "steak", 3).trade("gold_ingot", 1, "cooked_chicken", 3);
@@ -437,20 +447,25 @@ public final class VanillaContent implements VoxelinMod {
         }
         r.mob("ender_dragon", new MobSettings().health(200).speed(12f).size(4.5f, 2.2f).behavior(MobSettings.Behavior.HOSTILE).attack(10, 3.2f, 2.5f).armorPierce(0.5f).detect(80).persistent(true).flying(true).boss(true).title("Дракон Краю")
                 .drops("dragon_egg", 1, 1, 1f)
-                .part(0, 0.3f, 0, 2.2f, 1.5f, 3.8f, 0x1E1030).part(0, 1.0f, -2.5f, 1.0f, 0.9f, 1.4f, 0x241438).part(0, 1.1f, -3.5f, 1.4f, 1.1f, 1.5f, 0x2D1A44)
-                .part(0, 0.7f, -3.55f, 1.2f, 0.35f, 1.1f, 0x180C26).part(-0.4f, 1.6f, -4.0f, 0.3f, 0.3f, 0.1f, 0xE040FF).part(0.4f, 1.6f, -4.0f, 0.3f, 0.3f, 0.1f, 0xE040FF)
-                .part(0, 0.9f, 2.4f, 0.9f, 0.7f, 2.2f, 0x1E1030).part(0, 0.8f, 4.2f, 0.5f, 0.45f, 1.8f, 0x180C26)
-                .wingPart(-3.4f, 1.3f, 0.2f, 4.6f, 0.14f, 2.6f, 0x2A1844, true).wingPart(3.4f, 1.3f, 0.2f, 4.6f, 0.14f, 2.6f, 0x2A1844, false));
+                .part(0, 0.3f, 0, 2.2f, 1.5f, 3.8f, 0x1E1030).pattern("scale").part(0, 1.0f, -2.5f, 1.0f, 0.9f, 1.4f, 0x241438).pattern("scale")
+                .part(0, 1.1f, -3.5f, 1.4f, 1.1f, 1.5f, 0x2D1A44).pattern("scale").onHead().part(0, 0.7f, -3.55f, 1.2f, 0.35f, 1.1f, 0x180C26).pattern("scale").onHead()
+                .part(-0.4f, 1.6f, -4.26f, 0.3f, 0.3f, 0.1f, 0xE040FF).pattern("glow").onHead().part(0.4f, 1.6f, -4.26f, 0.3f, 0.3f, 0.1f, 0xE040FF).pattern("glow").onHead()
+                .part(-0.45f, 2.2f, -3.2f, 0.18f, 0.5f, 0.18f, 0xB8B0C8).pattern("bone").onHead().part(0.45f, 2.2f, -3.2f, 0.18f, 0.5f, 0.18f, 0xB8B0C8).pattern("bone").onHead() // роги
+                .part(0, 1.8f, -0.8f, 0.2f, 0.3f, 0.3f, 0xB8B0C8).pattern("bone").part(0, 1.8f, 0.6f, 0.2f, 0.3f, 0.3f, 0xB8B0C8).pattern("bone") // шипи на спині
+                .part(0, 0.9f, 2.4f, 0.9f, 0.7f, 2.2f, 0x1E1030).pattern("scale").part(0, 0.8f, 4.2f, 0.5f, 0.45f, 1.8f, 0x180C26).pattern("scale")
+                .wingPart(-3.4f, 1.3f, 0.2f, 4.6f, 0.14f, 2.6f, 0x2A1844, true).pattern("leather").wingPart(3.4f, 1.3f, 0.2f, 4.6f, 0.14f, 2.6f, 0x2A1844, false).pattern("leather"));
         r.mob("seam_weaver", new MobSettings().health(160).speed(13f).size(2.6f, 1.6f).behavior(MobSettings.Behavior.HOSTILE).attack(7, 2.8f, 2.0f).armorPierce(0.4f).detect(80).persistent(true).flying(true).boss(true).title("Ткач")
                 .drops("diamond", 2, 4, 1f).drops("liminite_shard", 4, 8, 1f)
-                .part(0, 0.3f, 0, 1.4f, 1.0f, 2.4f, 0xC8C0E8).part(0, 0.8f, -1.7f, 1.0f, 0.9f, 1.0f, 0xE0D8FF).part(-0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0x40FFE0).part(0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0x40FFE0)
-                .part(0, 0.4f, 1.8f, 0.4f, 0.3f, 1.6f, 0xA8A0D0)
-                .wingPart(-2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0xE8E0FF, true).wingPart(2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0xE8E0FF, false));
+                .part(0, 0.3f, 0, 1.4f, 1.0f, 2.4f, 0xC8C0E8).pattern("cloth").part(0, 0.8f, -1.7f, 1.0f, 0.9f, 1.0f, 0xE0D8FF).pattern("cloth").onHead()
+                .part(-0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0x40FFE0).pattern("glow").onHead().part(0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0x40FFE0).pattern("glow").onHead()
+                .part(0, 0.4f, 1.8f, 0.4f, 0.3f, 1.6f, 0xA8A0D0).pattern("cloth").part(0, 0.45f, 2.75f, 0.12f, 0.12f, 0.5f, 0x40FFE0).pattern("glow") // нитка з хвоста
+                .wingPart(-2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0xE8E0FF, true).pattern("cloth").wingPart(2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0xE8E0FF, false).pattern("cloth"));
         r.mob("seam_unraveler", new MobSettings().health(160).speed(13f).size(2.6f, 1.6f).behavior(MobSettings.Behavior.HOSTILE).attack(7, 2.8f, 2.0f).armorPierce(0.4f).detect(80).persistent(true).flying(true).boss(true).title("Розплітач")
                 .drops("diamond", 2, 4, 1f).drops("liminite_shard", 4, 8, 1f)
-                .part(0, 0.3f, 0, 1.4f, 1.0f, 2.4f, 0x5A1028).part(0, 0.8f, -1.7f, 1.0f, 0.9f, 1.0f, 0x701838).part(-0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0xFF6020).part(0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0xFF6020)
-                .part(0, 0.4f, 1.8f, 0.4f, 0.3f, 1.6f, 0x400A1C)
-                .wingPart(-2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0x8A1840, true).wingPart(2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0x8A1840, false));
+                .part(0, 0.3f, 0, 1.4f, 1.0f, 2.4f, 0x5A1028).pattern("scale").part(0, 0.8f, -1.7f, 1.0f, 0.9f, 1.0f, 0x701838).pattern("scale").onHead()
+                .part(-0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0xFF6020).pattern("glow").onHead().part(0.25f, 1.1f, -2.25f, 0.2f, 0.2f, 0.1f, 0xFF6020).pattern("glow").onHead()
+                .part(0, 0.4f, 1.8f, 0.4f, 0.3f, 1.6f, 0x400A1C).pattern("scale").part(0, 0.45f, 2.75f, 0.12f, 0.12f, 0.5f, 0xFF6020).pattern("glow") // нитка з хвоста
+                .wingPart(-2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0x8A1840, true).pattern("scale").wingPart(2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0x8A1840, false).pattern("scale"));
         // --- журнал записів (відкриваються подіями гри; лор «Шов»)
         // записки Сторожа (core/Story): по одній у кожній стоянці в Тихих пустищах, читаються по порядку; абзац з «~» - перекреслений, не його рука
         r.record("keeper_note_1", "Записка Сторожа I", "Я прийшов з уламків, коли Шов був тонкий, як волосина. Мені сказали стерегти. Не сказали, хто сказав.\n~Тебе ніхто не ставив.");
@@ -484,9 +499,11 @@ public final class VanillaContent implements VoxelinMod {
         // --- Сторож Шва: невразливий, стоїть біля яйця в Енді, говорить вікном вибору
         r.mob("seam_keeper", new MobSettings().health(100).speed(0.05f).size(0.6f, 1.9f).behavior(MobSettings.Behavior.PASSIVE).persistent(true).invulnerable(true).dialog("keeper").homeRadius(2).title("Сторож Шва")
                 .greeting("...")
-                .legPart(-0.13f, 0, 0, 0.24f, 0.85f, 0.24f, 0x1A1030, false).legPart(0.13f, 0, 0, 0.24f, 0.85f, 0.24f, 0x1A1030, true)
-                .part(0, 0.85f, 0, 0.55f, 0.85f, 0.32f, 0x2A1650).part(0, 1.7f, 0, 0.5f, 0.5f, 0.5f, 0xCFC8E8).part(0, 2.05f, 0, 0.6f, 0.25f, 0.6f, 0x2A1650)
-                .part(-0.12f, 1.85f, -0.27f, 0.1f, 0.1f, 0.05f, 0xE040FF).part(0.12f, 1.85f, -0.27f, 0.1f, 0.1f, 0.05f, 0xE040FF));
+                .legPart(-0.13f, 0, 0, 0.24f, 0.85f, 0.24f, 0x1A1030, false).pattern("cloth").legPart(0.13f, 0, 0, 0.24f, 0.85f, 0.24f, 0x1A1030, true).pattern("cloth")
+                .part(0, 0.85f, 0, 0.55f, 0.85f, 0.32f, 0x2A1650).pattern("cloth").part(0, 0.85f, 0.17f, 0.6f, 0.9f, 0.06f, 0x22123F).pattern("cloth") // плащ
+                .armPart(-0.36f, 1.0f, 0, 0.16f, 0.65f, 0.18f, 0x2A1650, true).pattern("cloth").armPart(0.36f, 1.0f, 0, 0.16f, 0.65f, 0.18f, 0x2A1650, false).pattern("cloth")
+                .part(0, 1.7f, 0, 0.5f, 0.5f, 0.5f, 0xCFC8E8).pattern("skin").onHead().part(0, 2.05f, 0, 0.6f, 0.25f, 0.6f, 0x2A1650).pattern("cloth").onHead()
+                .part(-0.12f, 1.85f, -0.27f, 0.1f, 0.1f, 0.05f, 0xE040FF).pattern("glow").onHead().part(0.12f, 1.85f, -0.27f, 0.1f, 0.1f, 0.05f, 0xE040FF).pattern("glow").onHead());
         r.structure("ruins", Structures.RUINS);
         r.structure("dungeon", Structures.DUNGEON);
         r.structure("mine", Structures.MINE);

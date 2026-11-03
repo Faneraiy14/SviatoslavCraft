@@ -22,6 +22,8 @@ public final class MobType implements MobRef {
     public final List<String> greetings;
     public final List<BlockSettings.Drop> drops;
     public final List<MobSettings.Part> parts;
+    /** Колір очей обличчя (-1 - типові темні). */
+    public final int eyes;
     public final List<String> spawnOn;
     /** Вимір природного спавну ("overworld" за замовчуванням). */
     public final String dimension;
@@ -33,7 +35,7 @@ public final class MobType implements MobRef {
         attackDamage = s.attackDamageValue(); reach = s.reachValue(); detect = s.detectValue(); cooldownTicks = Math.max(2, Math.round(s.cooldownValue() * 20));
         burnsInSun = s.burnsInSunValue(); fireproof = s.fireproofValue(); persistent = s.persistentValue(); flying = s.flyingValue(); boss = s.bossValue(); armorPierce = s.armorPierceValue(); invulnerable = s.invulnerableValue(); dialog = s.dialogKind(); homeRadius = s.homeRadiusValue(); trades = List.copyOf(s.tradeList()); greetings = List.copyOf(s.greetingList());
         rangedRange = s.rangedRangeValue(); arrowSpeed = s.rangedSpeedValue(); rangedCooldownTicks = Math.max(5, Math.round(s.rangedCooldownValue() * 20));
-        drops = List.copyOf(s.dropList()); parts = List.copyOf(s.partList()); spawnOn = List.copyOf(s.spawnOnList()); dimension = s.dimensionValue() == null ? "overworld" : s.dimensionValue();
+        drops = List.copyOf(s.dropList()); parts = List.copyOf(s.partList()); eyes = s.eyeColor(); spawnOn = List.copyOf(s.spawnOnList()); dimension = s.dimensionValue() == null ? "overworld" : s.dimensionValue();
     }
 
     /** Можна говорити (є угоди або репліки). */

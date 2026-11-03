@@ -324,6 +324,16 @@ public final class ItemTextureGen {
         return outlined(a);
     }
 
+    /** Записка Сторожа: пожовклий аркуш із рядками й фіолетовою руною в кутку. */
+    public static int[] keeperNote() {
+        int[] a = new int[256];
+        for (int y = 2; y <= 13; y++) for (int x = 3; x <= 12; x++) a[x + y * N] = hash(x, y, 61) % 7 == 0 ? 0xFFD8C8A0 : 0xFFEADCB4;
+        for (int y = 4; y <= 11; y += 2) line(a, 4, y, y == 11 ? 8 : 11, y, 0xFF6A5A48);
+        px(a, 11, 11, 0xFF9A70E0); px(a, 10, 12, 0xFF9A70E0); px(a, 12, 12, 0xFF7A50C0);
+        px(a, 12, 2, 0); px(a, 3, 13, 0);
+        return outlined(a);
+    }
+
     /** Кістка: навскіс, з потовщеннями на кінцях. */
     public static int[] bone() {
         int[] a = new int[256];

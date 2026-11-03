@@ -321,6 +321,8 @@ public final class VanillaContent implements VoxelinMod {
         r.item("steak", new ItemSettings().color(0x7A4A2A).food(8).texture("steak").title("Стейк"));
         r.item("rotten_flesh", new ItemSettings().color(0x6B7A3A).food(1).texture("rotten_flesh").title("Гнила плоть"));
         r.item("leather", new ItemSettings().color(0x8A5A32).texture("leather").title("Шкіра"));
+        tex("keeper_note", ItemTextureGen.keeperNote());
+        r.item("keeper_note", new ItemSettings().color(0xEADCB4).maxStack(16).texture("keeper_note").title("Записка Сторожа"));
         r.item("bone", new ItemSettings().color(0xE8E2D0).texture("bone").title("Кістка"));
         r.item("bone_meal", new ItemSettings().color(0xF0ECE0).texture("bone_meal").title("Кістяне борошно"));
         r.recipe("bone_meal", RecipeSettings.shapeless("bone").result("bone_meal", 3));
@@ -440,6 +442,14 @@ public final class VanillaContent implements VoxelinMod {
                 .part(0, 0.4f, 1.8f, 0.4f, 0.3f, 1.6f, 0x400A1C)
                 .wingPart(-2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0x8A1840, true).wingPart(2.2f, 1.0f, 0, 3.0f, 0.1f, 1.8f, 0x8A1840, false));
         // --- журнал записів (відкриваються подіями гри; лор «Шов»)
+        // записки Сторожа (core/Story): по одній у кожній стоянці в Тихих пустищах, читаються по порядку; абзац з «~» - перекреслений, не його рука
+        r.record("keeper_note_1", "Записка Сторожа I", "Я прийшов з уламків, коли Шов був тонкий, як волосина. Мені сказали стерегти. Не сказали, хто сказав.\n~Тебе ніхто не ставив.");
+        r.record("keeper_note_2", "Записка Сторожа II", "Камені в пустищах ставив я - по одному там, де Шов найтонший. Руни на них не прикраса, а шви. Поки світяться - тримають.\nЯкщо котрийсь згасне, не підходь до нього вночі.");
+        r.record("keeper_note_3", "Записка Сторожа III", "Дракон прийшов пізніше за мене. Я довго думав, що він ворог. Він - замок.\nХто зламає замок, той і вирішить, що буде з дверима.");
+        r.record("keeper_note_4", "Записка Сторожа IV", "Двоє тримають ланцюг Дракона: один зшиває, другий розпускає. Поки живі обидва, вони тримають одне одного.\nЯ бачив їх лише раз - і більше не хочу.");
+        r.record("keeper_note_5", "Записка Сторожа V", "Яйце - не дитина Дракона. Це насіння. Посадиш - світ почне проростати Швом. Залишиш у Краї - Шов можна затягнути.\nОбидва шляхи чесні. Я скажу це кожному, хто дійде.");
+        r.record("keeper_note_6", "Записка Сторожа VI", "Хтось латає нитки в Міжсвітті. Я лишав на піску пастки - зранку там стояли піраміди.\n~Він не просив допомоги.\nПірамід я не будую.");
+        r.record("keeper_note_7", "Записка Сторожа VII", "Це остання. Я йду в Край - чекати того, хто здолає Дракона. Якщо читаєш, ти пройшов пустища до кінця.\nНе вір лампам, що горять там, де ніхто не\n~Він не один чекає.");
         r.record("seam", "Шов", "Світи зшиті. Де шов тонкий - земля сивіє, а лімініт проступає крізь камінь.\nТак записав той, хто ходив тут до тебе.");
         r.record("elder", "Слова старійшини", "«Є місця, де тиша гучніша за грім.»\nСтарійшина не каже більше: його погляд завжди йде в бік мовчазних пустищ.");
         r.record("nether", "Нижній бік", "Тут Шов тече лавою. Камінь пам'ятає жар, а в глибині, біля самого моря, лімініт перегрівся й став кристалом.\nТой, хто ходив тут до тебе, не лишив карти - лише попіл на підлогах.");
@@ -473,7 +483,10 @@ public final class VanillaContent implements VoxelinMod {
         r.structure("temple", Structures.TEMPLE);
         r.structure("seam_gate", Structures.SEAM_GATE);
         r.structure("keeper_home", Structures.KEEPER_HOME);
+        r.structure("keeper_camp", Structures.KEEPER_CAMP);
         r.structure("nether_fortress", Structures.NETHER_FORTRESS);
+        r.loot("keeper_note", new LootSettings().rolls(1, 1).entry("keeper_note", 1, 1, 1)); // одна записка на стоянку - гарантовано
+        r.loot("keeper_camp", new LootSettings().rolls(2, 4).entry("liminite_shard", 1, 2, 4).entry("apple", 1, 3, 6).entry("torch", 2, 6, 6).entry("pale_planks", 2, 6, 5).entry("bone", 1, 3, 4));
         r.loot("keeper_home", new LootSettings().rolls(3, 5).entry("liminite_shard", 2, 5, 10).entry("threshold_bloom", 1, 2, 6).entry("echo_dust", 1, 3, 6).entry("diamond", 1, 2, 3).entry("lamp", 1, 2, 4).entry("apple", 1, 3, 5));
         r.structure("fortress", Structures.FORTRESS);
         r.structure("village_house_small", Structures.VILLAGE_HOUSE_SMALL);
@@ -636,11 +649,20 @@ public final class VanillaContent implements VoxelinMod {
             info.setRule(r.id(), v.equals("true"));
             k.reply(r.id() + " = " + info.rule(r.id()));
         });
+        c.register("record", "<запис|all>", 2, k -> { // чит: відкрити запис журналу (для перевірок і знімків)
+            if (!(k.world() instanceof voxelin.core.World w)) throw new Commands.CommandException("Недоступно");
+            if (k.args().size() != 1) throw new Commands.CommandException("Потрібна назва запису або all");
+            String id = k.args().get(0).toLowerCase(java.util.Locale.ROOT);
+            if (id.equals("all")) { int n = 0; for (voxelin.core.RecordRegistry.Record r : w.records.all()) if (w.unlockRecord(r.id)) n++; k.reply("Відкрито записів: " + n); return; }
+            if (id.indexOf(':') < 0) id = "voxelin:" + id;
+            if (w.records.get(id) == null) throw new Commands.CommandException("Нема запису " + id);
+            k.reply(w.unlockRecord(id) ? "Відкрито: " + w.records.get(id).title : "Уже відкрито");
+        });
         c.register("seed", "", 0, k -> { // зерно - не чит, його видно й без читів
             if (!(k.world() instanceof voxelin.core.World)) throw new Commands.CommandException("Недоступно");
             k.reply("Зерно світу: " + ((voxelin.core.World) k.world()).info.seed);
         });
-        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /gamerule, /summon, /killall, /locate, /tp, /wear, /seed, /help (усі, крім /seed і /help, - лише з читами). Назви блоків: voxelin:stone, voxelin:grass, ..."));
+        c.register("help", "", 0, k -> k.reply("Команди: /setblock, /fill, /time, /heal, /hurt, /eat, /give, /drop, /clear, /gamemode, /gamerule, /summon, /killall, /locate, /tp, /wear, /record, /seed, /help (усі, крім /seed і /help, - лише з читами). Назви блоків: voxelin:stone, voxelin:grass, ..."));
     }
 
     /** Назва блока з аргументу команди: "stone" = "voxelin:stone". */

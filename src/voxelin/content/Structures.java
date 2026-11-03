@@ -1057,6 +1057,64 @@ BBBBBBBBBBB
 """;
 
     /** Дім Сторожа в міжсвітті (ставить генератор міжсвіття біля острова прибуття; у звичайному світі не з'являється - роль). Двері на +z. */
+    // --- покинута стоянка Сторожа в Тихих пустищах: напівзруйнована хатина з блідих дощок біля моноліту; скриня з запискою (core/Story) і скриня припасів
+    public static final String KEEPER_CAMP = """
+place: surface
+spacing: 176
+chance: 0.6
+sink: 1
+biomes: quiet_wastes
+legend:
+  C = cobblestone
+  P = pale_planks
+  L = pale_log
+  M = monolith
+  N = chest loot=keeper_note
+  S = chest loot=keeper_camp
+  T = torch
+  _ = air
+layers:
+CCCCCCC
+CCCCCCC
+CCCCCCC
+CCCCCCC
+CCCCCCC
+CCCCCCC
+CCCCCCC
+---
+LPP_PPL
+P_____P
+P_N___M
+P____T_
+P_____P
+PS____P
+LP__PPL
+---
+LP__P.L
+P_____.
+P_____M
+______.
+P_____P
+P_____P
+L___P_L
+---
+L.....L
+.......
+......M
+.......
+.......
+.......
+L.....L
+---
+PPP....
+PP.....
+P.....M
+.......
+.......
+.......
+.......
+""";
+
     public static final String KEEPER_HOME = """
 place: manual
 legend:

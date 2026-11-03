@@ -37,6 +37,7 @@ public final class GLBitmapFont {
     // "просто кирилиця" наборі часто нема).
     private static final String CHARS =
         " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:-=_|/~!?()[]<>+*'#%@;" +
+        "«»—…’\"&$^" + // лапки й тире в записах журналу (раніше мовчки пропускались)
         "АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ" +
         "абвгґдеєжзиіїйклмнопрстуфхцчшщьюя";
     private static final int COLS = 12;

@@ -132,7 +132,10 @@ final class PlayScreen {
         grab(!v.opts.quiet()); // автоперевірки не захоплюють справжній курсор користувача
         if ("inventory".equals(v.opts.open)) invOpen = true;
         if ("pause".equals(v.opts.open)) paused = true;
-        if ("journal".equals(v.opts.open)) { journal = new JournalScreen(world); invOpen = true; }
+        if (v.opts.open != null && (v.opts.open.equals("journal") || v.opts.open.startsWith("journal:"))) { // journal:N - одразу N-й запис (знімки)
+            journal = new JournalScreen(world); invOpen = true;
+            if (v.opts.open.startsWith("journal:")) try { journal.select(Integer.parseInt(v.opts.open.substring(8))); } catch (NumberFormatException ignored) {}
+        }
         if ("creative".equals(v.opts.open)) { activeScreen = creativeScreen(); invOpen = true; }
         if ("credits".equals(v.opts.open)) { world.info.goals.add(Progress.RITUAL_END); credits = new CreditsScreen(world); credits.skip(40); invOpen = true; } // лише для знімків (тестова тека saves)
         if ("skin".equals(v.opts.open)) { paused = true; skinScreen = new SkinScreen(v); }
@@ -476,6 +479,12 @@ final class PlayScreen {
             if (n > 0) { if (!world.creative()) inv.wearSelected(t.durability); }
             else if (!NetherPortal.allowed(world)) say("Тут портал у Незер не розпалиться.");
             else say("Іскри гаснуть: потрібна рамка з обсидіану (усередині щонайменше 2x3, порожньо).");
+            return;
+        }
+        if (t.name.equals(Story.NOTE)) { // записка Сторожа: наступний запис серії в журнал
+            String id = Story.read(world);
+            if (id == null) say("Ти вже прочитав усі записки Сторожа.");
+            else { sounds.self("voxelin:record.unlock", 0.6f); if (!world.creative()) inv.takeSelected(); }
             return;
         }
         if (t.name.equals(Growth.BONE_MEAL) && hit != null) { // кістяне борошно: земля -> дерен, дерен -> часом дерево

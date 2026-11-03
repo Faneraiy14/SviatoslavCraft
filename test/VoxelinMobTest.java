@@ -284,11 +284,24 @@ public class VoxelinMobTest {
         check(spawned > 0, "спроби спавну дали ворогів: " + spawned);
         w.killAll(null);
         day(w);
-        for (int i = 0; i < 20 * 90; i++) { w.setTime((long) (w.dayTicks() * 0.1)); w.tick(); }
-        passive = 0; hostile = 0;
-        for (Mob m : w.mobs()) { if (m.type.passive()) { passive++; check(w.blocks.get(w.blockId(m.pos.blockX(), m.pos.blockY() - 1, m.pos.blockZ())).name.equals("voxelin:grass") || m.pos.y > top, "мирні на траві"); } else hostile++; }
+        // вдень ворог може з'явитись лише в темряві (світло <= 7: під густою кроною, у печері) - як у Minecraft; на освітленому місці - ніколи
+        java.util.Set<Mob> seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        int darkHostile = 0;
+        for (int i = 0; i < 20 * 90; i++) {
+            w.setTime((long) (w.dayTicks() * 0.1)); w.tick();
+            for (Mob m : w.mobs()) {
+                if (!seen.add(m) || m.type.passive()) continue;
+                Chunk c = w.chunk(Math.floorDiv(m.pos.blockX(), 16L), Math.floorDiv(m.pos.blockZ(), 16L));
+                int l = c.lightAt((int) Math.floorMod(m.pos.blockX(), 16L), m.pos.blockY(), (int) Math.floorMod(m.pos.blockZ(), 16L));
+                int eff = Math.max(l & 15, (int) ((l >> 4) * w.skyLevel()));
+                check(eff <= 7, "вдень ворог з'являється лише в темряві: " + m.type.name + " світло " + eff);
+                darkHostile++;
+            }
+        }
+        passive = 0;
+        for (Mob m : w.mobs()) if (m.type.passive()) { passive++; check(w.blocks.get(w.blockId(m.pos.blockX(), m.pos.blockY() - 1, m.pos.blockZ())).name.equals("voxelin:grass") || m.pos.y > top, "мирні на траві"); }
         check(passive > 0 && passive <= MobSpawner.PASSIVE_CAP + 3, "вдень з'явились мирні, ліміт тримається: " + passive);
-        check(hostile == 0, "вдень вороги не з'являються: " + hostile);
+        check(darkHostile <= 3, "вдень ворогів одиниці (лише в тіні крон): " + darkHostile);
         // творчий/мертвий гравець: спавну нема
         w.killAll(null);
         p.alive = false;

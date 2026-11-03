@@ -5,10 +5,11 @@ public final class ItemTextureGen {
     private ItemTextureGen() {}
 
     private static final int N = 16, OUT = 0xFF1E1A16;
-    public static final int WOOD = 0, STONE = 1, IRON = 2, DIAMOND = 3;
+    public static final int WOOD = 0, STONE = 1, IRON = 2, DIAMOND = 3, NETHERITE = 4;
     private static final int[][] MAT = { // основний, світлий, темний
             {0xFFB8925A, 0xFFD6B67E, 0xFF8A6A3A}, {0xFF8E8E8E, 0xFFB4B4B4, 0xFF646464},
-            {0xFFDADADA, 0xFFFFFFFF, 0xFFA6A6A6}, {0xFF5DE6E0, 0xFFBDFFFB, 0xFF2FAEA8}};
+            {0xFFDADADA, 0xFFFFFFFF, 0xFFA6A6A6}, {0xFF5DE6E0, 0xFFBDFFFB, 0xFF2FAEA8},
+            {0xFF4A4248, 0xFF8A7298, 0xFF2A242A}}; // незерит: темно-сірий із фіолетовим відблиском
     private static final int HANDLE = 0xFF7A5A30, HANDLE_HI = 0xFF9C7A48;
 
     private static void px(int[] a, int x, int y, int c) { if (x >= 0 && y >= 0 && x < N && y < N) a[x + y * N] = c; }
@@ -300,6 +301,14 @@ public final class ItemTextureGen {
         return outlined(a);
     }
 
+    /** Незеритовий уламок: темна зубчаста пластинка з фіолетовими прожилками. */
+    public static int[] netheriteScrap() {
+        int[] a = new int[256];
+        ellipse(a, 8, 8.5, 5.2, 4.2, (x, y, nx, ny) -> hash(x, y, 47) % 5 == 0 ? 0xFF8A7298 : (nx + ny < -0.4 ? 0xFF6A5E68 : 0xFF3A3238));
+        px(a, 4, 6, 0); px(a, 12, 11, 0); px(a, 11, 5, 0);
+        return outlined(a);
+    }
+
     public static int[] flint() {
         int[] a = new int[256];
         ellipse(a, 8, 8, 4.2, 5.4, (x, y, nx, ny) -> nx + ny < -0.5 ? 0xFF6A6A70 : nx + ny > 0.6 ? 0xFF1E1E22 : 0xFF3A3A40);
@@ -408,7 +417,8 @@ public final class ItemTextureGen {
     // ------------------------------------------------------------------ броня
 
     private static final int[][] ARMOR_MAT = { // шкіра, залізо, алмаз: основний, світлий, темний
-            {0xFFA06A3C, 0xFFC48E5C, 0xFF70482A}, {0xFFDADADA, 0xFFFFFFFF, 0xFFA6A6A6}, {0xFF5DE6E0, 0xFFBDFFFB, 0xFF2FAEA8}};
+            {0xFFA06A3C, 0xFFC48E5C, 0xFF70482A}, {0xFFDADADA, 0xFFFFFFFF, 0xFFA6A6A6}, {0xFF5DE6E0, 0xFFBDFFFB, 0xFF2FAEA8},
+            {0xFF4A4248, 0xFF8A7298, 0xFF2A242A}}; // + незерит
     private static final String[][] ARMOR_SHAPE = {
             { // шолом
                     "................", "................", "....hhhhhhhh....", "...hhhhhhhhhh...", "..hhhhhhhhhhhh..", "..hhhhhhhhhhhh..", "..hhhhhhhhhhhh..", "..hhh......hhh..", "..hhh......hhh..", "..dd........dd.."},

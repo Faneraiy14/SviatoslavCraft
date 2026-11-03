@@ -150,6 +150,8 @@ public final class VanillaContent implements VoxelinMod {
         block("ash", new BlockSettings().texture("ash").color(0x706864).tool(ToolKind.SHOVEL).sound("sand").title("Попіл").hardness(0.5f));
         block("ember_vein", new BlockSettings().texture("ember_vein").color(0xC05A28).light(10).tool(ToolKind.PICKAXE).minTier(1).drops("ember", 1, 2, 1f).title("Жарова жила").hardness(1.2f));
         block("ember_ore", new BlockSettings().texture("ember_ore").color(0xB060C0).light(6).tool(ToolKind.PICKAXE).minTier(4).drops("ember_crystal").title("Жаровий лімініт").hardness(5f));
+        tex("netherite_ore", TextureGen.netheriteOre());
+        block("netherite_ore", new BlockSettings().texture("netherite_ore").color(0x4A4248).tool(ToolKind.PICKAXE).minTier(4).title("Незеритова руда").hardness(8f)); // нижче y=20 у Незері, найрідша руда
         block("fortress_bricks", new BlockSettings().texture("fortress_bricks").color(0x3E1C22).tool(ToolKind.PICKAXE).minTier(1).title("Цегла фортеці").hardness(2.5f));
         block("nether_portal", new BlockSettings().texture("nether_portal").color(0x902070).solid(false).translucent(true).light(11).noItem().noDrops().interact("nether_portal").title("Портал Незеру").hardness(-1f));
         block("seam_scar", new BlockSettings().texture("seam_scar").color(0x2A2628).tool(ToolKind.PICKAXE).minTier(1).title("Шрам Шву").hardness(2.5f));
@@ -229,6 +231,33 @@ public final class VanillaContent implements VoxelinMod {
             r.recipe(aMat[m] + "_boots", RecipeSettings.shaped("M.M", "M.M").key('M', aHead[m]).result(aMat[m] + "_boots", 1));
         }
 
+        // --- незерит (рівень 5): руда з глибин Незеру -> піч -> уламок; 4 уламки + 4 золота = злиток; алмазна річ + злиток = незеритова.
+        // Очки захисту як в алмазу (сума вже впирається в межу 80%), перевага інша: міцніше, боси пробивають менше, слабше відкидання, не горить у лаві
+        tex("netherite_scrap", ItemTextureGen.netheriteScrap()); tex("netherite_ingot", ItemTextureGen.ingot(0x4A4248));
+        r.item("netherite_scrap", new ItemSettings().color(0x5A4E58).texture("netherite_scrap").fireproof().title("Незеритовий уламок"));
+        r.item("netherite_ingot", new ItemSettings().color(0x4A4248).texture("netherite_ingot").fireproof().title("Незеритовий злиток"));
+        r.recipe("smelt_netherite", RecipeSettings.smelting("netherite_ore", 20).result("netherite_scrap", 1));
+        r.recipe("netherite_ingot", RecipeSettings.shapeless("netherite_scrap", "netherite_scrap", "netherite_scrap", "netherite_scrap", "gold_ingot", "gold_ingot", "gold_ingot", "gold_ingot").result("netherite_ingot", 1));
+        int[] nDur = {490, 713, 668, 579};
+        for (int k = 0; k < 4; k++) {
+            String nm = "netherite_" + aKind[k];
+            tex(nm, ItemTextureGen.armor(k, 3));
+            r.item(nm, new ItemSettings().armor(aSlots[k], aPts[2][k], 5).durability(nDur[k]).color(0x4A4248).texture(nm).fireproof().title((k == 2 ? "Незеритові " : "Незеритовий ") + aTitle[k]));
+            r.recipe(nm, RecipeSettings.shapeless("diamond_" + aKind[k], "netherite_ingot").result(nm, 1));
+        }
+        String[] nTool = {"pickaxe", "axe", "sword", "shovel"}, nToolTitle = {"Незеритова кирка", "Незеритова сокира", "Незеритовий меч", "Незеритова лопата"};
+        ToolKind[] nKind = {ToolKind.PICKAXE, ToolKind.AXE, null, ToolKind.SHOVEL};
+        float[] nAtk = {6f, 7f, 8f, 5.5f};
+        for (int k = 0; k < 4; k++) {
+            String nm = "netherite_" + nTool[k];
+            int[] icon = k == 0 ? ItemTextureGen.pickaxe(ItemTextureGen.NETHERITE) : k == 1 ? ItemTextureGen.axe(ItemTextureGen.NETHERITE) : k == 2 ? ItemTextureGen.sword(ItemTextureGen.NETHERITE) : ItemTextureGen.shovel(ItemTextureGen.NETHERITE);
+            tex(nm, icon);
+            ItemSettings is = new ItemSettings().durability(2031).attack(nAtk[k]).color(0x4A4248).texture(nm).fireproof().title(nToolTitle[k]);
+            if (nKind[k] != null) is.tool(nKind[k], 5, 9f);
+            r.item(nm, is);
+            r.recipe(nm, RecipeSettings.shapeless("diamond_" + nTool[k], "netherite_ingot").result(nm, 1));
+        }
+
         r.item("end_eye", new ItemSettings().color(0x2FD16A).texture("end_eye").title("Око Енду"));
         r.recipe("end_eye", RecipeSettings.shapeless("liminite_shard", "diamond", "gold_ingot").result("end_eye", 1));
         r.item("threshold_key", new ItemSettings().color(0xC8C8D8).texture("threshold_key").title("Ключ Порогу"));
@@ -259,7 +288,7 @@ public final class VanillaContent implements VoxelinMod {
                 .entry("string", 2, 4, 5).entry("raw_gold", 2, 4, 6).entry("steak", 1, 3, 5).entry("iron_pickaxe", 1, 1, 1));
         r.loot("fortress", new LootSettings().rolls(3, 5).entry("iron_ingot", 2, 5, 9).entry("gold_ingot", 1, 3, 6).entry("diamond", 1, 3, 4).entry("iron_sword", 1, 1, 3)
                 .entry("steak", 2, 5, 7).entry("coal", 4, 10, 7).entry("raw_iron", 3, 6, 6).entry("diamond_pickaxe", 1, 1, 1).entry("cooked_chicken", 2, 4, 5));
-        r.loot("nether_fortress", new LootSettings().rolls(3, 5).entry("ember", 2, 6, 10).entry("ember_crystal", 1, 2, 3).entry("gold_ingot", 2, 5, 7).entry("iron_ingot", 2, 4, 6)
+        r.loot("nether_fortress", new LootSettings().rolls(3, 5).entry("netherite_scrap", 1, 1, 1).entry("ember", 2, 6, 10).entry("ember_crystal", 1, 2, 3).entry("gold_ingot", 2, 5, 7).entry("iron_ingot", 2, 4, 6)
                 .entry("diamond", 1, 2, 3).entry("obsidian", 2, 4, 4).entry("flint_and_steel", 1, 1, 3).entry("arrow", 4, 12, 5));
         r.loot("village", new LootSettings().rolls(1, 3).entry("apple", 1, 3, 8).entry("cooked_chicken", 1, 2, 6).entry("steak", 1, 2, 5).entry("coal", 2, 5, 6)
                 .entry("stick", 3, 8, 6).entry("iron_ingot", 1, 2, 3).entry("gold_ingot", 1, 1, 2).entry("leather", 1, 2, 4));

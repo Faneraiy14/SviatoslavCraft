@@ -89,12 +89,13 @@ final class PlayScreen {
             public double health() { return vt.health(); }
             public void hurt(double damage, double kx, double kz) { hurt(damage, kx, kz, 0); }
             public void hurt(double damage, double kx, double kz, double pierce) {
-                int pts = inv.armorPoints(world.itemTypes);
-                double reduced = Inventory.reduce(damage, pts, pierce);
+                int pts = inv.armorPoints(world.itemTypes), neth = inv.armorPieces(world.itemTypes, Inventory.NETHERITE_TIER);
+                double reduced = Inventory.reduce(damage, pts, Inventory.netheritePierce(pierce, neth));
                 double before = vt.health();
                 vt.hurt(reduced, false);
                 if (vt.health() < before && !world.creative()) inv.wearArmor(world.itemTypes, damage, new java.util.Random());
-                player.knock(kx * 6, 4, kz * 6);
+                double kb = Inventory.netheriteKnock(neth);
+                player.knock(kx * 6 * kb, 4 * kb, kz * 6 * kb);
             }
             public void teleport(long x, int y, long z) { player.teleport(Pos.ofBlock(x, y + PlayerEntity.EYE + 0.02, z)); }
         };

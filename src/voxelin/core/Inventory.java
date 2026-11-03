@@ -51,6 +51,19 @@ public final class Inventory implements ItemHolder {
         return p;
     }
 
+    /** Скільки надягнутих частин броні мають рівень не нижче tier (незерит - 5). */
+    public int armorPieces(ItemRegistry reg, int tier) {
+        int n = 0;
+        for (Stack s : armor) { if (s == null) continue; ItemType t = reg == null ? null : reg.get(s.item); if (t != null && t.armorSlot != null && t.armorTier >= tier) n++; }
+        return n;
+    }
+
+    /** Незерит: кожна частина зменшує пробиття броні босом на 20% (повний комплект - пробиття x0.2). */
+    public static double netheritePierce(double pierce, int pieces) { return pierce * (1 - 0.2 * Math.max(0, Math.min(4, pieces))); }
+    /** Незерит: кожна частина - на 10% слабше відкидання. */
+    public static double netheriteKnock(int pieces) { return 1 - 0.1 * Math.max(0, Math.min(4, pieces)); }
+    public static final int NETHERITE_TIER = 5;
+
     /** Чи повний комплект броні рівня не нижче tier у всіх 4 слотах (правило входу в Енд: tier 4). */
     public boolean fullArmor(ItemRegistry reg, int tier) {
         for (int i = 0; i < 4; i++) {

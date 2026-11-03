@@ -176,7 +176,7 @@ public final class Mob {
         double dx = to.relX(from.cx) - from.x, dy = to.y + 0.2 - from.y, dz = to.relZ(from.cz) - from.z;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), v = type.arrowSpeed;
         dy += 0.5 * Arrows.GRAVITY * (d / v) * (d / v) * 1.1; // 1.1 - на опір повітря
-        double spread = 0.03 * d;
+        double spread = 0.015 * d; // ~0.15 блока на 10 блоках: здебільшого влучає, але не завжди
         dx += rng.nextGaussian() * spread; dy += rng.nextGaussian() * spread * 0.5; dz += rng.nextGaussian() * spread;
         if (w.arrows.shootFrom(this, from, dx, dy, dz, v) != null) w.sound.play("voxelin:bow.shoot", from, 0.7f, 0.9f + rng.nextFloat() * 0.2f);
     }

@@ -311,6 +311,9 @@ public final class TextureGen {
     /** Жаровий лімініт: Згарище з фіолетово-помаранчевими кристалами (лімініт, перегрітий біля лави). */
     public static int[] emberOre() { return ore(cinder(), rgb(255, 128, 64), rgb(176, 110, 255), 78, 6); }
 
+    /** Незеритова руда: згарище з темними фіолетово-сірими вкрапленнями. */
+    public static int[] netheriteOre() { return ore(cinder(), rgb(74, 66, 72), rgb(150, 110, 176), 91, 5); }
+
     public static int[] fortressBricks() { return make((x, y) -> {
         boolean mortar = y % 4 == 3 || ((y / 4) % 2 == 0 ? x % 8 == 7 : x % 8 == 3);
         if (mortar) return rgb(28, 14, 18);

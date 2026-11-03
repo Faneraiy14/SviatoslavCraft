@@ -10,12 +10,12 @@ import voxelin.core.Chunk;
  * шрами Шву прожилками крізь камінь і глибоко біля лави - жаровий лімініт (матеріал для якоря Незеру). Детерміновано від зерна, long-координати.
  */
 public final class NetherGenerator implements Generator {
-    public static final int CEIL = 127, LAVA = 31, ORE_MAX_Y = 26;
+    public static final int CEIL = 127, LAVA = 31, ORE_MAX_Y = 26, NETHERITE_MAX_Y = 20;
     /** Фортеці: одна на клітинку 128x128 з імовірністю 0.5; зала на висоті FORT_Y, від неї хрест мостів по BRIDGE блоків. */
     public static final int FORT_CELL = 128, FORT_Y = 64, BRIDGE = 36, HALL = 11;
 
     private final long seed;
-    private final int bedrock, cinder, ash, lava, emberVein, emberOre, scar, bricks;
+    private final int bedrock, cinder, ash, lava, emberVein, emberOre, scar, bricks, netherite;
     private final Noise big, small, dress;
     private final StructureTemplate hall;
     private final StructurePlacer stamper;
@@ -25,7 +25,7 @@ public final class NetherGenerator implements Generator {
     public NetherGenerator(long seed, BlockRegistry reg, java.util.List<StructureTemplate> templates) {
         this.seed = seed;
         bedrock = id(reg, "bedrock"); cinder = id(reg, "cinder"); ash = id(reg, "ash"); lava = id(reg, "lava");
-        emberVein = id(reg, "ember_vein"); emberOre = id(reg, "ember_ore"); scar = id(reg, "seam_scar");
+        emberVein = id(reg, "ember_vein"); emberOre = id(reg, "ember_ore"); netherite = id(reg, "netherite_ore"); scar = id(reg, "seam_scar");
         bricks = id(reg, "fortress_bricks");
         StructureTemplate h = null;
         for (StructureTemplate t : templates) if (t.name.endsWith("nether_fortress")) h = t;
@@ -102,7 +102,8 @@ public final class NetherGenerator implements Generator {
                 if (Math.abs(dress.sample3(3, wx, y, wz, 18)) < 0.035) { c.set(x, y, z, scar); continue; } // прожилки Шву
                 boolean open = above == 0 || nb(c, x - 1, y, z) == 0 || nb(c, x + 1, y, z) == 0 || nb(c, x, y, z - 1) == 0 || nb(c, x, y, z + 1) == 0 || c.get(x, y - 1, z) == 0;
                 if (open && frac(hh) < 0.025) { c.set(x, y, z, emberVein); continue; }
-                if (y <= ORE_MAX_Y && frac(hh) > 0.996) c.set(x, y, z, emberOre);
+                if (y <= ORE_MAX_Y && frac(hh) > 0.996) { c.set(x, y, z, emberOre); continue; }
+                if (y <= NETHERITE_MAX_Y && netherite > 0 && frac(h(seed ^ 0x5E7E817EL, wx, y, wz)) > 0.9985) c.set(x, y, z, netherite); // незерит: найглибше й найрідше
             }
         }
         fortresses(c, bx, bz);

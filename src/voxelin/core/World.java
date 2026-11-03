@@ -198,7 +198,7 @@ public final class World implements WorldAccess {
             ItemEntity e = it.next();
             if (e.expired()) { it.remove(); continue; }
             e.tick(solidView, this::isLiquid);
-            if (e.pos.y < -30 || isLava(e.pos.blockX(), e.pos.blockY(), e.pos.blockZ())) it.remove(); // випав за межі світу чи згорів у лаві
+            if (e.pos.y < -30 || (isLava(e.pos.blockX(), e.pos.blockY(), e.pos.blockZ()) && !fireproof(e.item))) it.remove(); // випав за межі світу чи згорів у лаві (незерит не горить)
         }
         if (tick % 10 == 0 && items.size() > 1) { // злиття (раз на півсекунди)
             for (int i = 0; i < items.size(); i++) {
@@ -939,6 +939,7 @@ public final class World implements WorldAccess {
 
     /** Чи рідина в точці (вода): гравець у ній пливе. Незавантажене - ні. */
     public boolean isLiquid(long x, int y, long z) { int id = blockId(x, y, z); return id > 0 && blocks.get(id).liquid; }
+    private boolean fireproof(String item) { ItemType t = itemTypes.get(item); return t != null && t.fireproof; }
     public boolean isLava(long x, int y, long z) { int id = blockId(x, y, z); return id > 0 && blocks.get(id).name.equals(LAVA); }
     public static final String LAVA = "voxelin:lava";
 

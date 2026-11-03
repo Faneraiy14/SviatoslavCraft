@@ -17,13 +17,15 @@ public final class ItemType implements ItemRef {
     public final String title;
     /** Назва блока, який ставить предмет, або null. */
     public final String placesBlock;
+    /** Не горить у лаві. */
+    public final boolean fireproof;
 
     ItemType(String name, ItemSettings s) {
         this.name = name;
         title = s.titleText() != null ? s.titleText() : prettify(name);
         durability = s.durabilityValue(); maxStack = durability > 0 ? 1 : s.maxStackValue(); tier = s.tierValue(); speed = s.speedValue(); tool = s.toolKind();
         attack = s.attackValue(); armorSlot = s.armorSlotValue(); armorPoints = s.armorPointsValue(); armorTier = s.armorTierValue();
-        food = s.foodValue(); color = s.colorValue(); texture = s.textureName(); placesBlock = s.placesBlockName();
+        food = s.foodValue(); color = s.colorValue(); texture = s.textureName(); placesBlock = s.placesBlockName(); fireproof = s.fireproofValue();
     }
 
     /** «voxelin:iron_pickaxe» -> «Iron pickaxe» (запасна назва). */

@@ -27,9 +27,10 @@ public class VoxelinSkeletonTest {
     public static void main(String[] a) throws Exception {
         g = new Game(new File(Files.createTempDirectory("vx-skel").toFile(), "saves"), null);
         registry(); shooting(); wall(); retreat(); ownArrow(); creative(); sun(); boneMeal();
-        System.out.println("VoxelinSkeletonTest: " + n + " перевірок OK");
+        System.out.println("VoxelinSkeletonTest: " + n + " перевірок OK (влучань " + hitsInfo + ")");
     }
 
+    static String hitsInfo = "";
     static int seq;
     static World open() throws Exception {
         String name = "s" + (seq++);
@@ -64,10 +65,11 @@ public class VoxelinSkeletonTest {
         Fake f = player(w, 0.5, 0.5);
         Mob s = skeleton(w, 10.5, 0.5);
         int shot = 0;
-        for (int i = 0; i < 20 * 12; i++) { night(w); int before = w.arrows.all().size(); w.tick(); if (w.arrows.all().size() > before) shot++; }
-        check(shot >= 4, "стріляє раз на ~2 с: " + shot);
-        check(f.hits >= 2, "стріли влучають у гравця на 10 блоках: " + f.hits + " з " + shot);
+        for (int i = 0; i < 20 * 20; i++) { night(w); int before = w.arrows.all().size(); w.tick(); if (w.arrows.all().size() > before) shot++; }
+        check(shot >= 8 && shot <= 11, "стріляє раз на ~2 с: " + shot);
+        check(f.hits * 2 >= shot, "стріли здебільшого влучають у гравця на 10 блоках: " + f.hits + " з " + shot);
         check(f.total / Math.max(1, f.hits) >= 2 && f.total / Math.max(1, f.hits) <= 6, "шкода стріли 2..6: " + f.total / Math.max(1, f.hits));
+        hitsInfo = f.hits + " з " + shot;
         double d = dist(s, f);
         check(d >= Mob.KEEP_AWAY - 1 && d <= 16, "тримає дистанцію: " + d);
         check(s.health == 20, "свої стріли скелета не ранять: " + s.health);

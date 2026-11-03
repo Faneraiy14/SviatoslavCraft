@@ -811,6 +811,7 @@ public final class World implements WorldAccess {
         tickBlockEntities();
         tickMobs();
         Herobrine.tick(this, target, mobRng, tick);
+        VillageLife.tick(this, target, tick);
         infection.tick(tick, target);
         Rift.tick(this);
         budgets.clear();
@@ -902,7 +903,8 @@ public final class World implements WorldAccess {
         for (Chunk.Pending p : c.pending) {
             if ("mob".equals(p.kind())) { // житель/тварина зі структури: створюється один раз (відмітка в marks.dat)
                 if (marks.contains(p.seed())) continue;
-                MobType mt = mobTypes.get(p.loot());
+                String[] kinds = p.loot().split("\\|"); // «mob a|b» - вибір за зерном клітинки
+                MobType mt = mobTypes.get(kinds[(int) Math.floorMod(p.seed(), (long) kinds.length)]);
                 if (mt == null) continue;
                 Mob m = spawnMob(mt, Pos.ofBlock(p.x(), p.y(), p.z()));
                 if (m != null) { m.keep = true; marks.add(p.seed()); }

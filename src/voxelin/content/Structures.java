@@ -183,7 +183,7 @@ legend:
   R = oak_planks
   M = lamp
   K = chest loot=village
-  V = mob villager_farmer
+  V = mob villager_farmer|villager_farmer|villager_hunter|villager_healer
   _ = air
 layers:
 CCCCCCC
@@ -238,7 +238,7 @@ legend:
   R = oak_planks
   M = lamp
   K = chest loot=village
-  V = mob villager_smith
+  V = mob villager_smith|villager_smith|villager_mason
   _ = air
 layers:
 CCCCCCCCC

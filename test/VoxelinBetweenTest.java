@@ -215,8 +215,9 @@ public class VoxelinBetweenTest {
         w.setPlayerTarget(new Fake(Dimensions.arrival("between")));
         for (int t = 0; t < 20 * 90; t++) { w.tick(); if (t % 40 == 0) w.update(0, 0, 5); }
         int echoes = 0, other = 0;
-        for (voxelin.core.entity.Mob m : w.mobs()) { if (m.type == e) echoes++; else other++; }
-        check(echoes > 0 && echoes <= MobSpawner.hostileCap(w) && other == 0, "з'являються лише Відлуння, у межах ліміту: " + echoes + " / інших " + other);
+        StringBuilder who = new StringBuilder();
+        for (voxelin.core.entity.Mob m : w.mobs()) { if (m.type == e) echoes++; else { other++; who.append(' ').append(m.type.name).append('@').append(m.pos.blockX()).append(',').append(m.pos.blockY()).append(',').append(m.pos.blockZ()); } }
+        check(echoes > 0 && echoes <= MobSpawner.hostileCap(w) && other == 0, "з'являються лише Відлуння, у межах ліміту: " + echoes + " / інших " + other + who);
         check(MobSpawner.hostileCap(w) == 6, "звичайний ліміт 6");
         w.info.overInf = WorldInfo.InfState.ACTIVE;
         check(MobSpawner.hostileCap(w) == 12, "під час зараження - удвічі більше");

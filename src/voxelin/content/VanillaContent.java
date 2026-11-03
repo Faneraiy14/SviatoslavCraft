@@ -407,9 +407,10 @@ public final class VanillaContent implements VoxelinMod {
                 .part(0, 1.55f, 0, 0.5f, 0.4f, 0.45f, 0xC4C4CA).part(-0.12f, 1.7f, -0.23f, 0.1f, 0.06f, 0.02f, 0xFFD27A).part(0.12f, 1.7f, -0.23f, 0.1f, 0.06f, 0.02f, 0xFFD27A));
 
         // --- жителі (S6): мирні, живуть біля дому, торгують за золотий злиток; модель - коробки, колір одягу за професією
-        int[][] pal = {{0x8B5A2B, 0xE0C060}, {0x444A55, 0x2B2B30}, {0xE8E4D8, 0xC9C9C9}}; // одяг, капелюх/борода
-        String[] vName = {"villager_farmer", "villager_smith", "villager_elder"}, vTitle = {"Житель-фермер", "Житель-коваль", "Старійшина"};
-        for (int i = 0; i < 3; i++) {
+        int[][] pal = {{0x8B5A2B, 0xE0C060}, {0x444A55, 0x2B2B30}, {0xE8E4D8, 0xC9C9C9}, {0x7A7068, 0xA89F94}, {0x3E5A2A, 0x6B4A2B}, {0x5A3A6A, 0xB8A0D0}}; // одяг, капелюх/борода/фартух
+        String[] vName = {"villager_farmer", "villager_smith", "villager_elder", "villager_mason", "villager_hunter", "villager_healer"},
+                vTitle = {"Житель-фермер", "Житель-коваль", "Старійшина", "Житель-каменяр", "Житель-мисливець", "Знахарка"};
+        for (int i = 0; i < 6; i++) {
             MobSettings v = new MobSettings().health(20).speed(1.4f).size(0.6f, 1.8f).behavior(MobSettings.Behavior.PASSIVE).homeRadius(24).persistent(true).title(vTitle[i])
                     .legPart(-0.13f, 0, 0, 0.24f, 0.8f, 0.24f, 0x5A4630, false).legPart(0.13f, 0, 0, 0.24f, 0.8f, 0.24f, 0x5A4630, true)
                     .part(0, 0.8f, 0, 0.5f, 0.75f, 0.3f, pal[i][0]).part(0, 1.05f, -0.2f, 0.5f, 0.2f, 0.18f, pal[i][0])
@@ -417,12 +418,21 @@ public final class VanillaContent implements VoxelinMod {
             if (i == 0) v.part(0, 1.95f, 0, 0.75f, 0.06f, 0.75f, pal[i][1]).part(0, 1.99f, 0, 0.42f, 0.14f, 0.42f, pal[i][1]);
             if (i == 1) v.part(0, 0.8f, -0.17f, 0.46f, 0.5f, 0.06f, pal[i][1]);
             if (i == 2) v.part(0, 1.2f, -0.24f, 0.32f, 0.35f, 0.08f, pal[i][1]);
+            if (i == 3) v.part(0, 0.75f, -0.17f, 0.46f, 0.55f, 0.06f, pal[i][1]).part(0.3f, 1.1f, 0, 0.12f, 0.12f, 0.12f, 0x8A8A8A); // фартух і камінь у руці
+            if (i == 4) v.part(0, 1.78f, 0.04f, 0.5f, 0.16f, 0.5f, pal[i][1]).part(0.2f, 1.0f, 0.2f, 0.14f, 0.55f, 0.12f, 0x6B4A2B); // каптур і сагайдак
+            if (i == 5) v.part(0, 1.15f, -0.17f, 0.5f, 0.08f, 0.06f, pal[i][1]).part(-0.18f, 0.9f, -0.18f, 0.12f, 0.16f, 0.1f, 0xB8E0B0); // пасок і торбинка з травами
             if (i == 0) v.greeting("Добрий день! Маю свіже м'ясо, якщо маєш чим розплатитись.", "Яблука з дерев - то найкращі, що я куштував.", "Золото любить тих, хто вміє торгувати.")
                     .trade("apple", 8, "gold_ingot", 1).trade("raw_beef", 6, "gold_ingot", 1).trade("raw_chicken", 6, "gold_ingot", 1)
                     .trade("gold_ingot", 1, "steak", 3).trade("gold_ingot", 1, "cooked_chicken", 3);
             if (i == 1) v.greeting("Залізо любить терпіння. Золото любить мене.", "Принеси злитки - викую щось путнє.", "Піч - перший друг мандрівника.")
                     .trade("iron_ingot", 4, "gold_ingot", 1).trade("gold_ingot", 2, "iron_helmet", 1).trade("gold_ingot", 2, "iron_boots", 1).trade("gold_ingot", 3, "iron_pickaxe", 1).trade("gold_ingot", 3, "iron_sword", 1).trade("gold_ingot", 1, "coal", 8);
             if (i == 2) v.greeting("Тут колись було тихо... Кажуть, під лімінітом земля тонка, як папір.", "Не ходи ночами в печери без світла. Темрява тут - не просто відсутність світла.", "Мандрівники приносять дивні вісті про Шов. Я лише старий і не вірю в казки.", "Є місця, де тиша гучніша за грім. Обминай мовчазні пустища.");
+            if (i == 3) v.greeting("Камінь не бреше: або тримає, або тріскає.", "Принеси бруківку - зроблю з неї щось гарне.", "Цеглу печуть з глини. Глину шукай біля води.")
+                    .trade("cobblestone", 32, "gold_ingot", 1).trade("gold_ingot", 1, "stone_bricks", 16).trade("gold_ingot", 1, "bricks", 12).trade("gold_ingot", 1, "lamp", 2).trade("gold_ingot", 2, "obsidian", 2);
+            if (i == 4) v.greeting("Скелети стріляють краще, ніж ходять. Тримайся за деревами.", "Пір'я, нитки, кістки - усе згодиться.", "Хороша стріла летить туди, куди дивишся, а не туди, куди хочеш.")
+                    .trade("feather", 12, "gold_ingot", 1).trade("string", 8, "gold_ingot", 1).trade("bone", 10, "gold_ingot", 1).trade("gold_ingot", 1, "arrow", 12).trade("gold_ingot", 3, "bow", 1).trade("gold_ingot", 1, "leather", 4);
+            if (i == 5) v.greeting("Гнила плоть - теж ліки, якщо знати як.", "У Тихих пустищах трава бліда не від посухи.", "Від Шву не вилікуєш травами. Але від голоду - так.")
+                    .trade("rotten_flesh", 12, "gold_ingot", 1).trade("echo_dust", 3, "gold_ingot", 1).trade("gold_ingot", 1, "bone_meal", 8).trade("gold_ingot", 1, "apple", 4).trade("gold_ingot", 4, "liminite_shard", 1);
             r.mob(vName[i], v);
         }
         r.mob("ender_dragon", new MobSettings().health(200).speed(12f).size(4.5f, 2.2f).behavior(MobSettings.Behavior.HOSTILE).attack(10, 3.2f, 2.5f).armorPierce(0.5f).detect(80).persistent(true).flying(true).boss(true).title("Дракон Краю")

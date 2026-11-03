@@ -130,9 +130,15 @@ public final class StructureTemplate {
             if (v.equals("air")) idOf.put(e.getKey(), 0);
             else if (v.equals("keep")) idOf.put(e.getKey(), -1);
             else if (v.startsWith("mob ")) {
-                String mn = v.substring(4).strip();
-                if (!mn.matches("[a-z0-9_]+(:[a-z0-9_/]+)?")) throw new StructureException(1, "mob: погана назва виду: " + mn);
-                idOf.put(e.getKey(), 0); mobOf.put(e.getKey(), mn.indexOf(':') >= 0 ? mn : "voxelin:" + mn);
+                // «mob a|b|c» - один із видів (вибір за зерном клітинки: той самий у тому самому світі)
+                StringBuilder all = new StringBuilder();
+                for (String mn : v.substring(4).strip().split("\\|")) {
+                    mn = mn.strip();
+                    if (!mn.matches("[a-z0-9_]+(:[a-z0-9_/]+)?")) throw new StructureException(1, "mob: погана назва виду: " + mn);
+                    if (all.length() > 0) all.append('|');
+                    all.append(mn.indexOf(':') >= 0 ? mn : "voxelin:" + mn);
+                }
+                idOf.put(e.getKey(), 0); mobOf.put(e.getKey(), all.toString());
             }
             else if (v.startsWith("chest")) {
                 String[] p = v.split("\\s+");

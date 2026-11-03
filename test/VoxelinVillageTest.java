@@ -38,7 +38,7 @@ public class VoxelinVillageTest {
         StructureTemplate small = g.structures.find("village_house_small"), farm = g.structures.find("village_farm"), well = g.structures.find("village_well");
         check(small.sx == 7 && small.sz == 7 && small.role.equals("house") && small.weight == 3, "малий будинок 7x7, вага 3");
         int mobs = 0, chests = 0;
-        for (int y = 0; y < small.sy; y++) for (int z = 0; z < small.sz; z++) for (int x = 0; x < small.sx; x++) { if (small.mobAt(x, y, z) != null) { mobs++; check(small.mobAt(x, y, z).equals("voxelin:villager_farmer") && small.id(x, y, z) == 0, "мітка моба = повітря"); } if (small.lootAt(x, y, z) != null) chests++; }
+        for (int y = 0; y < small.sy; y++) for (int z = 0; z < small.sz; z++) for (int x = 0; x < small.sx; x++) { if (small.mobAt(x, y, z) != null) { mobs++; check(small.mobAt(x, y, z).startsWith("voxelin:villager_farmer|") && small.id(x, y, z) == 0, "мітка моба = повітря (житель: фермер або нова професія)"); } if (small.lootAt(x, y, z) != null) chests++; }
         check(mobs == 1 && chests == 1, "у будинку один житель і одна скриня: " + mobs + "/" + chests);
         int animals = 0; for (int y = 0; y < farm.sy; y++) for (int z = 0; z < farm.sz; z++) for (int x = 0; x < farm.sx; x++) if (farm.mobAt(x, y, z) != null) animals++;
         check(animals == 5, "у загоні 5 тварин: " + animals);

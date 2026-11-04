@@ -93,6 +93,28 @@ public final class ScriptHost {
 
     public File dir() { return dir; }
 
+    /** Скрипти світу: &lt;світ&gt;/scripts/ (їдуть разом зі світом в архіві .vxworld). Однакова назва - перемагає скрипт світу. */
+    private File worldScripts;
+
+    /** Тека світу, що відкривається (Game.openAt); null - без скриптів світу. */
+    public void setWorldDir(File worldDir) { worldScripts = worldDir == null ? null : new File(worldDir, "scripts"); }
+
+    public File worldScriptsDir() { return worldScripts; }
+
+    /** Теки зі скриптами: спершу світу, потім загальна. */
+    private List<File> roots() { List<File> r = new ArrayList<>(); if (worldScripts != null && worldScripts.isDirectory()) r.add(worldScripts); r.add(dir); return r; }
+
+    /** Чи скрипт лежить у теці світу. */
+    public boolean inWorld(String id) { Script s = scripts.get(id); File d = s != null ? s.dir : dirOf(id); return worldScripts != null && d != null && d.getParentFile().equals(worldScripts); }
+
+    /** Тека скрипта за назвою (запущеного або на диску; null - нема). */
+    private File dirOf(String id) {
+        Script s = scripts.get(id);
+        if (s != null) return s.dir;
+        for (File r : roots()) { File d = new File(r, id); if (new File(d, "main.nx").isFile()) return d; }
+        return null;
+    }
+
     public List<Info> list() { List<Info> r = new ArrayList<>(); for (Script s : scripts.values()) r.add(s.info); return r; }
 
     // ------------------------------------------------------------------ для вікна коду в грі
@@ -103,8 +125,10 @@ public final class ScriptHost {
     /** Назви скриптів на диску (теки з main.nx), за абеткою - і тих, що ще не запущені. */
     public List<String> ids() {
         TreeSet<String> out = new TreeSet<>(scripts.keySet());
-        File[] ds = dir.listFiles(File::isDirectory);
-        if (ds != null) for (File d : ds) if (validId(d.getName()) && new File(d, "main.nx").isFile()) out.add(d.getName());
+        for (File root : roots()) {
+            File[] ds = root.listFiles(File::isDirectory);
+            if (ds != null) for (File d : ds) if (validId(d.getName()) && new File(d, "main.nx").isFile()) out.add(d.getName());
+        }
         return new ArrayList<>(out);
     }
 
@@ -117,10 +141,18 @@ public final class ScriptHost {
         return lastConsole.getOrDefault(id, List.of());
     }
 
-    public File mainFile(String id) { return new File(new File(dir, id), "main.nx"); }
+    public File mainFile(String id) { File d = dirOf(id); return new File(d != null ? d : new File(dir, id), "main.nx"); }
 
     /** Програма з блоків (редактор блоків); якщо файла нема - скрипт пишеться кодом. */
-    public File blocksFile(String id) { return new File(new File(dir, id), "blocks.json"); }
+    public File blocksFile(String id) { File d = dirOf(id); return new File(d != null ? d : new File(dir, id), "blocks.json"); }
+
+    /** Новий скрипт одразу в теці світу (поїде з експортом світу). */
+    public void createInWorld(String id, String text) throws IOException {
+        if (!validId(id) || worldScripts == null) throw new IOException(worldScripts == null ? "світ не відкрито" : "погана назва");
+        if (dirOf(id) != null) throw new IOException("скрипт «" + id + "» уже є");
+        write(new File(new File(worldScripts, id), "main.nx"), text);
+        if (world != null) rescan();
+    }
 
     /** Зберегти програму з блоків і згенерований з неї код (спершу blocks.json - перезапуск іде від зміни main.nx). */
     public void saveBlocks(String id, String blocksJson, String code) throws IOException {
@@ -197,14 +229,17 @@ public final class ScriptHost {
     private void rescan() {
         if (world == null) return;
         Set<String> seen = new HashSet<>();
-        File[] ds = dir.listFiles(File::isDirectory);
+        for (File root : roots()) {
+        File[] ds = root.listFiles(File::isDirectory);
         if (ds != null) for (File d : ds) {
             String id = d.getName().toLowerCase(Locale.ROOT);
-            if (!id.matches("[a-z0-9_]{1,32}") || !new File(d, "main.nx").isFile()) continue;
+            if (!id.matches("[a-z0-9_]{1,32}") || !new File(d, "main.nx").isFile() || seen.contains(id)) continue;
             seen.add(id);
             Script s = scripts.get(id);
             if (s == null) { s = new Script(id, d); scripts.put(id, s); start(s); continue; }
+            if (!s.dir.equals(d)) { stop(s, State.STOPPED, null); s = new Script(id, d); scripts.put(id, s); start(s); continue; } // з'явився скрипт світу з тією ж назвою
             if (stamp(d) != s.stamp) { notify("Скрипт «" + id + "» змінено - перезапуск"); start(s); } // і впалий: виправив і зберіг - запуститься
+        }
         }
         for (Iterator<Script> it = scripts.values().iterator(); it.hasNext(); ) {
             Script s = it.next();
@@ -230,7 +265,7 @@ public final class ScriptHost {
             return;
         }
         try {
-            writeHelper();
+            writeHelper(s.dir.getParentFile());
             List<String> cmd = new ArrayList<>(nx);
             cmd.add("main.nx");
             Map<String, String> env = new HashMap<>();
@@ -251,8 +286,10 @@ public final class ScriptHost {
         }
     }
 
-    private void writeHelper() throws IOException {
-        File f = new File(dir, ScriptHelper.FILE);
+    /** Помічник voxelin.nx - у теці, де лежить скрипт (import "../voxelin.nx"): загальній або світу. */
+    private void writeHelper(File root) throws IOException {
+        root.mkdirs();
+        File f = new File(root, ScriptHelper.FILE);
         byte[] want = ScriptHelper.TEXT.getBytes(StandardCharsets.UTF_8);
         if (f.isFile() && Arrays.equals(Files.readAllBytes(f.toPath()), want)) return;
         Files.write(f.toPath(), want);

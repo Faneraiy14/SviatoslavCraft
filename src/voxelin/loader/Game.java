@@ -104,6 +104,7 @@ public final class Game {
 
     public World openWorld(String name) throws IOException {
         File d = worldDir(name);
+        if (scripts != null) scripts.setWorldDir(d);
         return openAt(d, WorldInfo.load(d));
     }
 
@@ -112,6 +113,7 @@ public final class Game {
         WorldInfo.Type type = voxelin.core.Dimensions.type(dimension);
         if (type == null) throw new IllegalArgumentException("невідомий вимір: " + dimension);
         File base = worldDir(worldName), d = new File(base, "dimensions/" + dimension);
+        if (scripts != null) scripts.setWorldDir(base); // скрипти світу - ті самі в усіх вимірах
         WorldInfo info;
         if (WorldInfo.exists(d)) info = WorldInfo.load(d);
         else {

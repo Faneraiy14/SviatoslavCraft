@@ -12,7 +12,7 @@ import static org.lwjgl.glfw.GLFW.*;
 
 /** Меню: головне, список світів, створення й перейменування світу. Малює й обробляє ввід у кадрі (Gui - негайний режим). */
 final class Menus {
-    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS, SOUND, SKIN }
+    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS, SOUND, SKIN, IMPORT }
 
     private final Voxelin v;
     Screen screen = Screen.MAIN;
@@ -32,10 +32,11 @@ final class Menus {
 
     void show(Screen s) {
         screen = s;
-        status = "";
+        status = ""; statusOk = false;
         v.input.clearPressed();
         v.input.endText();
         if (s == Screen.WORLDS) refresh();
+        if (s == Screen.IMPORT) { archives = voxelin.core.WorldArchive.list(shareDir()); importSel = 0; }
         if (s == Screen.SKIN) skin = new SkinScreen(v);
         if (s == Screen.CREATE) { flat = false; cataclysms = WorldInfo.Cataclysms.ON; creative = cheats = more = false; rules.clear(); seedText = ""; v.input.beginText(autoName(), false); }
         if (s == Screen.RENAME) { renameFrom = selectedName(); v.input.beginText(renameFrom == null ? "" : renameFrom, false); }
@@ -78,6 +79,7 @@ final class Menus {
             case SETTINGS -> settings(g);
             case SOUND -> sound(g);
             case SKIN -> { if (!skin.draw(g)) show(Screen.MAIN); }
+            case IMPORT -> importScreen(g);
         }
         Gui.text("Voxelin " + Voxelin.VERSION, 12, Gui.H - 22, 1.8f, 0.55f, 0.6f, 0.7f);
     }
@@ -211,15 +213,52 @@ final class Menus {
         if (g.button("НОВИЙ СВІТ", 445, 560, 190, 56)) { show(Screen.CREATE); return; }
         if (g.button("ПЕРЕЙМЕНУВАТИ", 645, 560, 190, 56, false, any)) { show(Screen.RENAME); return; }
         if (g.button("НАЗАД", 845, 560, 190, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { show(Screen.MAIN); return; }
+        if (g.button("ЕКСПОРТ", 445, 624, 190, 44, false, any)) { // увесь світ разом зі скриптами світу - в один файл share/<світ>.vxworld
+            File out = new File(shareDir(), selectedName() + voxelin.core.WorldArchive.EXT);
+            try { int n = voxelin.core.WorldArchive.export(v.game.worldDir(selectedName()), out); status = "Збережено " + n + " файлів: " + out.getPath(); statusOk = true; }
+            catch (IOException | RuntimeException e) { status = "Не експортовано: " + e.getMessage(); statusOk = false; }
+        }
+        if (g.button("ІМПОРТ", 645, 624, 190, 44)) { show(Screen.IMPORT); return; }
         if (v.input.pressed(GLFW_KEY_DOWN)) selected = Math.min(worlds.size() - 1, selected + 1);
         if (v.input.pressed(GLFW_KEY_UP)) selected = Math.max(0, selected - 1);
         if (selected < scroll) scroll = selected;
         if (selected >= scroll + rows) scroll = selected - rows + 1;
-        if (hiddenOld > 0) Gui.textCentered("Старі світи (v0.0.3) не показано: у нового Voxelin інший формат. Файли не видалено.", Gui.W / 2f, 640, 1.9f, 0.7f, 0.7f, 0.5f);
-        if (!status.isEmpty()) Gui.textCentered(status, Gui.W / 2f, 670, 2.2f, 1f, 0.5f, 0.4f);
+        if (hiddenOld > 0) Gui.textCentered("Старі світи (v0.0.3) не показано: у нового Voxelin інший формат. Файли не видалено.", Gui.W / 2f, 676, 1.7f, 0.7f, 0.7f, 0.5f);
+        if (!status.isEmpty()) { float ss = Math.min(2.2f, 1240 / Math.max(1, Gui.textWidth(status, 1))); Gui.textCentered(status, Gui.W / 2f, 696, ss, statusOk ? 0.5f : 1f, statusOk ? 0.95f : 0.5f, 0.4f); }
     }
 
     private long lastClick;
+    private boolean statusOk;
+    private List<File> archives = List.of();
+    private int importSel;
+
+    /** Тека для обміну світами: share/ поруч із saves/ (туди пише ЕКСПОРТ, звідти бере ІМПОРТ). */
+    File shareDir() { File base = v.game.savesDir.getAbsoluteFile().getParentFile(); return new File(base == null ? new File(".") : base, "share"); }
+
+    private void importScreen(Gui g) {
+        Gui.textCentered("ІМПОРТ СВІТУ", Gui.W / 2f, 40, 5f, 1f, 0.85f, 0.3f);
+        String hint = "Поклади файл .vxworld у теку: " + shareDir().getAbsolutePath();
+        Gui.textCentered(hint, Gui.W / 2f, 100, Math.min(1.7f, 1240 / Math.max(1, Gui.textWidth(hint, 1))), 0.75f, 0.78f, 0.9f);
+        final int x = 290, y0 = 140, w = 700, rowH = 48, rows = 7;
+        if (archives.isEmpty()) Gui.textCentered("Тут поки порожньо.", Gui.W / 2f, 300, 2.6f, 0.8f, 0.8f, 0.85f);
+        for (int i = 0; i < rows && i < archives.size(); i++) {
+            float y = y0 + i * (rowH + 4);
+            boolean sel = i == importSel, hov = g.over(x, y, w, rowH);
+            Gui.rect(x, y, w, rowH, sel ? 0.35f : (hov ? 0.22f : 0.14f), sel ? 0.3f : (hov ? 0.22f : 0.16f), sel ? 0.1f : 0.28f, 0.95f);
+            File f = archives.get(i);
+            Gui.text(f.getName(), x + 14, y + 10, 2.4f, 1, 1, 1);
+            Gui.text((f.length() + 1023) / 1024 + " КБ", x + w - 140, y + 16, 1.7f, 0.7f, 0.72f, 0.8f);
+            if (hov && g.click) { importSel = i; g.click = false; }
+        }
+        Gui.textCentered("Скрипти зі світу працюють у пісочниці: без доступу до твоїх файлів і мережі.", Gui.W / 2f, 524, 1.7f, 0.7f, 0.75f, 0.6f);
+        boolean any = importSel < archives.size();
+        if (g.button("ІМПОРТУВАТИ", 345, 560, 290, 56, true, any)) {
+            try { String name = voxelin.core.WorldArchive.importTo(archives.get(importSel), v.game.savesDir); show(Screen.WORLDS); select(name); status = "Імпортовано: " + name; statusOk = true; return; }
+            catch (IOException | RuntimeException e) { status = "Не імпортовано: " + e.getMessage(); statusOk = false; }
+        }
+        if (g.button("НАЗАД", 645, 560, 290, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { show(Screen.WORLDS); return; }
+        if (!status.isEmpty()) Gui.textCentered(status, Gui.W / 2f, 650, 2f, statusOk ? 0.5f : 1f, statusOk ? 0.95f : 0.5f, 0.4f);
+    }
 
     private void play() { String n = selectedName(); if (n != null) v.beginLoading(n); }
 

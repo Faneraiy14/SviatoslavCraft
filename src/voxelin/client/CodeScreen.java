@@ -33,6 +33,8 @@ final class CodeScreen {
     private String pendingLeave;
     /** Ввід назви нового скрипта (null - не вводимо). */
     private StringBuilder naming;
+    /** Новий скрипт - у теці світу (поїде з експортом світу). */
+    private boolean newInWorld;
     private boolean dragging;
     boolean close;
     /** Відкрити редактор блоків для цього скрипта (PlayScreen перемикає екран). */
@@ -139,6 +141,7 @@ final class CodeScreen {
             float[] dot = dot(info);
             Gui.rect(32, y + 12, 8, 8, dot[0], dot[1], dot[2], 1f);
             Gui.text(id + (sel && buf.modified() ? " *" : ""), 48, y + 9, 1.7f, 1f, 1f, 1f);
+            if (host.inWorld(id)) Gui.text("світ", 190, y + 11, 1.3f, 0.6f, 0.85f, 0.6f);
             y += 36;
         }
         if (ids.isEmpty()) Gui.text("(порожньо)", 32, y + 6, 1.6f, 0.6f, 0.62f, 0.72f);
@@ -245,13 +248,19 @@ final class CodeScreen {
         boolean exists = ids.contains(id);
         if (exists) Gui.text("такий уже є", x + 20, y + 130, 1.5f, 1f, 0.5f, 0.4f);
         boolean good = ScriptHost.validId(id) && !exists;
+        if (host.worldScriptsDir() != null && g.button(newInWorld ? "У ТЕЦІ СВІТУ: ТАК" : "У ТЕЦІ СВІТУ: НІ", x + w - 240, y + 12, 220, 34, newInWorld, true)) newInWorld = !newInWorld;
         if (g.button("КОДОМ", x + 20, y + 160, 170, 50, true, good) || ok && good) {
-            try { host.save(id, ScriptHost.template(id)); refreshIds(); load(id); say("Скрипт «" + id + "» створено й запущено: команда /" + id); }
+            try { create(id, ScriptHost.template(id)); refreshIds(); load(id); say("Скрипт «" + id + "» створено й запущено: команда /" + id); }
             catch (IOException e) { say("Не створено: " + e.getMessage()); }
             naming = null;
-        } else if (g.button("БЛОКАМИ", x + 200, y + 160, 170, 50, false, good)) { // порожня програма; збереже редактор блоків
-            naming = null; openBlocks = id; close = true; end();
+        } else if (g.button("БЛОКАМИ", x + 200, y + 160, 170, 50, false, good)) {
+            try { create(id, new voxelin.client.code.BlockProgram().toCode(id)); naming = null; openBlocks = id; close = true; end(); } // порожня програма; блоки збереже редактор
+            catch (IOException e) { say("Не створено: " + e.getMessage()); naming = null; }
         } else if (g.button("СКАСУВАТИ", x + w - 170, y + 160, 150, 50) || cancel) naming = null;
+    }
+
+    private void create(String id, String text) throws IOException {
+        if (newInWorld && host.worldScriptsDir() != null) host.createInWorld(id, text); else host.save(id, text);
     }
 
     /** Для тестів і знімків. */

@@ -156,6 +156,10 @@ public class VoxelinNetTest {
         c2.close();
         run(() -> srv.guests().size() == 1, 60);
         check(hostChat.stream().anyMatch(s -> s.startsWith("Друг вийшов")), "вихід гостя - одразу");
+        // перебір коду: після 5 хибних - пауза навіть для правильного
+        for (int i = 0; i < 4; i++) joinErr("Злий", "ZZZZZZ");
+        check(joinErr("Злий", srv.code).contains("забагато"), "перебір коду блокується");
+
         srv.close();
         run(() -> cli.kicked() != null, 100);
         check(cli.kicked().contains("закрив"), "хост закрив гру - гість дізнався: " + cli.kicked());

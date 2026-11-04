@@ -55,6 +55,10 @@ public final class NetServer implements AutoCloseable {
     private final Map<Conn, Long> handshakeSince = new IdentityHashMap<>();
     private final List<Guest> guests = new ArrayList<>();
     private final Map<Mob, Integer> mobIds = new IdentityHashMap<>();
+    /** Хибні коди з адреси: {скільки, коли останній}. Після WRONG_LIMIT - відмова на LOCK_MS (код не підібрати перебором). */
+    private final Map<InetAddress, long[]> wrong = new HashMap<>();
+    static final int WRONG_LIMIT = 5;
+    static final long LOCK_MS = 60_000;
     private final World.BlockWatcher watcher = this::blockChanged;
     private int nextId = 1, nextMob = 1, rr;
     private long tick;
@@ -157,7 +161,16 @@ public final class NetServer implements AutoCloseable {
         int ver = in.readInt();
         String code = str(in, 16), name = cleanName(str(in, 64)), look = str(in, 400);
         if (ver != VERSION) return "інша версія гри (протокол " + ver + ", у хоста " + VERSION + ")";
-        if (!this.code.equalsIgnoreCase(code.trim())) return "неправильний код запрошення";
+        long[] w = wrong.get(c.address());
+        long now = System.currentTimeMillis();
+        if (w != null && now - w[1] > LOCK_MS) { wrong.remove(c.address()); w = null; }
+        if (w != null && w[0] >= WRONG_LIMIT) return "забагато спроб - зачекай хвилину";
+        if (!this.code.equalsIgnoreCase(code.trim())) {
+            if (wrong.size() > 1000) wrong.clear();
+            long[] e = wrong.computeIfAbsent(c.address(), k -> new long[2]);
+            e[0]++; e[1] = now;
+            return "неправильний код запрошення";
+        }
         if (name == null) return "ім'я: 1-16 літер, цифр, _ або -";
         if (name.equalsIgnoreCase(hostName) || guests.stream().anyMatch(g -> g.name.equalsIgnoreCase(name))) return "ім'я " + name + " вже зайняте";
         if (guests.size() >= MAX_GUESTS) return "світ повний (" + MAX_GUESTS + " гостей)";

@@ -47,6 +47,10 @@ public final class NetClient implements AutoCloseable {
     private Pos teleport;
     private String kicked;
     private boolean started;
+    /** Остання надіслана позиція й коли - без руху (екран завантаження) раз на секунду повторюємо, щоб хост не вважав нас зниклими. */
+    private Pos lastPos;
+    private float lastYaw, lastPitch;
+    private long lastSent;
 
     private NetClient(Conn conn, Welcome w, String name) { this.conn = conn; welcome = w; this.name = name; }
 
@@ -110,6 +114,7 @@ public final class NetClient implements AutoCloseable {
         }
         if (refused.size() > 512) refused.clear();
         smooth();
+        if (started && System.currentTimeMillis() - lastSent > 1000) sendPos(lastPos != null ? lastPos : welcome.spawn(), lastYaw, lastPitch);
         if (kicked == null && conn.closed()) kicked = conn.error() == null ? "з'єднання розірвано" : conn.error();
         if (kicked == null && System.currentTimeMillis() - conn.lastRecv > TIMEOUT_MS) { kicked = "хост не відповідає"; conn.close(); }
     }
@@ -221,7 +226,9 @@ public final class NetClient implements AutoCloseable {
     /** Причина, з якої гру завершено (null - ще граємо). */
     public String kicked() { return kicked; }
 
-    public void sendPos(Pos p, float yaw, float pitch) { conn.send(frame(C_POS, o -> { NetServer.writePos(o, p); o.writeFloat(yaw); o.writeFloat(pitch); })); }
+    public void sendPos(Pos p, float yaw, float pitch) {
+        lastPos = p.copy(); lastYaw = yaw; lastPitch = pitch; lastSent = System.currentTimeMillis();
+        conn.send(frame(C_POS, o -> { NetServer.writePos(o, p); o.writeFloat(yaw); o.writeFloat(pitch); })); }
     public void breakBlock(long x, int y, long z) { conn.send(frame(C_BREAK, o -> { o.writeLong(x); o.writeInt(y); o.writeLong(z); })); }
     public void placeBlock(long x, int y, long z, String block) { conn.send(frame(C_PLACE, o -> { o.writeLong(x); o.writeInt(y); o.writeLong(z); o.writeUTF(block); })); }
     public void chat(String text) { String t = cleanChat(text); if (!t.isEmpty()) conn.send(frame(C_CHAT, o -> o.writeUTF(t))); }

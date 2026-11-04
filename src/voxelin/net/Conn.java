@@ -81,6 +81,7 @@ public final class Conn implements AutoCloseable {
     }
 
     public byte[] poll() { return inbox.poll(); }
+    public java.net.InetAddress address() { return socket.getInetAddress(); }
     public boolean closed() { return closed; }
     public String error() { return error; }
 

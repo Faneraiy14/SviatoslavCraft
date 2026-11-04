@@ -119,14 +119,27 @@ public final class ScriptHost {
 
     public File mainFile(String id) { return new File(new File(dir, id), "main.nx"); }
 
-    /** Записати main.nx (атомарно) і одразу перезапустити скрипт (не чекаючи перевірки раз на секунду). */
-    public void save(String id, String text) throws IOException {
+    /** Програма з блоків (редактор блоків); якщо файла нема - скрипт пишеться кодом. */
+    public File blocksFile(String id) { return new File(new File(dir, id), "blocks.json"); }
+
+    /** Зберегти програму з блоків і згенерований з неї код (спершу blocks.json - перезапуск іде від зміни main.nx). */
+    public void saveBlocks(String id, String blocksJson, String code) throws IOException {
         if (!validId(id)) throw new IOException("назва скрипта - малі латинські літери, цифри, _ (до 32)");
-        File f = mainFile(id);
+        write(blocksFile(id), blocksJson);
+        save(id, code);
+    }
+
+    private static void write(File f, String text) throws IOException {
         f.getParentFile().mkdirs();
         File tmp = new File(f.getPath() + ".tmp");
         Files.writeString(tmp.toPath(), text, StandardCharsets.UTF_8);
         voxelin.core.Files2.replace(tmp, f);
+    }
+
+    /** Записати main.nx (атомарно) і одразу перезапустити скрипт (не чекаючи перевірки раз на секунду). */
+    public void save(String id, String text) throws IOException {
+        if (!validId(id)) throw new IOException("назва скрипта - малі латинські літери, цифри, _ (до 32)");
+        write(mainFile(id), text);
         Script s = scripts.get(id);
         if (world == null) return;
         if (s == null) rescan();

@@ -53,6 +53,7 @@ public class VoxelinScriptTest {
             blockEvent(ground);
             sandbox();
             editorSave();
+            blocksProgram(ground);
             hang();
             crashAndReload();
             stopSaves();
@@ -143,6 +144,58 @@ public class VoxelinScriptTest {
         check(saidHas("Змінено: tmpl"), "збереження у вікні коду перезапускає скрипт");
         g.scripts.stop("tmpl");
         check(g.scripts.info("tmpl").state == ScriptHost.State.STOPPED, "кнопка ЗУПИНИТИ");
+    }
+
+    /** Редактор блоків: програма -> код NyxilumLang -> справжній nx; команда з повтором, змінні, умови, подія блоку, «коли запускається». */
+    static void blocksProgram(int ground) throws Exception {
+        voxelin.client.code.BlockProgram p = new voxelin.client.code.BlockProgram();
+        voxelin.client.code.BlockProgram.Node start = p.insert(voxelin.client.code.BlockProgram.kind("start"), null);
+        voxelin.client.code.BlockProgram.Node hello = p.insert(voxelin.client.code.BlockProgram.kind("say"), start);
+        hello.values[0] = "старт \"блоків\" \\ {count}";
+        voxelin.client.code.BlockProgram.Node cmd = p.insert(voxelin.client.code.BlockProgram.kind("command"), null);
+        cmd.values[0] = "wall";
+        voxelin.client.code.BlockProgram.Node rep = p.insert(voxelin.client.code.BlockProgram.kind("repeat"), cmd);
+        rep.values[0] = "arg";
+        voxelin.client.code.BlockProgram.Node inner = p.insert(voxelin.client.code.BlockProgram.kind("repeat"), rep);
+        inner.values[0] = "2";
+        voxelin.client.code.BlockProgram.Node put = p.insert(voxelin.client.code.BlockProgram.kind("setblock"), inner);
+        put.values[0] = "bricks"; put.values[1] = "4 + j"; put.values[2] = "i"; put.values[3] = "-1";
+        voxelin.client.code.BlockProgram.Node inc = p.insert(voxelin.client.code.BlockProgram.kind("changevar"), rep);
+        inc.values[0] = "count"; inc.values[1] = "1";
+        voxelin.client.code.BlockProgram.Node ifv = p.insert(voxelin.client.code.BlockProgram.kind("ifvar"), cmd);
+        ifv.values[0] = "count"; ifv.values[1] = "≥"; ifv.values[2] = "3";
+        p.insert(voxelin.client.code.BlockProgram.kind("say"), ifv).values[0] = "стіна {arg}, разом {count}";
+        voxelin.client.code.BlockProgram.Node ifb = p.insert(voxelin.client.code.BlockProgram.kind("ifblock"), cmd);
+        ifb.values[0] = "4"; ifb.values[1] = "0"; ifb.values[2] = "-1"; ifb.values[3] = "bricks";
+        p.insert(voxelin.client.code.BlockProgram.kind("say"), ifb).values[0] = "цегла на місці";
+        voxelin.client.code.BlockProgram.Node fill = p.insert(voxelin.client.code.BlockProgram.kind("fill"), cmd);
+        fill.values[1] = "-6"; fill.values[2] = "0"; fill.values[3] = "-6"; fill.values[4] = "-5"; fill.values[5] = "1"; fill.values[6] = "-5";
+        voxelin.client.code.BlockProgram.Node placed = p.insert(voxelin.client.code.BlockProgram.kind("placed"), null);
+        placed.values[0] = "glass";
+        voxelin.client.code.BlockProgram.Node pc = p.insert(voxelin.client.code.BlockProgram.kind("changevar"), placed);
+        pc.values[0] = "glasses";
+        p.insert(voxelin.client.code.BlockProgram.kind("setblock"), pc).values[0] = "stone";
+        p.insert(voxelin.client.code.BlockProgram.kind("say"), placed).values[0] = "скла: {glasses}";
+        said.clear();
+        g.scripts.saveBlocks("blk", p.toJson(), p.toCode("blk"));
+        tickUntil(() -> saidHas("старт \"блоків\" \\ 0"), 8000);
+        check(saidHas("старт \"блоків\" \\ 0"), "«коли запускається» + текст з лапками й змінною: " + said + " / " + g.scripts.console("blk"));
+        long px = 3, py = ground + 1, pz = 3;
+        List<String> out = g.commands.execute(Sources.player("Тест"), w, new long[]{px, py, pz}, "/wall 3");
+        check(out.isEmpty(), "команда з блоків зареєстрована: " + out);
+        tickUntil(() -> saidHas("цегла на місці"), 5000);
+        check(saidHas("стіна 3, разом 3"), "змінні й умова: " + said + " / " + g.scripts.console("blk"));
+        check(saidHas("цегла на місці"), "якщо на ... є блок");
+        int bricks = 0;
+        for (int dy = 0; dy < 3; dy++) for (int dx = 4; dx <= 5; dx++) if (w.getBlock(px + dx, (int) py + dy, pz - 1).name().equals("voxelin:bricks")) bricks++;
+        check(bricks == 6, "повтор у повторі: стінка 2x3 з лічильниками i, j: " + bricks);
+        tickUntil(() -> w.getBlock(px - 5, (int) py + 1, pz - 5).name().equals("voxelin:glass"), 5000); // run - запит, іде після say
+        check(w.getBlock(px - 6, (int) py, pz - 6).name().equals("voxelin:glass") && w.getBlock(px - 5, (int) py + 1, pz - 5).name().equals("voxelin:glass"), "заповнити (fill) відносно гравця");
+        w.setBlock(Sources.player("Гравець"), 9, ground + 1, 9, g.blocks.byName("voxelin:glass"));
+        tickUntil(() -> saidHas("скла: 1"), 5000);
+        check(saidHas("скла: 1"), "подія «ставить блок» з позицією від блоку");
+        check(w.getBlock(11, ground + 1, 9).name().equals("voxelin:stone"), "у події блоку позиції - від самого блоку");
+        g.scripts.stop("blk");
     }
 
     static void command(int ground) throws Exception {

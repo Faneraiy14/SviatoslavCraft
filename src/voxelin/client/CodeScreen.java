@@ -96,6 +96,7 @@ final class CodeScreen {
         float by = 664;
         if (g.button("ЗБЕРЕГТИ (Ctrl+S)", X, by, 300, 44, true, current != null)) save();
         if (g.button("ЗУПИНИТИ", X + 316, by, 190, 44, false, current != null && host.info(current) != null && host.info(current).state == ScriptHost.State.RUNNING)) { host.stop(current); say("Скрипт «" + current + "» зупинено"); }
+        if (g.button("БЛОКИ", X + 522, by, 160, 44, false, current != null) && leave("blocks")) { openBlocks = current; close = true; end(); }
         if (g.button("ЗАКРИТИ (Esc)", X + W - 240, by, 240, 44)) tryClose();
         if (!status.isEmpty() && System.currentTimeMillis() - statusAt < 6000) Gui.text(status, X + 160, 26, 1.6f, 0.95f, 0.9f, 0.6f);
     }
@@ -243,11 +244,14 @@ final class CodeScreen {
         String id = naming.toString();
         boolean exists = ids.contains(id);
         if (exists) Gui.text("такий уже є", x + 20, y + 130, 1.5f, 1f, 0.5f, 0.4f);
-        if (g.button("СТВОРИТИ", x + 20, y + 160, 250, 50, true, ScriptHost.validId(id) && !exists) || ok && ScriptHost.validId(id) && !exists) {
+        boolean good = ScriptHost.validId(id) && !exists;
+        if (g.button("КОДОМ", x + 20, y + 160, 170, 50, true, good) || ok && good) {
             try { host.save(id, ScriptHost.template(id)); refreshIds(); load(id); say("Скрипт «" + id + "» створено й запущено: команда /" + id); }
             catch (IOException e) { say("Не створено: " + e.getMessage()); }
             naming = null;
-        } else if (g.button("СКАСУВАТИ", x + w - 270, y + 160, 250, 50) || cancel) naming = null;
+        } else if (g.button("БЛОКАМИ", x + 200, y + 160, 170, 50, false, good)) { // порожня програма; збереже редактор блоків
+            naming = null; openBlocks = id; close = true; end();
+        } else if (g.button("СКАСУВАТИ", x + w - 170, y + 160, 150, 50) || cancel) naming = null;
     }
 
     /** Для тестів і знімків. */

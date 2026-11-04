@@ -45,6 +45,8 @@ final class PlayScreen {
     private JournalScreen journal;
     /** Вікно коду скриптів (K). */
     private CodeScreen code;
+    /** Редактор блоків (з вікна коду: БЛОКИ). */
+    private BlocksScreen blocks;
     private KeeperScreen keeper;
     private CreditsScreen credits;
     /** Око Енду в повітря: куди тягне до Брами Шву (показується кілька секунд). */
@@ -146,6 +148,7 @@ final class PlayScreen {
         if (v.opts.open != null && (v.opts.open.equals("code") || v.opts.open.startsWith("code:"))) { // code:назва - одразу цей скрипт (знімки)
             code = new CodeScreen(v, v.game.scripts, v.opts.open.startsWith("code:") ? v.opts.open.substring(5) : null); invOpen = true;
         }
+        if (v.opts.open != null && v.opts.open.startsWith("blocks:") && v.game.scripts != null) { blocks = new BlocksScreen(v, v.game.scripts, v.opts.open.substring(7)); invOpen = true; }
         if (v.opts.open != null && (v.opts.open.equals("journal") || v.opts.open.startsWith("journal:"))) { // journal:N - одразу N-й запис (знімки)
             journal = new JournalScreen(world); invOpen = true;
             if (v.opts.open.startsWith("journal:")) try { journal.select(Integer.parseInt(v.opts.open.substring(8))); } catch (NumberFormatException ignored) {}
@@ -281,12 +284,12 @@ final class PlayScreen {
         Input in = v.input;
         if (leaving) return false;
         if (invOpen && openedBlock && !openedKind.equals(world.blocks.get(Math.max(0, world.blockId(openedX, openedY, openedZ))).interact)) closeInventory(); // блок зламано/зник
-        boolean searching = code != null || invOpen && journal == null && keeper == null && trade == null && credits == null && activeScreen.typing(); // пошук в інвентарі забирає клавіатуру
-        boolean subScreen = pauseSettings || skinScreen != null || code != null; // Esc і Enter обробляє сам екран налаштувань чи скіна
+        boolean searching = code != null || blocks != null || invOpen && journal == null && keeper == null && trade == null && credits == null && activeScreen.typing(); // пошук в інвентарі забирає клавіатуру
+        boolean subScreen = pauseSettings || skinScreen != null || code != null || blocks != null; // Esc і Enter обробляє сам екран налаштувань чи скіна
         if (in.pressed(GLFW_KEY_ESCAPE) && !vt.dead() && !subScreen) {
             if (chatOpen) closeChat(); else if (searching) activeScreen.stopTyping(); else if (invOpen) { closeInventory(); } else if (paused) resume(); else pause();
         }
-        if (code == null) { // у вікні коду всі клавіші - редактору
+        if (code == null && blocks == null) { // у вікні коду й блоків усі клавіші - редактору
             if (in.pressed(GLFW_KEY_F3)) debug = !debug;
             if (in.pressed(GLFW_KEY_F1)) hud = !hud;
             if (in.pressed(GLFW_KEY_F5)) cam.cycle();
@@ -390,7 +393,7 @@ final class PlayScreen {
 
         // інтерфейс
         v.gui.begin();
-        if (hud || code != null) hud(v.gui);
+        if (hud || code != null || blocks != null) hud(v.gui);
         if (paused) pauseMenu(v.gui);
         v.gui.end();
         guiNs = System.nanoTime() - t2;
@@ -850,7 +853,10 @@ final class PlayScreen {
 
     private void openChat(String initial) { chatOpen = true; v.input.beginText(initial, true); grab(false); }
 
-    private void closeInventory() { if (code != null) { code.end(); code = null; invOpen = false; grab(true); return; }
+    private void closeInventory() {
+        if (code != null && code.openBlocks != null) { String id = code.openBlocks; code.end(); code = null; blocks = new BlocksScreen(v, v.game.scripts, id); return; } // вікно коду -> блоки
+        if (blocks != null && blocks.toCode) { String id = blocks.id; blocks.end(); blocks = null; code = new CodeScreen(v, v.game.scripts, id); return; }
+        if (code != null || blocks != null) { if (code != null) code.end(); if (blocks != null) blocks.end(); code = null; blocks = null; invOpen = false; grab(true); return; }
         if (trade != null || journal != null || keeper != null || credits != null) { trade = null; journal = null; keeper = null; credits = null; invOpen = false; grab(true); return; } openedBlock = false; activeScreen.close(); invOpen = false; grab(true); }
 
     private void closeChat() { chatOpen = false; v.input.endText(); grab(!invOpen); }
@@ -932,7 +938,8 @@ final class PlayScreen {
         }
         if (invOpen) {
             if (credits != null) { credits.draw(g); if (credits.close) { if (credits.toMenu) leaving = true; closeInventory(); } }
-            else if (code != null) { code.draw(g); if (code != null && code.close) closeInventory(); }
+            else if (code != null) { code.draw(g); if (code.close) closeInventory(); }
+            else if (blocks != null) { blocks.draw(g); if (blocks.close) closeInventory(); }
             else if (journal != null) { journal.draw(g); if (journal.close) closeInventory(); }
             else if (keeper != null) { keeper.draw(g); if (keeper.close) closeInventory(); }
             else if (trade != null) { trade.draw(g); if (trade.close) closeInventory(); }
@@ -1198,6 +1205,7 @@ final class PlayScreen {
         sounds.close();
         world.sound = voxelin.core.SoundSink.NONE;
         if (code != null) code.end();
+        if (blocks != null) blocks.end();
         if (invOpen) activeScreen.close();
         if (vt.dead()) player.teleport(spawn); // збереження в момент смерті: гравець з'явиться на спавні
         world.info.setPlayer(player.pos, player.yaw, player.pitch);

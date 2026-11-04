@@ -38,7 +38,7 @@ public final class GLBitmapFont {
     private static final String CHARS =
         " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:-=_|/~!?()[]<>+*'#%@;" +
         "«»—…’\"&$^" + // лапки й тире в записах журналу (раніше мовчки пропускались)
-        "{}\\`" + // дужки й зворотна похила - для вікна коду
+        "{}\\`≠≤≥" + // дужки, зворотна похила й порівняння - для вікна коду й блоків
         "АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ" +
         "абвгґдеєжзиіїйклмнопрстуфхцчшщьюя";
     private static final int COLS = 12;

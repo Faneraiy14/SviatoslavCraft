@@ -43,7 +43,7 @@ public final class Voxelin {
         boolean autoFlat, debug, freeze;
         String menuScreen;
         /** dev: --lan - одразу відкрити світ для мережі (код - у stdout); --join АДРЕСА/КОД і --name ІМ'Я - зайти гостем без меню. */
-        boolean lan;
+        boolean lan, lanSurvival;
         String join, name;
         /** Автоматичні перевірки (бенчмарк, знімок, заморожений гравець, показ меню): не захоплювати курсор, не відбирати фокус, не слухати мишу. */
         boolean quiet() { return benchSeconds > 0 || screenshot != null || freeze || menuScreen != null || lan; }
@@ -78,6 +78,7 @@ public final class Voxelin {
                         case "--freeze" -> o.freeze = true;
                         case "--menu" -> o.menuScreen = a[++i];
                         case "--lan" -> o.lan = true;
+                        case "--lan-survival" -> { o.lan = true; o.lanSurvival = true; }
                         case "--join" -> o.join = a[++i];
                         case "--name" -> o.name = a[++i];
                         case "--size" -> { String[] s = a[++i].split("x"); o.width = Math.max(320, Integer.parseInt(s[0])); o.height = Math.max(240, Integer.parseInt(s[1])); }
@@ -347,7 +348,7 @@ public final class Voxelin {
         refreshTextures();
         try {
             voxelin.net.NetClient.Welcome w = c.welcome;
-            World mirror = game.openMirror(w.worldName(), w.seed(), w.type(), w.palette());
+            World mirror = game.openMirror(w.worldName(), w.seed(), w.type(), w.palette(), w.survival());
             mirror.info.setPlayer(w.spawn(), w.yaw(), w.pitch());
             c.attach(mirror);
             loadingNet = c;

@@ -15,7 +15,7 @@ import static voxelin.net.Protocol.*;
  */
 public final class NetClient implements AutoCloseable {
     /** Що хост сказав при вході. */
-    public record Welcome(int id, String hostName, String worldName, long seed, WorldInfo.Type type, List<String> palette, Pos spawn, float yaw, float pitch, int view) {}
+    public record Welcome(int id, String hostName, String worldName, long seed, WorldInfo.Type type, List<String> palette, Pos spawn, float yaw, float pitch, int view, boolean survival) {}
 
     /** Інший гравець (хост чи гість): позиція з мережі (target) і показана (pos, плавно доганяє). */
     public static final class Remote {
@@ -43,6 +43,8 @@ public final class NetClient implements AutoCloseable {
     private final Map<Integer, Mob> mobs = new HashMap<>();
     private final Map<Mob, Pos> mobTargets = new IdentityHashMap<>();
     private final Deque<String> chat = new ArrayDeque<>();
+    /** Дроп від хоста (виживання): {предмет, кількість, зношення}; забирає PlayScreen у інвентар. */
+    private final Deque<Object[]> gifts = new ArrayDeque<>();
     private final Map<ChunkPos, Long> refused = new HashMap<>();
     private Pos teleport;
     private String kicked;
@@ -81,8 +83,9 @@ public final class NetClient implements AutoCloseable {
             Pos spawn = NetServer.readPos(in);
             float yaw = in.readFloat(), pitch = in.readFloat();
             int view = Math.max(2, Math.min(MAX_VIEW, in.readInt()));
+            boolean survival = in.readBoolean();
             if (spawn == null) throw new IOException("погана точка появи");
-            return new NetClient(c, new Welcome(id, hostName, world, seed, type, pal, spawn, Float.isFinite(yaw) ? yaw : 0, Float.isFinite(pitch) ? pitch : 0, view), nm);
+            return new NetClient(c, new Welcome(id, hostName, world, seed, type, pal, spawn, Float.isFinite(yaw) ? yaw : 0, Float.isFinite(pitch) ? pitch : 0, view, survival), nm);
         } catch (SocketTimeoutException e) { c.close(); throw new IOException("хост не відповів"); }
         catch (EOFException e) { c.close(); throw new IOException("хост закрив з'єднання"); }
         catch (IOException e) { c.close(); throw e; }
@@ -140,6 +143,10 @@ public final class NetClient implements AutoCloseable {
             case S_CHAT -> { if (chat.size() < 100) chat.add(cleanChat(str(in, 1000))); }
             case S_KICK -> { kicked = str(in, 300); conn.close(); }
             case S_TELEPORT -> { Pos p = NetServer.readPos(in); if (p != null) teleport = p; }
+            case S_GIVE -> {
+                String item = str(in, 96); int count = in.readInt(), damage = in.readInt();
+                if (world.itemTypes.get(item) != null && count > 0 && count <= 64 && damage >= 0 && gifts.size() < 256) gifts.add(new Object[]{item, count, damage});
+            }
             case S_PLAYERS -> players(in);
             case S_MOBS -> mobs(in);
             default -> { } // новіший хост: невідоме пропускаємо
@@ -220,6 +227,9 @@ public final class NetClient implements AutoCloseable {
     /** Нові рядки чату (забираються). */
     public List<String> takeChat() { List<String> l = new ArrayList<>(chat); chat.clear(); return l; }
 
+    /** Дроп, що прийшов від хоста (забирається). */
+    public List<Object[]> takeGifts() { List<Object[]> l = new ArrayList<>(gifts); gifts.clear(); return l; }
+
     /** Хост повернув гостя (стрибок позиції) - куди. */
     public Pos takeTeleport() { Pos p = teleport; teleport = null; return p; }
 
@@ -229,7 +239,7 @@ public final class NetClient implements AutoCloseable {
     public void sendPos(Pos p, float yaw, float pitch) {
         lastPos = p.copy(); lastYaw = yaw; lastPitch = pitch; lastSent = System.currentTimeMillis();
         conn.send(frame(C_POS, o -> { NetServer.writePos(o, p); o.writeFloat(yaw); o.writeFloat(pitch); })); }
-    public void breakBlock(long x, int y, long z) { conn.send(frame(C_BREAK, o -> { o.writeLong(x); o.writeInt(y); o.writeLong(z); })); }
+    public void breakBlock(long x, int y, long z, String tool) { conn.send(frame(C_BREAK, o -> { o.writeLong(x); o.writeInt(y); o.writeLong(z); o.writeUTF(tool == null ? "" : tool); })); }
     public void placeBlock(long x, int y, long z, String block) { conn.send(frame(C_PLACE, o -> { o.writeLong(x); o.writeInt(y); o.writeLong(z); o.writeUTF(block); })); }
     public void chat(String text) { String t = cleanChat(text); if (!t.isEmpty()) conn.send(frame(C_CHAT, o -> o.writeUTF(t))); }
 

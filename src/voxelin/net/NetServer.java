@@ -14,7 +14,8 @@ import static voxelin.net.Protocol.*;
 
 /**
  * Хост мережевої гри: відкритий для мережі світ гравця. Працює на головному потоці гри (tick() щотіку), сокети - у своїх потоках.
- * Гості - будівельники у творчому режимі: бачать світ, гравців, істот, час доби; ламають і ставлять блоки, пишуть у чат. Хост перевіряє
+ * Гості у творчому режимі чи у виживанні (обирає хост): бачать світ, гравців, істот, час доби; ламають і ставлять блоки, пишуть у чат.
+ * У виживанні дроп зламаного блока хост надсилає гостю в інвентар (S_GIVE); інвентар, здоров'я й голод гостя живуть у гостя. Хост перевіряє
  * кожен запит: код запрошення, ім'я, відстань до блока, частоту дій, стрибки позиції, розмір кадрів. Гості не виконують команд, їх не
  * атакують істоти, вони не ходять у інші виміри.
  */
@@ -25,13 +26,13 @@ public final class NetServer implements AutoCloseable {
         public final String name, look;
         final Conn conn;
         final Source src;
-        public final Pos pos;
+        public final Pos pos, spawn;
         public float yaw, pitch;
         final Set<ChunkPos> sent = new HashSet<>();
         final ArrayDeque<ChunkPos> wants = new ArrayDeque<>();
         int actions = ACTION_BURST, chats = 3;
         Guest(int id, String name, String look, Conn conn, Pos at) {
-            this.id = id; this.name = name; this.look = look; this.conn = conn; this.pos = at.copy();
+            this.id = id; this.name = name; this.look = look; this.conn = conn; this.pos = at.copy(); this.spawn = at.copy();
             src = Sources.of(name, Source.Kind.PLAYER, 0, 16);
         }
     }
@@ -48,6 +49,9 @@ public final class NetServer implements AutoCloseable {
     public final String code;
     public final int port;
     public final String hostName;
+    /** Режим гостей: true - виживання, false - творчий. */
+    public final boolean survival;
+    private final Random rng = new Random();
     public volatile String hostLook;
     private final Consumer<String> chatOut;
     private final ConcurrentLinkedQueue<Socket> accepted = new ConcurrentLinkedQueue<>();
@@ -67,7 +71,10 @@ public final class NetServer implements AutoCloseable {
     private float hostYaw, hostPitch;
 
     /** Відкрити світ для мережі на порту (0 - будь-який вільний). chatOut - що показати в чаті хоста. */
-    public NetServer(World world, int port, String hostName, String hostLook, Consumer<String> chatOut) throws IOException {
+    public NetServer(World world, int port, String hostName, String hostLook, Consumer<String> chatOut) throws IOException { this(world, port, hostName, hostLook, chatOut, false); }
+
+    public NetServer(World world, int port, String hostName, String hostLook, Consumer<String> chatOut, boolean survival) throws IOException {
+        this.survival = survival;
         if (world.remote()) throw new IllegalStateException("дзеркало чужого світу не можна відкрити для мережі");
         this.world = world; this.hostName = hostName; this.hostLook = hostLook; this.chatOut = chatOut;
         code = Protocol.newCode();
@@ -187,6 +194,7 @@ public final class NetServer implements AutoCloseable {
             for (String p : pal) o.writeUTF(p);
             writePos(o, spawn); o.writeFloat((hostYaw + 180) % 360); o.writeFloat(0);
             o.writeInt(MAX_VIEW);
+            o.writeBoolean(survival);
         }));
         c.send(timeFrame());
         announce(name + " приєднався до гри.");
@@ -213,7 +221,7 @@ public final class NetServer implements AutoCloseable {
                 Pos p = readPos(in);
                 float yaw = in.readFloat(), pitch = in.readFloat();
                 if (p == null || !Float.isFinite(yaw) || !Float.isFinite(pitch)) return;
-                if (distance(p, g.pos) > MAX_STEP) { g.conn.send(frame(S_TELEPORT, o -> writePos(o, g.pos))); return; } // стрибок - назад
+                if (distance(p, g.pos) > MAX_STEP && distance(p, g.spawn) > 3) { g.conn.send(frame(S_TELEPORT, o -> writePos(o, g.pos))); return; } // стрибок (крім відродження в точці появи) - назад
                 g.pos.cx = p.cx; g.pos.cz = p.cz; g.pos.x = p.x; g.pos.y = p.y; g.pos.z = p.z;
                 g.yaw = ((yaw % 360) + 360) % 360; g.pitch = Math.max(-90, Math.min(90, pitch));
             }
@@ -224,7 +232,15 @@ public final class NetServer implements AutoCloseable {
             }
             case C_BREAK -> {
                 long x = in.readLong(); int y = in.readInt(); long z = in.readLong();
-                if (!mayTouch(g, x, y, z) || !world.harvest(g.src, x, y, z, null, false)) resend(g, x, y, z);
+                ItemType tool = world.itemTypes.get(str(in, 96)); // інструмент у руці гостя (інвентар - у гостя: впливає лише на дроп)
+                int id = world.blockId(x, y, z);
+                BlockType b = id > 0 ? world.blocks.get(id) : null;
+                int boardCount = b != null && world.boards.isBoards(b) ? Long.bitCount(world.boards.mask(x, y, z)) : 0;
+                if (!mayTouch(g, x, y, z) || !world.harvest(g.src, x, y, z, null, false)) { resend(g, x, y, z); return; }
+                if (survival && b != null) {
+                    if (boardCount > 0) give(g, World.boardItem(b), boardCount, 0);
+                    for (Inventory.Stack st : Mining.drops(b, tool, rng)) give(g, st.item, st.count, st.damage);
+                }
             }
             case C_PLACE -> {
                 long x = in.readLong(); int y = in.readInt(); long z = in.readLong();
@@ -246,6 +262,11 @@ public final class NetServer implements AutoCloseable {
             case C_BYE -> drop(g, null);
             default -> throw new IOException("невідомий вид " + f[0]);
         }
+    }
+
+    private void give(Guest g, String item, int count, int damage) {
+        if (item == null || count <= 0) return;
+        g.conn.send(frame(S_GIVE, o -> { o.writeUTF(item); o.writeInt(count); o.writeInt(damage); }));
     }
 
     private static byte[] noChunk(ChunkPos k) { return frame(S_NOCHUNK, o -> { o.writeLong(k.cx()); o.writeLong(k.cz()); }); }

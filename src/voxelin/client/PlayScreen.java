@@ -82,6 +82,8 @@ final class PlayScreen {
     /** Гра по мережі: net - ми гість (світ - дзеркало хоста); server - ми хост і світ відкрито для мережі. */
     final voxelin.net.NetClient net;
     private voxelin.net.NetServer server;
+    /** Хост: у якому режимі будуть гості (обирається в паузі до відкриття для мережі). */
+    private boolean lanSurvival;
     /** Чому гру завершено (хост закрив, розрив) - показується в меню. */
     String endReason;
     /** Інші гравці у хоста (гості) - плавні позиції; у гостя вони в net.players(). Моделі - своя на кожного (свій скін). */
@@ -126,7 +128,7 @@ final class PlayScreen {
         if (!world.remote() && world.dimension().equals(Dimensions.BETWEEN)) world.unlockRecord("voxelin:between");
         icons = new IconAtlas(v.textures, world);
         skins = new voxelin.client.render.MobSkins(world.mobTypes.all(), new java.io.File("textures"));
-        java.util.function.Consumer<Inventory.Stack> dropper = st -> { if (st != null && !world.remote()) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); };
+        java.util.function.Consumer<Inventory.Stack> dropper = st -> { if (st != null && world.remote()) inv.add(st.item, st.count, st.damage); else if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); };
         invScreen = InventoryScreen.craft("ІНВЕНТАР", new CraftMenu(world.itemTypes, v.game.recipes, inv, 2), inv, world, icons, dropper);
         benchScreen = InventoryScreen.craft("ВЕРСТАК", new CraftMenu(world.itemTypes, v.game.recipes, inv, 3), inv, world, icons, dropper);
         invScreen.vitals = vt;
@@ -188,8 +190,8 @@ final class PlayScreen {
             invOpen = true;
         }
         say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера, M - мінікарта, C - зум, K - код.");
-        if (v.opts.lan && net == null) { openLan(); if (server != null) System.out.println("[net] code " + server.code + " port " + server.port); }
-        if (net != null) say("Гра по мережі: світ «" + net.welcome.worldName() + "» гравця " + net.welcome.hostName() + ". Ти будівельник у творчому режимі; T - чат.");
+        if (v.opts.lan && net == null) { lanSurvival = v.opts.lanSurvival; openLan(); if (server != null) System.out.println("[net] code " + server.code + " port " + server.port); }
+        if (net != null) say("Гра по мережі: світ «" + net.welcome.worldName() + "» гравця " + net.welcome.hostName() + (net.welcome.survival() ? ". Режим - виживання: речі, здоров'я й голод - твої (при смерті речі лишаються); T - чат." : ". Ти будівельник у творчому режимі; T - чат."));
     }
 
     /** Дальність малювання: у гостя - не більше, ніж дає хост (він вантажить світ довкола кожного гостя). */
@@ -198,9 +200,9 @@ final class PlayScreen {
     /** Хост: відкрити світ для мережі (порт 24555, якщо зайнятий - будь-який вільний). */
     private void openLan() {
         try {
-            try { server = new voxelin.net.NetServer(world, voxelin.net.Protocol.DEFAULT_PORT, v.settings.playerName, v.look.toNet(), this::say); }
-            catch (java.io.IOException busy) { server = new voxelin.net.NetServer(world, 0, v.settings.playerName, v.look.toNet(), this::say); }
-            say("Світ відкрито для мережі. Код: " + server.code + ", адреса: " + lanLine() + ". Гості - у творчому режимі.");
+            try { server = new voxelin.net.NetServer(world, voxelin.net.Protocol.DEFAULT_PORT, v.settings.playerName, v.look.toNet(), this::say, lanSurvival); }
+            catch (java.io.IOException busy) { server = new voxelin.net.NetServer(world, 0, v.settings.playerName, v.look.toNet(), this::say, lanSurvival); }
+            say("Світ відкрито для мережі. Код: " + server.code + ", адреса: " + lanLine() + ". Гості - " + (lanSurvival ? "у виживанні." : "у творчому режимі."));
         } catch (java.io.IOException e) { say("Не вдалось відкрити для мережі: " + e.getMessage()); }
     }
 
@@ -216,6 +218,11 @@ final class PlayScreen {
         for (String line : net.takeChat()) say(line);
         Pos back = net.takeTeleport();
         if (back != null) player.teleport(back);
+        for (Object[] gift : net.takeGifts()) { // дроп зламаного блока (виживання)
+            int left = inv.add((String) gift[0], (int) gift[1], (int) gift[2]);
+            if (left < (int) gift[1]) sounds.self("voxelin:item.pickup", 0.5f);
+            if (left > 0) say("Інвентар повний - " + InventoryScreen.titleOf(world, (String) gift[0]) + " x" + left + " пропало.");
+        }
         if (net.kicked() != null && !leaving) { endReason = "Гру по мережі завершено: " + net.kicked(); leaving = true; }
         if (ticks % 2 == 0) net.sendPos(player.pos, player.yaw, player.pitch);
         world.update(player.pos.cx, player.pos.cz, rend.renderDistance + 1);
@@ -295,8 +302,6 @@ final class PlayScreen {
                 portalLock = true; sounds.ui("voxelin:portal.travel");
                 v.requestTravel(inRift ? Dimensions.BETWEEN : inNether ? (netherWorld() ? Dimensions.OVERWORLD : Dimensions.NETHER) : Dimensions.portalTarget(world.dimension()));
             }
-            if (!vt.dead() && !world.creative() && world.tickCount() % 10 == 0 && (world.isLava(player.pos.blockX(), (int) Math.floor(player.pos.y - PlayerEntity.EYE + 0.3), player.pos.blockZ())
-                    || world.isLava(player.pos.blockX(), (int) Math.floor(player.pos.y - 0.5), player.pos.blockZ()))) vt.hurt(4, false); // лава
             if (world.info.netherArrival && world.chunk(Math.floorDiv(world.info.arrivalX, 16L), Math.floorDiv(world.info.arrivalZ, 16L)) != null) { // прибули в Незер: портал назад поруч
                 world.info.netherArrival = false;
                 player.teleport(NetherPortal.arrive(world, world.info.arrivalX, world.info.arrivalZ));
@@ -304,6 +309,8 @@ final class PlayScreen {
                 world.unlockRecord("voxelin:nether");
             }
         }
+        if (!vt.dead() && !world.creative() && ticks % 10 == 0 && (world.isLava(player.pos.blockX(), (int) Math.floor(player.pos.y - PlayerEntity.EYE + 0.3), player.pos.blockZ())
+                || world.isLava(player.pos.blockX(), (int) Math.floor(player.pos.y - 0.5), player.pos.blockZ()))) vt.hurt(4, false); // лава
         if (net == null && !vt.dead() && !v.opts.freeze && world.collectItems(bodyPos(), inv) + world.arrows.collect(bodyPos(), inv) > 0) sounds.self("voxelin:item.pickup", 0.6f);
         sounds.tick(player, !vt.dead());
         if (vt.dead() && !deadHandled && !world.creative() && !world.rule(GameRules.KEEP_INVENTORY)) {
@@ -313,7 +320,7 @@ final class PlayScreen {
         }
         if (vt.dead() && !deadHandled) { deadHandled = true; hud = true; if (invOpen) closeInventory(); invOpen = false; chatOpen = false; v.input.endText(); grab(false); say("Ти загинув."); }
         if (player.pos.y < -20) { player.teleport(spawn); if (!vt.dead()) vt.damage(4); say("Ти впав за межі світу - повернено на спавн."); }
-        if (ticks % 20 == 0 && !world.creative() && !vt.dead()) checkGoals();
+        if (ticks % 20 == 0 && net == null && !world.creative() && !vt.dead()) checkGoals();
         if (net != null) { netTick(); return; }
         world.update(player.pos.cx, player.pos.cz, rend.renderDistance + 1);
         world.tick();
@@ -554,7 +561,7 @@ final class PlayScreen {
                 sounds.self("voxelin:chest.open", 0.8f);
                 ChestEntity ce = world.chestAt(hit.x(), hit.y(), hit.z());
                 if (ce != null) {
-                    activeScreen = InventoryScreen.container("СКРИНЯ", new ChestMenu(world.itemTypes, inv, ce), inv, world, icons, st -> { if (st != null && !world.remote()) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
+                    activeScreen = InventoryScreen.container("СКРИНЯ", new ChestMenu(world.itemTypes, inv, ce), inv, world, icons, st -> { if (st != null && world.remote()) inv.add(st.item, st.count, st.damage); else if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
                     openedX = hit.x(); openedY = hit.y(); openedZ = hit.z(); openedBlock = true; openedKind = "chest";
                     invOpen = true; grab(false);
                 }
@@ -562,7 +569,7 @@ final class PlayScreen {
             else if ("furnace".equals(target.interact)) {
                 FurnaceEntity fe = world.furnaceAt(hit.x(), hit.y(), hit.z());
                 if (fe != null) {
-                    activeScreen = InventoryScreen.furnace(new FurnaceMenu(world.itemTypes, v.game.recipes, inv, fe), inv, world, icons, st -> { if (st != null && !world.remote()) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
+                    activeScreen = InventoryScreen.furnace(new FurnaceMenu(world.itemTypes, v.game.recipes, inv, fe), inv, world, icons, st -> { if (st != null && world.remote()) inv.add(st.item, st.count, st.damage); else if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
                     openedX = hit.x(); openedY = hit.y(); openedZ = hit.z(); openedBlock = true; openedKind = "furnace";
                     invOpen = true; grab(false);
                 }
@@ -602,14 +609,25 @@ final class PlayScreen {
         }
     }
 
-    /** Гість: права кнопка лише ставить блок з руки (вікна блоків, портали, сон - у світі хоста недоступні). */
+    /** Гість: верстак, їжа, броня й постановка блока з руки (скрині, печі, портали, сон - у світі хоста недоступні). */
     private void guestPlace() {
+        boolean sneak = v.input.down(GLFW_KEY_LEFT_SHIFT) || v.input.down(GLFW_KEY_RIGHT_SHIFT);
+        BlockType target = hit == null ? null : world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
+        if (target != null && "workbench".equals(target.interact) && !sneak) { activeScreen = benchScreen; invOpen = true; grab(false); return; }
         Inventory.Stack st = inv.selectedStack();
         ItemType t = st == null ? null : world.itemTypes.get(st.item);
-        if (hit == null || t == null || t.placesBlock == null) return;
+        if (t == null || vt.dead()) return;
+        if (t.armorSlot != null) { inv.equipSelected(world.itemTypes); return; }
+        if (t.food > 0) {
+            if (vt.hunger() < Vitals.MAX && !world.creative()) { vt.feed(t.food); sounds.self("voxelin:player.eat", 0.9f); inv.takeSelected(); }
+            return;
+        }
+        if (hit == null || t.placesBlock == null) return;
         if (world.boards.isBoards(world.blocks.byName(t.placesBlock))) { say("Дошки в чужому світі ставить лише хост."); return; }
-        if (!player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock))
+        if (!player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
             sounds.block(world.blocks.byName(t.placesBlock), hit.px(), hit.py(), hit.pz(), "place");
+            if (!world.creative()) inv.takeSelected(); // хост поставить (або поверне справжній стан блока)
+        }
     }
 
     private InventoryScreen creativeScr;
@@ -1090,6 +1108,7 @@ final class PlayScreen {
 
     /** Поточна ціль «Шляху» у лівому верхньому куті (у виживанні) і стрілка Ока до Брами. */
     private void goalHud() {
+        if (net != null) return; // «Шлях» - гра хоста; у гостя він не рахується
         long now = System.currentTimeMillis();
         if (gateHint != null && now < gateHintUntil) {
             double dx = (gateHint[0] - player.pos.cx * 16) + 0.5 - player.pos.x, dz = (gateHint[2] - player.pos.cz * 16) + 0.5 - player.pos.z;
@@ -1215,18 +1234,20 @@ final class PlayScreen {
         String sub = net != null ? "гра по мережі: світ «" + world.info.name + "» гравця " + net.welcome.hostName() + (net.players().size() > 1 ? ", ще гравців: " + (net.players().size() - 1) : "")
                 : world.info.name + "  -  день " + world.dayNumber() + (server != null ? "  -  світ відкрито для мережі, гра не зупиняється" : "");
         Gui.textCentered(sub, Gui.W / 2f, server != null ? 196 : 200, Math.min(2.2f, 1240 / Gui.textWidth(sub, 1)), 0.7f, 0.74f, 0.88f);
-        float x = Gui.W / 2f - 210, w = 420, h = 54, y = 250;
+        boolean lanRow = net == null && server == null; // зайвий рядок «режим гостей» - кнопки щільніше
+        float x = Gui.W / 2f - 210, w = 420, h = lanRow ? 50 : 54, y = 250, step = lanRow ? 58 : 66;
         if (g.button("ПРОДОВЖИТИ", x, y, w, h)) { resume(); return; }
-        if (g.button("НАЛАШТУВАННЯ", x, y += 66, w, h)) { pauseSettings = true; v.menus.show(Menus.Screen.SETTINGS); return; }
-        if (g.button("ЗВУК", x, y += 66, w, h)) { pauseSettings = true; v.menus.show(Menus.Screen.SOUND); return; }
-        if (g.button("СКІН І КОСМЕТИКА", x, y += 66, w, h)) { skinScreen = new SkinScreen(v); v.input.clearPressed(); return; }
-        if (net == null) {
-            if (server == null && g.button("ВІДКРИТИ ДЛЯ МЕРЕЖІ", x, y += 66, w, h)) { openLan(); return; }
-            if (server != null && g.button("ЗАКРИТИ ДЛЯ МЕРЕЖІ", x, y += 66, w, h)) { server.close(); server = null; hostView.clear(); say("Світ закрито для мережі."); return; }
+        if (g.button("НАЛАШТУВАННЯ", x, y += step, w, h)) { pauseSettings = true; v.menus.show(Menus.Screen.SETTINGS); return; }
+        if (g.button("ЗВУК", x, y += step, w, h)) { pauseSettings = true; v.menus.show(Menus.Screen.SOUND); return; }
+        if (g.button("СКІН І КОСМЕТИКА", x, y += step, w, h)) { skinScreen = new SkinScreen(v); v.input.clearPressed(); return; }
+        if (lanRow) {
+            if (g.button("РЕЖИМ ГОСТЕЙ: " + (lanSurvival ? "ВИЖИВАННЯ" : "ТВОРЧИЙ"), x, y += step, w, h)) { lanSurvival = !lanSurvival; return; }
+            if (g.button("ВІДКРИТИ ДЛЯ МЕРЕЖІ", x, y += step, w, h)) { openLan(); return; }
         }
-        if (g.button(net != null ? "ВИЙТИ З ГРИ" : "ЗБЕРЕГТИ Й ВИЙТИ В МЕНЮ", x, y += 66 + 16, w, h)) leaving = true;
+        if (net == null && server != null && g.button("ЗАКРИТИ ДЛЯ МЕРЕЖІ", x, y += step, w, h)) { server.close(); server = null; hostView.clear(); say("Світ закрито для мережі."); return; }
+        if (g.button(net != null ? "ВИЙТИ З ГРИ" : "ЗБЕРЕГТИ Й ВИЙТИ В МЕНЮ", x, y += step + 14, w, h)) leaving = true;
         if (server != null) {
-            String info = "Код: " + server.code + "   адреса: " + lanLine() + "   гостей: " + server.guests().size() + "/" + voxelin.net.Protocol.MAX_GUESTS;
+            String info = "Код: " + server.code + "   адреса: " + lanLine() + "   гостей: " + server.guests().size() + "/" + voxelin.net.Protocol.MAX_GUESTS + (server.survival ? " (виживання)" : " (творчий)");
             Gui.textCentered(info, Gui.W / 2f, 226, Math.min(2.2f, 1240 / Gui.textWidth(info, 1)), 1f, 0.85f, 0.35f);
         }
     }

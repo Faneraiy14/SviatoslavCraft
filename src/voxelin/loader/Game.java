@@ -125,15 +125,19 @@ public final class Game {
 
     /**
      * Дзеркало чужого світу для гри по мережі: тимчасова тека (видалити після close), той самий генератор (зерно, тип) - для
-     * висоти поверхні й біомів, палітра хоста, творчий режим без читів. Чанки дає хост (World.setFeed), істот не спавнить.
+     * висоти поверхні й біомів, палітра хоста, режим гостей (творчий чи виживання) без читів. Чанки дає хост (World.setFeed), істот не спавнить.
      */
-    public World openMirror(String name, long seed, WorldInfo.Type type, List<String> palette) throws IOException {
+    public World openMirror(String name, long seed, WorldInfo.Type type, List<String> palette) throws IOException { return openMirror(name, seed, type, palette, false); }
+
+    /** survival - гості у виживанні (речі при смерті лишаються: кинути їх у чужий світ гість не може). */
+    public World openMirror(String name, long seed, WorldInfo.Type type, List<String> palette, boolean survival) throws IOException {
         if (palette.isEmpty() || !palette.get(0).equals(BlockRegistry.AIR)) throw new IOException("погана палітра хоста");
         File d = java.nio.file.Files.createTempDirectory("voxelin-guest").toFile();
         WorldInfo info = WorldInfo.create(d, WorldInfo.isValidName(name) ? name : "Гра по мережі", seed, type);
         info.palette.clear();
         info.palette.addAll(palette);
-        info.mode = WorldInfo.Mode.CREATIVE; info.cheats = false;
+        info.mode = survival ? WorldInfo.Mode.SURVIVAL : WorldInfo.Mode.CREATIVE; info.cheats = false;
+        info.setRule(GameRules.KEEP_INVENTORY, true);
         World w = openAt(d, info);
         w.naturalSpawning = false;
         w.setFeed((cx, cz) -> false); // до attach - нічого не генерувати

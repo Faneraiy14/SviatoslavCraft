@@ -74,7 +74,7 @@ public class VoxelinNetTest {
         cli.placeBlock(2, ground + 1, 2, "voxelin:stone");
         run(() -> host.getBlock(2, ground + 1, 2).name().equals("voxelin:stone") && mirror.getBlock(2, ground + 1, 2).name().equals("voxelin:stone"), 100);
         check(true, "гість поставив камінь: у хоста й у дзеркалі");
-        cli.breakBlock(2, ground + 1, 2);
+        cli.breakBlock(2, ground + 1, 2, null);
         run(() -> host.blockId(2, ground + 1, 2) == 0 && mirror.blockId(2, ground + 1, 2) == 0, 100);
         check(true, "гість зламав камінь");
         // перевірки хоста
@@ -82,7 +82,7 @@ public class VoxelinNetTest {
         cli.placeBlock(1, ground + 1, 1, "voxelin:bedrock");                // незламний
         cli.placeBlock(1, ground + 2, 2, "voxelin:nope");                   // невідомий
         cli.placeBlock(hostPos.blockX(), ground + 1, hostPos.blockZ(), "voxelin:stone"); // у тілі хоста/гостя
-        cli.breakBlock(3, 0, 3);                                            // далеко вниз
+        cli.breakBlock(3, 0, 3, null);                                           // далеко вниз
         cli.placeBlock(1, ground + 1, 3, Infection.EGG);                    // яйце зараження
         cli.placeBlock(3, ground + 1, 3, "voxelin:stone");                  // зайнято золотом
         tickAll(30);
@@ -168,6 +168,34 @@ public class VoxelinNetTest {
         mirror.close();
         WorldArchive.deleteTree(md);
         check(!md.exists(), "тека дзеркала прибрана");
+        // режим виживання: хост обирає; дроп зламаного блока - гостю
+        check(!srv.survival, "типово гості - у творчому");
+        srv = new NetServer(host, 0, "Хост", "", hostChat::add, true);
+        cli = null; mirror = null;
+        NetClient sv = join("Шахтар", srv.code);
+        check(sv.welcome.survival(), "привітання каже: виживання");
+        World m2 = g.openMirror(sv.welcome.worldName(), sv.welcome.seed(), sv.welcome.type(), sv.welcome.palette(), true);
+        check(!m2.creative() && m2.rule(GameRules.KEEP_INVENTORY), "дзеркало у виживанні, речі при смерті лишаються");
+        sv.attach(m2);
+        cli = sv; mirror = m2;
+        hostPos = sv.welcome.spawn().copy();
+        run(() -> m2.chunk(hostPos.cx, hostPos.cz) != null, 400);
+        long bx = hostPos.blockX() + 1, bz = hostPos.blockZ();
+        host.setBlock(Sources.player("Хост"), bx, ground + 1, bz, host.blocks.byName("voxelin:dirt"));
+        tickAll(3);
+        sv.sendPos(hostPos, 0, 0);
+        sv.breakBlock(bx, ground + 1, bz, "voxelin:wooden_shovel");
+        run(() -> host.blockId(bx, ground + 1, bz) == 0, 100);
+        List<Object[]> gifts = new ArrayList<>();
+        run(() -> { gifts.addAll(sv.takeGifts()); return !gifts.isEmpty(); }, 60);
+        check(gifts.size() == 1 && gifts.get(0)[0].equals("voxelin:dirt") && (int) gifts.get(0)[1] == 1, "дроп землі прийшов гостю");
+        Pos far = sv.welcome.spawn().copy(); far.add(60, 0, 0);
+        sv.sendPos(far, 0, 0); tickAll(3); sv.takeTeleport();
+        sv.sendPos(sv.welcome.spawn(), 0, 0); tickAll(5);
+        check(sv.takeTeleport() == null || NetServerDist(srv.guests().get(0).pos, sv.welcome.spawn()) < 0.01, "відродження в точці появи - не стрибок");
+        check(NetServerDist(srv.guests().get(0).pos, sv.welcome.spawn()) < 0.01, "хост прийняв відродження");
+        sv.close(); srv.close();
+        File m2d = m2.dir; m2.close(); WorldArchive.deleteTree(m2d);
         host.close();
         System.out.println("VoxelinNetTest: " + n + " перевірок OK");
         System.exit(0);

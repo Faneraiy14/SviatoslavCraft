@@ -35,17 +35,20 @@ public final class CosmeticRenderer implements AutoCloseable {
     /** Забути текстуру (косметику перезавантажено з диска). */
     public void forget(String id) { Integer t = textures.remove(id); if (t != null) glDeleteTextures(t); }
 
-    public void draw(Cosmetic c, float light) {
+    public void draw(Cosmetic c, float light) { draw(c, light, 0); }
+
+    /** side: 0 - уся модель, +1/-1 - лише кубоїди правої/лівої кінцівки (Cosmetic.onSide). */
+    public void draw(Cosmetic c, float light, int side) {
         glEnable(GL_TEXTURE_2D);
         glEnable(GL_ALPHA_TEST); glAlphaFunc(GL_GREATER, 0.1f);
         glBindTexture(GL_TEXTURE_2D, texture(c));
         Map<String, Cosmetic.Bone> byName = new HashMap<>();
         for (Cosmetic.Bone b : c.bones) byName.put(b.name, b);
         for (Cosmetic.Bone b : c.bones) {
-            if (b.cubes.isEmpty()) continue;
+            if (b.cubes.isEmpty() || (side != 0 && b.cubes.stream().noneMatch(q -> Cosmetic.onSide(q, side)))) continue;
             glPushMatrix();
             applyBone(b, byName, 0);
-            for (Cosmetic.Cube q : b.cubes) cube(c, q, light);
+            for (Cosmetic.Cube q : b.cubes) if (Cosmetic.onSide(q, side)) cube(c, q, light);
             glPopMatrix();
         }
         glBindTexture(GL_TEXTURE_2D, 0);

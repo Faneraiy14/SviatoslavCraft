@@ -13,11 +13,13 @@ import java.util.Properties;
  * cape=seam                   none або один із CAPES, або file:плащ.png у теці capes/
  * head=builtin:wreath         3D-косметика на голові: none, builtin:<назва> або file:<тека в cosmetics/> (моделі Blockbench)
  * body=builtin:backpack       те саме на тулубі/спині
+ * arms=builtin:gloves         на руках (одна модель на обидві руки)
+ * legs=builtin:boots          на ногах
  * </pre>
  */
 public final class PlayerLook {
     public static final List<String> CAPES = List.of("none", "seam", "ukraine", "dragon", "night", "ember");
-    public String skin = "builtin:traveler", cape = "none", head = "none", body = "none";
+    public String skin = "builtin:traveler", cape = "none", head = "none", body = "none", arms = "none", legs = "none";
 
     public static String capeTitle(String id) {
         return switch (id) { case "seam" -> "Шов"; case "ukraine" -> "Україна"; case "dragon" -> "Дракон Краю"; case "night" -> "Зоряна ніч"; case "ember" -> "Жар";
@@ -43,7 +45,7 @@ public final class PlayerLook {
         else if (skin.startsWith("file:")) skin = fileRef(skin);
         if (cape == null || !(CAPES.contains(cape) || (cape.startsWith("file:") && fileRef(cape) != null))) cape = "none";
         else if (cape.startsWith("file:")) cape = fileRef(cape);
-        head = cosmetic(head); body = cosmetic(body);
+        head = cosmetic(head); body = cosmetic(body); arms = cosmetic(arms); legs = cosmetic(legs);
     }
 
     public static PlayerLook load(File f) {
@@ -53,6 +55,7 @@ public final class PlayerLook {
         try (Reader r = new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8)) { p.load(r); }
         catch (IOException | IllegalArgumentException e) { System.out.println("[Voxelin] ⚠️ " + f.getName() + " не прочитано: " + e.getMessage()); return l; }
         l.skin = p.getProperty("skin", l.skin).trim(); l.cape = p.getProperty("cape", l.cape).trim(); l.head = p.getProperty("head", l.head).trim(); l.body = p.getProperty("body", l.body).trim();
+        l.arms = p.getProperty("arms", l.arms).trim(); l.legs = p.getProperty("legs", l.legs).trim();
         l.clamp();
         return l;
     }
@@ -60,22 +63,22 @@ public final class PlayerLook {
     public void save(File f) {
         clamp();
         Properties p = new Properties();
-        p.setProperty("skin", skin); p.setProperty("cape", cape); p.setProperty("head", head); p.setProperty("body", body);
+        p.setProperty("skin", skin); p.setProperty("cape", cape); p.setProperty("head", head); p.setProperty("body", body); p.setProperty("arms", arms); p.setProperty("legs", legs);
         try {
             File dir = f.getAbsoluteFile().getParentFile();
             if (dir != null && !dir.isDirectory()) dir.mkdirs();
             File tmp = new File(f.getPath() + ".tmp");
-            try (Writer w = new OutputStreamWriter(new FileOutputStream(tmp), StandardCharsets.UTF_8)) { p.store(w, "Вигляд гравця Voxelin (пишуть гра й лаунчер): skin=builtin:<назва>|file:<png у skins/>|launcher, cape, head, body (3D-косметика)"); }
+            try (Writer w = new OutputStreamWriter(new FileOutputStream(tmp), StandardCharsets.UTF_8)) { p.store(w, "Вигляд гравця Voxelin (пишуть гра й лаунчер): skin=builtin:<назва>|file:<png у skins/>|launcher, cape, head, body, arms, legs (3D-косметика)"); }
             voxelin.core.Files2.replace(tmp, f);
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати " + f + ": " + e); }
     }
 
-    public PlayerLook copy() { PlayerLook l = new PlayerLook(); l.skin = skin; l.cape = cape; l.head = head; l.body = body; return l; }
+    public PlayerLook copy() { PlayerLook l = new PlayerLook(); l.skin = skin; l.cape = cape; l.head = head; l.body = body; l.arms = arms; l.legs = legs; return l; }
 
     /** Косметика в слоті (Cosmetic.SLOTS). */
-    public String slot(String slot) { return slot.equals("body") ? body : head; }
-    public void setSlot(String slot, String id) { if (slot.equals("body")) body = id; else head = id; }
+    public String slot(String slot) { return switch (slot) { case "body" -> body; case "arms" -> arms; case "legs" -> legs; default -> head; }; }
+    public void setSlot(String slot, String id) { switch (slot) { case "body" -> body = id; case "arms" -> arms = id; case "legs" -> legs = id; default -> head = id; } }
 
-    @Override public boolean equals(Object o) { return o instanceof PlayerLook l && l.skin.equals(skin) && l.cape.equals(cape) && l.head.equals(head) && l.body.equals(body); }
-    @Override public int hashCode() { return (skin + "|" + cape + "|" + head + "|" + body).hashCode(); }
+    @Override public boolean equals(Object o) { return o instanceof PlayerLook l && l.skin.equals(skin) && l.cape.equals(cape) && l.head.equals(head) && l.body.equals(body) && l.arms.equals(arms) && l.legs.equals(legs); }
+    @Override public int hashCode() { return (skin + "|" + cape + "|" + head + "|" + body + "|" + arms + "|" + legs).hashCode(); }
 }

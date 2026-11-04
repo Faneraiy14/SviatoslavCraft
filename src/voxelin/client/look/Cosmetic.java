@@ -9,7 +9,8 @@ import voxelin.core.Json;
 /**
  * 3D-косметика з Blockbench: модель «Bedrock geometry» (.geo.json) + текстура PNG + cosmetic.properties (назва, слот). Координати - як у
  * шаблоні гравця Blockbench (пікселі, ноги в 0, голова 24..32, перед - північ, -Z). Слот визначає, за якою частиною тіла модель рухається:
- * head (голова), body (тулуб, спина).
+ * head (голова), body (тулуб, спина), arms (руки), legs (ноги). Для рук і ніг одна модель описує обидві кінцівки в координатах шаблона
+ * гравця: кубоїди з центром праворуч (x гравця > 0, у Blockbench - ліва половина екрана спереду) рухаються з правою рукою/ногою, решта - з лівою.
  * <pre>
  * cosmetics/капелюх/
  *     model.geo.json      Blockbench: File > Export > Export Bedrock Geometry
@@ -19,7 +20,9 @@ import voxelin.core.Json;
  * </pre>
  */
 public final class Cosmetic {
-    public static final List<String> SLOTS = List.of("head", "body");
+    public static final List<String> SLOTS = List.of("head", "body", "arms", "legs");
+    /** Слоти, що малюються окремо на правій і лівій кінцівці. */
+    public static boolean paired(String slot) { return slot.equals("arms") || slot.equals("legs"); }
     public static final int MAX_CUBES = 512, MAX_TEX = 256;
     static final String[] FACES = {"north", "south", "east", "west", "up", "down"};
 
@@ -83,6 +86,16 @@ public final class Cosmetic {
         a = Math.toRadians(rot[2]); c = Math.cos(a); s = Math.sin(a);
         x1 = (float) (x * c - y * s); y1 = (float) (x * s + y * c);
         p[0] = x1 + cx; p[1] = y1 + cy; p[2] = z + cz;
+    }
+
+    /**
+     * Чи малювати кубоїд на цій кінцівці: side 0 - усі, +1 - права (центр кубоїда в просторі малювання x >= 0), -1 - ліва. Повороти кістки
+     * не враховуються - кінцівку визначає місце в моделі, як її бачить автор у Blockbench.
+     */
+    public static boolean onSide(Cube q, int side) {
+        if (side == 0) return true;
+        float cx = -(q.origin[0] + q.size[0] / 2); // експорт дзеркалить X
+        return side > 0 ? cx >= 0 : cx < 0;
     }
 
     public int cubeCount() { int n = 0; for (Bone b : bones) n += b.cubes.size(); return n; }

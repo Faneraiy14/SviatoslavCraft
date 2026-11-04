@@ -14,7 +14,8 @@ public final class BuiltinCosmetics {
     private BuiltinCosmetics() {}
 
     /** Назви вбудованої косметики (для перевірки player.properties без розбору моделей). */
-    public static final List<String> IDS = List.of("builtin:wreath", "builtin:crown", "builtin:tophat", "builtin:cap", "builtin:horns", "builtin:halo", "builtin:backpack");
+    public static final List<String> IDS = List.of("builtin:wreath", "builtin:crown", "builtin:tophat", "builtin:cap", "builtin:horns", "builtin:halo", "builtin:backpack",
+            "builtin:gloves", "builtin:bracers", "builtin:boots", "builtin:wraps");
 
     // палітра: індекс -> колір
     private static final int[] PAL = {0xFF3E8E3A, 0xFF24602A, 0xFFD8262E, 0xFFFFD02A, 0xFF2F6FD6, 0xFFF4F1E8, 0xFFE9B638, 0xFF9C7418,
@@ -131,6 +132,46 @@ public final class BuiltinCosmetics {
                 .cube(-0.6f, 19.2f, 5.7f, 1.2f, 1.2f, 0.3f, GOLD).cube(-4.4f, 22.4f, 2.4f, 8.8f, 2.4f, 2.4f, DRED)
                 .cube(-3.4f, 13.5f, 1.6f, 1, 10.5f, 0.6f, DBROWN).cube(2.4f, 13.5f, 1.6f, 1, 10.5f, 0.6f, DBROWN);
         out.add(Cosmetic.parse("builtin:backpack", "Рюкзак", "body", pack.json("backpack"), 32, 32, tex));
+        // Руки й ноги: одна модель на обидві кінцівки (кубоїди з x > 0 - права, x < 0 - ліва); рука x 4..8, y 12..24; нога x 0..4, y 0..12
+        // Шкіряні рукавиці: кисть і відворот
+        Geo gloves = new Geo();
+        for (int side = -1; side <= 1; side += 2) {
+            float x = side > 0 ? 4 : -8;
+            gloves.bone(side > 0 ? "right_glove" : "left_glove", side * 6, 22, 0, 0, 0, 0)
+                    .cube(x - 0.4f, 11.6f, -2.4f, 4.8f, 3.6f, 4.8f, BROWN)
+                    .cube(x - 0.7f, 15.2f, -2.7f, 5.4f, 1.6f, 5.4f, DBROWN)
+                    .cube(x + 1.2f, 12.4f, -2.7f, 1.6f, 1.2f, 0.4f, GOLD); // ґудзик на тильному боці
+        }
+        out.add(Cosmetic.parse("builtin:gloves", "Шкіряні рукавиці", "arms", gloves.json("gloves"), 32, 32, tex));
+        // Золоті наручі: широкий обруч з каменем назовні
+        Geo bracers = new Geo();
+        for (int side = -1; side <= 1; side += 2) {
+            float x = side > 0 ? 4 : -8, outX = side > 0 ? 8.3f : -8.7f;
+            bracers.bone(side > 0 ? "right_bracer" : "left_bracer", side * 6, 22, 0, 0, 0, 0)
+                    .cube(x - 0.3f, 14.6f, -2.3f, 4.6f, 3.4f, 4.6f, GOLD)
+                    .cube(x - 0.45f, 14.4f, -2.45f, 4.9f, 0.6f, 4.9f, DGOLD).cube(x - 0.45f, 17.6f, -2.45f, 4.9f, 0.6f, 4.9f, DGOLD)
+                    .cube(outX, 15.6f, -0.7f, 0.4f, 1.4f, 1.4f, RED);
+        }
+        out.add(Cosmetic.parse("builtin:bracers", "Золоті наручі", "arms", bracers.json("bracers"), 32, 32, tex));
+        // Чоботи мандрівника: халява, носок, підошва
+        Geo boots = new Geo();
+        for (int side = -1; side <= 1; side += 2) {
+            float x = side > 0 ? 0 : -4;
+            boots.bone(side > 0 ? "right_boot" : "left_boot", side * 2, 12, 0, 0, 0, 0)
+                    .cube(x - 0.3f, 0, -2.4f, 4.6f, 5, 4.8f, DBROWN)
+                    .cube(x - 0.5f, 5, -2.6f, 5, 1.2f, 5.2f, BROWN)
+                    .cube(x - 0.2f, 0, -3f, 4.4f, 1.8f, 0.6f, BROWN)
+                    .cube(x - 0.35f, -0.2f, -3.1f, 4.7f, 0.4f, 5.5f, BLACK);
+        }
+        out.add(Cosmetic.parse("builtin:boots", "Чоботи мандрівника", "legs", boots.json("boots"), 32, 32, tex));
+        // Вишиті онучі: біле полотно з червоно-чорними смугами
+        Geo wraps = new Geo();
+        for (int side = -1; side <= 1; side += 2) {
+            float x = side > 0 ? 0 : -4;
+            wraps.bone(side > 0 ? "right_wrap" : "left_wrap", side * 2, 12, 0, 0, 0, 0).cube(x - 0.25f, 1, -2.25f, 4.5f, 8, 4.5f, WHITE);
+            for (float y : new float[]{2.2f, 5f, 7.8f}) wraps.cube(x - 0.35f, y, -2.35f, 4.7f, 0.8f, 4.7f, RED).cube(x - 0.4f, y + 0.25f, -2.4f, 4.8f, 0.3f, 4.8f, BLACK);
+        }
+        out.add(Cosmetic.parse("builtin:wraps", "Вишиті онучі", "legs", wraps.json("wraps"), 32, 32, tex));
         return out;
     }
 }

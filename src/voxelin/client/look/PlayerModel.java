@@ -68,15 +68,15 @@ public final class PlayerModel implements AutoCloseable {
         glDisable(GL_CULL_FACE);
         glBindTexture(GL_TEXTURE_2D, skinTex);
         float sw = (float) Math.sin(p.limbPhase) * 50f * p.limbAmount;
-        // ноги (обертання в стегні y=12)
-        limb(0, 16, 0, 32, 2, 12, sw, p.light, 64);    // права (+x)
-        limb(16, 48, 0, 48, -2, 12, -sw, p.light, 64); // ліва
+        // ноги (обертання в стегні y=12); косметика рук і ніг - у координатах кінцівки, тож рухається з нею («legs:1» - права)
+        limb(0, 16, 0, 32, 2, 12, sw, p.light, 64, attach, 1);    // права (+x)
+        limb(16, 48, 0, 48, -2, 12, -sw, p.light, 64, attach, -1); // ліва
         // тулуб
         part(16, 16, 16, 32, -4, 12, -2, 8, 12, 4, p.light, 64);
         // руки (плече y=22)
         float armX = p.gliding ? 0 : 1;
-        limbArm(40, 16, 40, 32, 6, -sw * armX, p.gliding ? -20 : 0, p.light);
-        limbArm(32, 48, 48, 48, -6, sw * armX, p.gliding ? 20 : 0, p.light);
+        limbArm(40, 16, 40, 32, 6, -sw * armX, p.gliding ? -20 : 0, p.light, attach, 1);
+        limbArm(32, 48, 48, 48, -6, sw * armX, p.gliding ? 20 : 0, p.light, attach, -1);
         // голова (шия y=24)
         glPushMatrix();
         glTranslatef(0, 24, 0); glRotatef(-p.headYaw, 0, 1, 0); glRotatef(-p.headPitch, 1, 0, 0); glTranslatef(0, -24, 0);
@@ -105,18 +105,29 @@ public final class PlayerModel implements AutoCloseable {
         cuboid(u2, v2, x, y, z, w, h, d, 0.25f, light, texH);
     }
 
-    private void limb(int u, int v, int u2, int v2, float cx, float pivot, float angle, float light, int texH) {
+    private void limb(int u, int v, int u2, int v2, float cx, float pivot, float angle, float light, int texH, java.util.function.Consumer<String> attach, int side) {
         glPushMatrix();
         glTranslatef(0, pivot, 0); glRotatef(angle, 1, 0, 0); glTranslatef(0, -pivot, 0);
         part(u, v, u2, v2, cx - 2, 0, -2, 4, 12, 4, light, texH);
+        attachLimb(attach, "legs:" + side);
         glPopMatrix();
     }
 
-    private void limbArm(int u, int v, int u2, int v2, float cx, float angle, float roll, float light) {
+    private void limbArm(int u, int v, int u2, int v2, float cx, float angle, float roll, float light, java.util.function.Consumer<String> attach, int side) {
         glPushMatrix();
         glTranslatef(cx, 22, 0); glRotatef(angle, 1, 0, 0); glRotatef(roll, 0, 0, 1); glTranslatef(-cx, -22, 0);
         part(u, v, u2, v2, cx - 2, 12, -2, 4, 12, 4, light, 64);
+        attachLimb(attach, "arms:" + side);
         glPopMatrix();
+    }
+
+    /** Косметика на кінцівці; рендерер косметики міняє текстуру й стан - повертаємо скін для наступних частин. */
+    private void attachLimb(java.util.function.Consumer<String> attach, String slot) {
+        if (attach == null) return;
+        attach.accept(slot);
+        glEnable(GL_TEXTURE_2D);
+        glEnable(GL_ALPHA_TEST); glAlphaFunc(GL_GREATER, 0.1f);
+        glBindTexture(GL_TEXTURE_2D, skinTex);
     }
 
     /**

@@ -128,7 +128,12 @@ public final class Voxelin {
 
     /** Хук моделі гравця: намалювати косметику вигляду look у слоті (у координатах цієї частини тіла). */
     java.util.function.Consumer<String> cosmeticsFor(voxelin.client.look.PlayerLook look, float light) {
-        return slot -> { voxelin.client.look.Cosmetic c = cosmetics.get(look.slot(slot)); if (c != null) cosmeticRenderer.draw(c, light); };
+        return slot -> { // "head", "body" або "arms:1"/"legs:-1" - кінцівка (1 права, -1 ліва)
+            int colon = slot.indexOf(':');
+            int side = colon < 0 ? 0 : Integer.parseInt(slot.substring(colon + 1));
+            voxelin.client.look.Cosmetic c = cosmetics.get(look.slot(colon < 0 ? slot : slot.substring(0, colon)));
+            if (c != null) cosmeticRenderer.draw(c, light, side);
+        };
     }
     /** Рушій звуку (завжди є; без пристрою чи в тестових запусках - мовчить). */
     voxelin.client.audio.AudioEngine audio;

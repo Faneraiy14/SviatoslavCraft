@@ -102,6 +102,22 @@ public class VoxelinLookTest {
             PlayerLook pl = PlayerLook.load(f);
             check(pl.head.equals("none") && pl.body.equals("none"), "погана косметика відкинута: " + b);
         }
+        // руки й ноги: одна модель на обидві кінцівки, кожен кубоїд - праворуч або ліворуч
+        for (String id : new String[]{"builtin:gloves", "builtin:bracers", "builtin:boots", "builtin:wraps"}) {
+            Cosmetic pc = lib.get(id);
+            check(pc != null && Cosmetic.paired(pc.slot), "вбудована для кінцівок: " + id);
+            int right = 0, left = 0;
+            for (Cosmetic.Bone b : pc.bones) for (Cosmetic.Cube q : b.cubes) { if (Cosmetic.onSide(q, 1)) right++; if (Cosmetic.onSide(q, -1)) left++; check(Cosmetic.onSide(q, 1) != Cosmetic.onSide(q, -1) && Cosmetic.onSide(q, 0), "кубоїд рівно на одній кінцівці"); }
+            check(right == left && right > 0, id + ": праворуч і ліворуч порівну (" + right + "/" + left + ")");
+        }
+        check(lib.forSlot("arms").contains("builtin:gloves") && !lib.forSlot("arms").contains("builtin:boots") && lib.forSlot("legs").contains("builtin:wraps"), "списки для рук і ніг");
+        Files.writeString(f.toPath(), "head=file:капелюх\nbody=builtin:backpack\narms=builtin:bracers\nlegs=builtin:nope\n");
+        PlayerLook al = PlayerLook.load(f);
+        check(al.arms.equals("builtin:bracers") && al.slot("arms").equals("builtin:bracers") && al.legs.equals("none"), "руки з файла, погане для ніг відкинуто");
+        al.setSlot("legs", "builtin:boots"); al.save(f);
+        PlayerLook al2 = PlayerLook.load(f);
+        check(al2.legs.equals("builtin:boots") && al2.equals(al) && al2.copy().equals(al2), "запис рук і ніг");
+        l = PlayerLook.load(f);
         l.setSlot("body", "none"); l.save(f);
         check(PlayerLook.load(f).body.equals("none") && PlayerLook.load(f).head.equals("file:капелюх"), "запис слотів");
     }

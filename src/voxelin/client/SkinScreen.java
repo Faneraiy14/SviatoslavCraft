@@ -79,8 +79,12 @@ final class SkinScreen {
         float x = 580, w = 600, y = 96;
         y = row(g, "СКІН", skinTitle(edit.skin), x, y, w, d -> edit.skin = next(skins, edit.skin, d));
         y = row(g, "ПЛАЩ", PlayerLook.capeTitle(edit.cape), x, y + 14, w, d -> edit.cape = next(capes, edit.cape, d));
-        y = row(g, "НА ГОЛОВІ", v.cosmetics.title(edit.head), x, y + 14, w, d -> edit.head = next(v.cosmetics.forSlot("head"), edit.head, d));
-        y = row(g, "НА СПИНІ", v.cosmetics.title(edit.body), x, y + 14, w, d -> edit.body = next(v.cosmetics.forSlot("body"), edit.body, d));
+        // косметика - по дві в рядку: голова|спина, руки|ноги
+        float hw = (w - 20) / 2;
+        row(g, "НА ГОЛОВІ", v.cosmetics.title(edit.head), x, y + 14, hw, d -> edit.head = next(v.cosmetics.forSlot("head"), edit.head, d));
+        y = row(g, "НА СПИНІ", v.cosmetics.title(edit.body), x + hw + 20, y + 14, hw, d -> edit.body = next(v.cosmetics.forSlot("body"), edit.body, d));
+        row(g, "НА РУКАХ", v.cosmetics.title(edit.arms), x, y + 14, hw, d -> edit.arms = next(v.cosmetics.forSlot("arms"), edit.arms, d));
+        y = row(g, "НА НОГАХ", v.cosmetics.title(edit.legs), x + hw + 20, y + 14, hw, d -> edit.legs = next(v.cosmetics.forSlot("legs"), edit.legs, d));
         Gui.rect(x, y + 18, w, 2, 0.3f, 0.32f, 0.44f, 1f);
         float ty = y + 32;
         for (String line : new String[]{
@@ -102,11 +106,13 @@ final class SkinScreen {
     private float row(Gui g, String label, String value, float x, float y, float w, Step step) {
         Gui.text(label, x, y, 2f, 0.62f, 0.66f, 0.8f);
         float by = y + 24;
-        if (g.button("<", x, by, 56, 52)) step.go(-1);
-        Gui.rect(x + 66, by, w - 132, 52, 0.06f, 0.07f, 0.1f, 1f);
-        Gui.frame(x + 66, by, w - 132, 52, 2, 0.3f, 0.32f, 0.44f);
-        Gui.textCentered(value, x + w / 2f, by + 17, 2.4f, 1f, 1f, 1f);
-        if (g.button(">", x + w - 56, by, 56, 52)) step.go(1);
+        float bw = w < 400 ? 40 : 56, box = w - 2 * bw - 16; // у півширинних рядках - вужчі стрілки, ширше поле
+        if (g.button("<", x, by, bw, 52)) step.go(-1);
+        Gui.rect(x + bw + 8, by, box, 52, 0.06f, 0.07f, 0.1f, 1f);
+        Gui.frame(x + bw + 8, by, box, 52, 2, 0.3f, 0.32f, 0.44f);
+        float sc = Math.min(2.4f, (box - 12) / Math.max(1, Gui.textWidth(value, 1))); // довга назва - дрібніше
+        Gui.textCentered(value, x + w / 2f, by + 26 - 7.1f * sc / 2, sc, 1f, 1f, 1f);
+        if (g.button(">", x + w - bw, by, bw, 52)) step.go(1);
         return by + 52;
     }
 

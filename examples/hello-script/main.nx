@@ -1,0 +1,45 @@
+// Приклад скрипта Voxelin на NyxilumLang.
+// Скопіюй теку в scripts/ поруч із mods/ (scripts/hello/main.nx) - гра запустить її сама,
+// а після кожного збереження файла перезапустить.
+import "../voxelin.nx"
+
+var placed = 0
+
+// /tower <висота> - башта з цегли поруч із гравцем
+func onTower(ev) {
+    var h = 5
+    var args = mapGet(ev, "args")
+    if (len(args) > 0) {
+        h = clamp(toInt(args[0]), 1, 64)
+    }
+    var x = mapGet(ev, "x") + 2
+    var z = mapGet(ev, "z")
+    var i = 0
+    while (i < h) {
+        setBlock(x, mapGet(ev, "y") + i, z, "bricks")
+        i = i + 1
+    }
+    say("Башта на " + h + " блоків готова")
+}
+
+// Гравець поставив смолоскип - рахуємо
+func onBlock(ev) {
+    if (mapGet(ev, "new") == "voxelin:torch") {
+        placed = placed + 1
+        if (placed % 10 == 0) {
+            say("Уже " + placed + " смолоскипів!")
+        }
+    }
+}
+
+func main() {
+    // свої дані скрипт може тримати лише у своїй теці
+    if (fileExists("torches.txt")) {
+        placed = toInt(readFile("torches.txt"))
+    }
+    command("tower", "[висота]", onTower)
+    on("block", onBlock)
+    on("stop", func(ev) { writeFile("torches.txt", toString(placed)) })
+    say("Скрипт hello готовий: /tower 8")
+    vxRun()
+}

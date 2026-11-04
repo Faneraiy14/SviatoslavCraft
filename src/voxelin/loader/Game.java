@@ -26,6 +26,8 @@ public final class Game {
     public final Map<String, int[][]> textures = new LinkedHashMap<>();
     public final ModLoader mods = new ModLoader(blocks, items, recipes, mobTypes, loot, structures, records, events, commands, textures);
     public final File savesDir;
+    /** Скрипти NyxilumLang з scripts/ поруч із mods/ (null - гра без теки модів, як у тестах; див. enableScripts). */
+    public ScriptHost scripts;
 
     public Game(File savesDir, File modsDir) {
         this.savesDir = savesDir;
@@ -40,7 +42,19 @@ public final class Game {
         loadStructureFiles(modsDir);
         structures.freeze(blocks);
         records.freeze();
+        if (modsDir != null) enableScripts(new File(modsDir.getAbsoluteFile().getParentFile(), "scripts"), null);
     }
+
+    /** Увімкнути скрипти з теки (створюється, якщо нема). nx - команда інтерпретатора, null - знайти самому. */
+    public ScriptHost enableScripts(File dir, List<String> nx) {
+        if (scripts != null) throw new IllegalStateException("скрипти вже увімкнено");
+        if (!dir.isDirectory() && !dir.mkdirs()) System.out.println("[Voxelin] ⚠️ не вдалось створити " + dir);
+        scripts = new ScriptHost(dir, nx, events, commands, blocks);
+        return scripts;
+    }
+
+    /** Закриття гри: зупинити скрипти (вони встигають зберегти свої дані). */
+    public void close() { if (scripts != null) scripts.stopAll(); }
 
     /** Власні шаблони: структури/*.vxs поруч із текою модів (файл перекриває ванільний шаблон з тією ж назвою). */
     private void loadStructureFiles(File modsDir) {

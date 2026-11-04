@@ -4,6 +4,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
+import voxelin.core.Json;
 
 /**
  * 3D-косметика з Blockbench: модель «Bedrock geometry» (.geo.json) + текстура PNG + cosmetic.properties (назва, слот). Координати - як у

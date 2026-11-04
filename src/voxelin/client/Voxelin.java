@@ -385,6 +385,7 @@ public final class Voxelin {
         try { if (play != null) { play.close(); play = null; } else if (loading != null) { loading.close(); loading = null; } }
         catch (Throwable t) { System.out.println("[Voxelin] ⚠️ при закритті: " + t); }
         if (audio != null) { if (opts.recordAudio != null) audio.saveRecording(opts.recordAudio); audio.close(); }
+        if (game != null) game.close();
         try { if (window != null) window.destroy(); } catch (Throwable ignored) { /* вікно вже закрите */ }
     }
 }

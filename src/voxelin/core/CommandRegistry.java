@@ -22,6 +22,9 @@ public final class CommandRegistry {
         map.put(n, new Entry(n, usage, owner, permission, h));
     }
 
+    /** Прибрати всі команди власника (скрипт перезапускається й реєструє їх наново). */
+    public synchronized void unregisterOwner(String owner) { map.values().removeIf(e -> e.owner.equals(owner)); }
+
     public Commands forMod(String modId) {
         return (name, usage, perm, h) -> register(modId, name, usage, perm, h);
     }

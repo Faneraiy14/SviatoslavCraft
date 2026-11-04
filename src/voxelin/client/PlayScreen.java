@@ -27,6 +27,8 @@ final class PlayScreen {
     private final Voxelin v;
     final World world;
     final WorldRenderer rend;
+    /** Мінікарта (M - розмір/вимкнути, N - наближення). */
+    final Minimap minimap;
     final Camera cam = new Camera();
     final PlayerEntity player;
     final Inventory inv;
@@ -75,6 +77,7 @@ final class PlayScreen {
         sounds = new voxelin.client.audio.GameSounds(v.audio, world);
         world.sound = sounds;
         rend = new WorldRenderer(world, v.textures);
+        minimap = new Minimap(world, Minimap.palette(world, n -> v.textures.pixels(v.textures.layer(n))));
         rend.renderDistance = v.opts.renderDistance;
         rend.outlines = v.settings.outlines;
         cam.fov = v.settings.fov;
@@ -162,7 +165,7 @@ final class PlayScreen {
             activeScreen = InventoryScreen.furnace(new FurnaceMenu(world.itemTypes, v.game.recipes, inv, demo), inv, world, icons, st -> { });
             invOpen = true;
         }
-        say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера.");
+        say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера, M - мінікарта.");
     }
 
     /** Центр тіла гравця - від нього рахується підбір і випадіння речей. */
@@ -279,6 +282,15 @@ final class PlayScreen {
         if (in.pressed(GLFW_KEY_F5)) cam.cycle();
         if (!chatOpen && !vt.dead() && !searching) {
             if (in.pressed(GLFW_KEY_E)) { if (invOpen) closeInventory(); else { activeScreen = world.creative() ? creativeScreen() : invScreen; invOpen = true; grab(false); } }
+            if (in.pressed(GLFW_KEY_M) && !invOpen) { // мінікарта: мала -> велика -> вимкнена
+                v.settings.minimap = (v.settings.minimap + 1) % 3; v.settings.save(v.settingsFile);
+                say(new String[]{"Мінікарту вимкнено (M - увімкнути).", "Мінікарта: мала. N - наближення.", "Мінікарта: велика."}[v.settings.minimap]);
+            }
+            if (in.pressed(GLFW_KEY_N) && !invOpen && v.settings.minimap > 0) {
+                v.settings.minimapZoom = (v.settings.minimapZoom + 1) % Minimap.ZOOMS.length; v.settings.save(v.settingsFile);
+                int b = Minimap.N * Minimap.ZOOMS[v.settings.minimapZoom];
+                say("Мінікарта: " + Minimap.ZOOMS[v.settings.minimapZoom] + " бл. на точку, видно ~" + (b - 4 * Minimap.ZOOMS[v.settings.minimapZoom]) + " блоків.");
+            }
             if (in.pressed(GLFW_KEY_J) && !invOpen) { journal = new JournalScreen(world); invOpen = true; grab(false); }
             if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); }
         }
@@ -860,6 +872,7 @@ final class PlayScreen {
             Gui.text(t, Gui.W - 300, 12, 2.2f, r, gg, 1f);
         }
         goalHud();
+        minimapHud();
         int bars = 0;
         for (Mob boss : world.mobs()) if (boss.type.boss && boss.alive() && bars < 2) { // смуги босів вгорі екрана (до двох: Ткач і Розплітач)
             float w = 520, x = (Gui.W - w) / 2f, oy = bars * 52;
@@ -911,6 +924,20 @@ final class PlayScreen {
         }
         if (vt.dead()) deathScreen(g);
         if (debug) debugText();
+    }
+
+    /** Мінікарта у правому верхньому куті (під відліком Шву, якщо він є) і координати під нею. */
+    private void minimapHud() {
+        if (v.settings.minimap == 0) return;
+        Pos p = player.pos;
+        long bx = p.blockX(), bz = p.blockZ();
+        minimap.update(bx, p.blockY(), bz, v.settings.minimapZoom);
+        float size = v.settings.minimap == 2 ? 260 : 170, x = Gui.W - size - 14, y = world.info.infState == WorldInfo.InfState.ACTIVE ? 46 : 14;
+        minimap.draw(x, y, size, bx, p.x - Math.floor(p.x), bz, p.z - Math.floor(p.z), player.yaw);
+        String c = bx + "  " + (int) Math.floor(p.y - PlayerEntity.EYE) + "  " + bz;
+        float sc = Math.min(1.8f, (size + 6) / Gui.textWidth(c, 1));
+        Gui.rect(x - 3, y + size + 3, size + 6, 20, 0, 0, 0, 0.55f);
+        Gui.textCentered(c, x + size / 2f, y + size + 6, sc, 0.92f, 0.92f, 0.85f);
     }
 
     /** Поточна ціль «Шляху» у лівому верхньому куті (у виживанні) і стрілка Ока до Брами. */
@@ -1151,6 +1178,7 @@ final class PlayScreen {
         if (vt.dead()) player.teleport(spawn); // збереження в момент смерті: гравець з'явиться на спавні
         world.info.setPlayer(player.pos, player.yaw, player.pitch);
         rend.close();
+        minimap.close();
         icons.close();
         skins.close();
         world.close();

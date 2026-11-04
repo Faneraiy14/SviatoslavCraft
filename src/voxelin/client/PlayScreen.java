@@ -29,6 +29,10 @@ final class PlayScreen {
     final WorldRenderer rend;
     /** Мінікарта (M - розмір/вимкнути, N - наближення). */
     final Minimap minimap;
+    /** Зум FL Client: тримати C; коліщатко під час зуму - сильніше/слабше. zoomNow плавно йде до zoomWant (1 - без зуму). */
+    private float zoomNow = 1f, zoomFactor = 4f;
+    /** Найменше світло для fullbright (клавіша B): усе видно й уночі, і в печерах. */
+    static final float FULLBRIGHT = 0.85f;
     final Camera cam = new Camera();
     final PlayerEntity player;
     final Inventory inv;
@@ -165,7 +169,7 @@ final class PlayScreen {
             activeScreen = InventoryScreen.furnace(new FurnaceMenu(world.itemTypes, v.game.recipes, inv, demo), inv, world, icons, st -> { });
             invOpen = true;
         }
-        say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера, M - мінікарта.");
+        say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера, M - мінікарта, C - зум.");
     }
 
     /** Центр тіла гравця - від нього рахується підбір і випадіння речей. */
@@ -291,17 +295,26 @@ final class PlayScreen {
                 int b = Minimap.N * Minimap.ZOOMS[v.settings.minimapZoom];
                 say("Мінікарта: " + Minimap.ZOOMS[v.settings.minimapZoom] + " бл. на точку, видно ~" + (b - 4 * Minimap.ZOOMS[v.settings.minimapZoom]) + " блоків.");
             }
+            if (in.pressed(GLFW_KEY_B) && !invOpen) {
+                v.settings.fullbright = !v.settings.fullbright; v.settings.save(v.settingsFile);
+                say(v.settings.fullbright ? "Fullbright: світло скрізь (B - вимкнути)." : "Fullbright вимкнено.");
+            }
             if (in.pressed(GLFW_KEY_J) && !invOpen) { journal = new JournalScreen(world); invOpen = true; grab(false); }
             if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); }
         }
         if (chatOpen) { in.updateText(); if (in.pressed(GLFW_KEY_ENTER)) sendChat(); } // не залежить від F1 (HUD)
         boolean play = grabbed && !chatOpen && !invOpen && !vt.dead() && !paused;
+        boolean zooming = play && in.down(GLFW_KEY_C);
+        zoomNow += ((zooming ? zoomFactor : 1f) - zoomNow) * Math.min(1f, (float) v.frameDt * 14f); // плавно, ~0.1 с
+        if (Math.abs(zoomNow - 1f) < 0.002f) zoomNow = 1f;
+        cam.fov = v.settings.fov / zoomNow;
         if (play) {
-            float sens = v.settings.mouseSensitivity;
+            float sens = v.settings.mouseSensitivity / zoomNow; // при зумі миша повільніша - ціль не «стрибає»
             player.rotate((float) in.mouseDX() * sens, (float) -in.mouseDY() * sens);
             for (int i = 0; i < 9; i++) if (in.pressed(GLFW_KEY_1 + i)) inv.select(i);
             double sc = in.consumeScroll();
-            if (sc > 0) inv.scroll(-1); else if (sc < 0) inv.scroll(1);
+            if (zooming) { if (sc != 0) zoomFactor = Math.max(1.5f, Math.min(12f, zoomFactor * (sc > 0 ? 1.25f : 0.8f))); } // коліщатко під час зуму - сила зуму
+            else if (sc > 0) inv.scroll(-1); else if (sc < 0) inv.scroll(1);
         } else in.consumeScroll();
         in.resetMouse();
 
@@ -322,7 +335,7 @@ final class PlayScreen {
         boolean under = world.isLiquid(cam.pos.blockX(), cam.pos.blockY(), cam.pos.blockZ());
         rend.underwater = under;
         boolean endDim = world.dimension().equals("end"), betweenDim = world.dimension().equals(Dimensions.BETWEEN), netherDim = world.info.type == WorldInfo.Type.NETHER;
-        rend.ambient = netherDim ? 0.16f : 0.04f;
+        rend.ambient = v.settings.fullbright ? FULLBRIGHT : netherDim ? 0.16f : 0.04f;
         double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : (endDim || betweenDim || netherDim ? world.skyLevel() : DayCycle.sky(phase));
         rend.skyBrightness = (float) sky;
         float[] horizon = endDim ? new float[]{0.10f, 0.05f, 0.16f} : netherDim ? new float[]{0.24f, 0.06f, 0.05f} : betweenDim ? betweenSky() : DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
@@ -598,7 +611,7 @@ final class PlayScreen {
         Chunk c = world.chunk(player.pos.cx, player.pos.cz);
         int l = c == null ? 0xF0 : c.lightAt((int) Math.floorMod(player.pos.blockX(), 16L), Math.min(255, Math.max(0, player.pos.blockY())), (int) Math.floorMod(player.pos.blockZ(), 16L));
         voxelin.client.look.PlayerModel.Pose pose = new voxelin.client.look.PlayerModel.Pose();
-        pose.light = (float) Math.max(0.25, Math.max(Math.pow(0.8, 15 - (l >> 4)) * rend.skyBrightness, Math.pow(0.8, 15 - (l & 15))));
+        pose.light = (float) Math.max(v.settings.fullbright ? FULLBRIGHT : 0.25, Math.max(Math.pow(0.8, 15 - (l >> 4)) * rend.skyBrightness, Math.pow(0.8, 15 - (l & 15))));
         pose.headPitch = player.pitch;
         pose.limbPhase = (float) walkPhase;
         pose.limbAmount = (float) Math.min(1, hs / 5);
@@ -684,7 +697,7 @@ final class PlayScreen {
             if (++drawn > 150) break;
             Chunk c = world.chunk(m.pos.cx, m.pos.cz);
             int l = c == null ? 0xF0 : c.lightAt((int) Math.floorMod(m.pos.blockX(), 16L), Math.min(255, m.pos.blockY() + 1), (int) Math.floorMod(m.pos.blockZ(), 16L));
-            float light = (float) Math.max(0.18, Math.max(Math.pow(0.8, 15 - (l >> 4)) * rend.skyBrightness, Math.pow(0.8, 15 - (l & 15))));
+            float light = (float) Math.max(v.settings.fullbright ? FULLBRIGHT : 0.18, Math.max(Math.pow(0.8, 15 - (l >> 4)) * rend.skyBrightness, Math.pow(0.8, 15 - (l & 15))));
             float tr = 1f, tg = 1f, tb = 1f;
             if (m.hurtTicks > 0) { tr = 1f; tg = 0.45f; tb = 0.45f; }
             else if (m.burning) { tr = 1f; tg = 0.75f; tb = 0.4f; }

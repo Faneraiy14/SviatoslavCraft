@@ -22,6 +22,8 @@ public final class Settings {
     public int volMaster = 100, volBlocks = 100, volMobs = 100, volAmbient = 80, volUi = 100;
     /** Мінікарта: 0 - вимкнена, 1 - мала, 2 - велика (клавіша M); наближення - індекс Minimap.ZOOMS (клавіша N). */
     public int minimap = 1, minimapZoom = 1;
+    /** Fullbright (FL Client, клавіша B): найменше світло 0.85 - темряви нема. */
+    public boolean fullbright;
 
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
     private static int vol(int v) { return clamp(Math.round(v / 10f) * 10, 0, 100); }
@@ -53,6 +55,7 @@ public final class Settings {
         s.outlines = !"false".equalsIgnoreCase(p.getProperty("outlines", "true").trim());
         s.volMaster = intOf(p, "volume.master", s.volMaster); s.volBlocks = intOf(p, "volume.blocks", s.volBlocks); s.volMobs = intOf(p, "volume.mobs", s.volMobs);
         s.volAmbient = intOf(p, "volume.ambient", s.volAmbient); s.volUi = intOf(p, "volume.ui", s.volUi);
+        s.fullbright = "true".equalsIgnoreCase(p.getProperty("fullbright", "false").trim());
         s.minimap = intOf(p, "minimap", s.minimap); s.minimapZoom = intOf(p, "minimap.zoom", s.minimapZoom);
         s.clampAll();
         return s;
@@ -74,7 +77,7 @@ public final class Settings {
         p.setProperty("outlines", String.valueOf(outlines));
         p.setProperty("volume.master", String.valueOf(volMaster)); p.setProperty("volume.blocks", String.valueOf(volBlocks)); p.setProperty("volume.mobs", String.valueOf(volMobs));
         p.setProperty("volume.ambient", String.valueOf(volAmbient)); p.setProperty("volume.ui", String.valueOf(volUi));
-        p.setProperty("minimap", String.valueOf(minimap)); p.setProperty("minimap.zoom", String.valueOf(minimapZoom));
+        p.setProperty("fullbright", String.valueOf(fullbright)); p.setProperty("minimap", String.valueOf(minimap)); p.setProperty("minimap.zoom", String.valueOf(minimapZoom));
         try {
             File dir = f.getAbsoluteFile().getParentFile();
             if (dir != null && !dir.isDirectory()) dir.mkdirs();

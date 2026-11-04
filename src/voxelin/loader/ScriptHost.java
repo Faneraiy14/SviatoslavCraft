@@ -48,7 +48,9 @@ public final class ScriptHost {
         long stamp;
         Map<String, Object> held; // операція, відкладена до наступного тіку (вичерпано ліміт блоків)
         int blocksThisTick;
-        long pingN, pongN, pingTick; // пінг раз на секунду; без відповіді STUCK_TICKS ігрового часу - скрипт завис (пауза гри не рахується)
+        long pingN, pongN, pingTick, pingNanos; // пінг раз на секунду; без відповіді STUCK_TICKS ігрового часу І STUCK_MS справжнього - завис
+        // (пауза гри не рахується - тіки стоять; справжній час потрібен, бо тіки бувають швидші за годинник: тести, наздоганяння після лагу,
+        // а холодний старт nx на завантаженій машині триває секунди)
         Script(String id, File dir) { this.id = id; this.dir = dir; this.info = new Info(id); this.source = Sources.of("script:" + id, Source.Kind.SCRIPT, 2, BLOCKS_PER_TICK); }
         String owner() { return "script:" + id; }
     }
@@ -107,7 +109,7 @@ public final class ScriptHost {
             if (s.proc == null || !health(s)) continue;
             if (s.subs.contains("tick")) s.proc.send(event("tick", "t", tick));
             if (tick % 20 == 0 && s.subs.contains("second")) s.proc.send(event("second", "t", tick));
-            if (tick % 20 == 0) { if (s.pongN == s.pingN) s.pingTick = tick; s.proc.send(event("ping", "n", ++s.pingN)); }
+            if (tick % 20 == 0) { if (s.pongN == s.pingN) { s.pingTick = tick; s.pingNanos = System.nanoTime(); } s.proc.send(event("ping", "n", ++s.pingN)); }
         }
     }
 
@@ -215,7 +217,7 @@ public final class ScriptHost {
             st = State.CRASHED;
             List<String> c = p.console();
             why = "завершився (код " + p.exitCode() + ")" + (c.isEmpty() ? "" : ": " + c.get(c.size() - 1));
-        } else if (p.stuckMillis() > STUCK_MS || s.pongN < s.pingN && tick - s.pingTick > STUCK_TICKS) why = "не відповідає понад " + STUCK_MS / 1000 + " с (нескінченний цикл?)";
+        } else if (p.stuckMillis() > STUCK_MS || s.pongN < s.pingN && tick - s.pingTick > STUCK_TICKS && System.nanoTime() - s.pingNanos > STUCK_MS * 1_000_000L) why = "не відповідає понад " + STUCK_MS / 1000 + " с (нескінченний цикл?)";
         else if (tick % 100 == 0) { long mb = p.memoryMb(); if (mb > MEMORY_MB) why = "забагато пам'яті: " + mb + " МБ (межа " + MEMORY_MB + ")"; }
         if (why == null) return true;
         stop(s, st, why);
@@ -253,7 +255,7 @@ public final class ScriptHost {
         try {
             switch (kind) {
                 case "ready" -> { return false; }
-                case "pong" -> { long n = lng(op.get("n")); if (n > s.pongN && n <= s.pingN) { s.pongN = n; s.pingTick = tick; } return false; }
+                case "pong" -> { long n = lng(op.get("n")); if (n > s.pongN && n <= s.pingN) { s.pongN = n; s.pingTick = tick; s.pingNanos = System.nanoTime(); } return false; }
                 case "say" -> { notify(ScriptProcess.cut(str(op.get("text")), 200)); return false; }
                 case "log" -> { System.out.println("[script:" + s.id + "] " + ScriptProcess.cut(str(op.get("text")), 300)); return false; }
                 case "subscribe" -> {

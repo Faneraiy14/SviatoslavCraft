@@ -191,7 +191,8 @@ final class PlayScreen {
         }
         say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера, M - мінікарта, C - зум, K - код.");
         if (v.opts.lan && net == null) { lanSurvival = v.opts.lanSurvival; openLan(); if (server != null) System.out.println("[net] code " + server.code + " port " + server.port); }
-        if (net != null) say("Гра по мережі: світ «" + net.welcome.worldName() + "» гравця " + net.welcome.hostName() + (net.welcome.survival() ? ". Режим - виживання: речі, здоров'я й голод - твої (при смерті речі лишаються); T - чат." : ". Ти будівельник у творчому режимі; T - чат."));
+        if (net != null && net.welcome.survival()) net.onClose = () -> net.sendInv(inv); // речі гостя лишаються в хоста до наступної гри
+        if (net != null) say("Гра по мережі: світ «" + net.welcome.worldName() + "» гравця " + net.welcome.hostName() + (net.welcome.survival() ? ". Режим - виживання: істоти хоста нападають і на тебе; речі хост зберігає до наступної гри (при смерті не губляться); T - чат." : ". Ти будівельник у творчому режимі; T - чат."));
     }
 
     /** Дальність малювання: у гостя - не більше, ніж дає хост (він вантажить світ довкола кожного гостя). */
@@ -218,6 +219,21 @@ final class PlayScreen {
         for (String line : net.takeChat()) say(line);
         Pos back = net.takeTeleport();
         if (back != null) player.teleport(back);
+        if (net.welcome.survival()) {
+            String[] saved = net.takeSavedInv(); // речі з минулої гри в цьому світі (зберігає хост)
+            if (saved != null) {
+                String[] slots = new String[Inventory.SIZE], armor = new String[4];
+                for (int i = 0; i < Inventory.SIZE; i++) slots[i] = saved[i].isEmpty() ? null : saved[i];
+                for (int i = 0; i < 4; i++) armor[i] = saved[Inventory.SIZE + i].isEmpty() ? null : saved[Inventory.SIZE + i];
+                int sel = 0;
+                try { sel = Integer.parseInt(saved[Inventory.SIZE + 4].trim()); } catch (NumberFormatException ignored) { }
+                inv.decode(slots, sel); inv.decodeArmor(armor);
+                say("Хост зберіг твої речі з минулої гри - вони в інвентарі.");
+            }
+            for (double[] h : net.takeHurts()) if (!vt.dead()) playerTarget.hurt(h[0], h[1], h[2], h[3]); // удар істоти хоста
+            if (ticks % 10 == 0) net.sendState(vt.health(), vt.dead());
+            if (ticks % 600 == 0) net.sendInv(inv);
+        }
         for (Object[] gift : net.takeGifts()) { // дроп зламаного блока (виживання)
             int left = inv.add((String) gift[0], (int) gift[1], (int) gift[2]);
             if (left < (int) gift[1]) sounds.self("voxelin:item.pickup", 0.5f);

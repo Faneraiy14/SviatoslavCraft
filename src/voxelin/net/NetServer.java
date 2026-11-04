@@ -31,10 +31,67 @@ public final class NetServer implements AutoCloseable {
         final Set<ChunkPos> sent = new HashSet<>();
         final ArrayDeque<ChunkPos> wants = new ArrayDeque<>();
         int actions = ACTION_BURST, chats = 3;
+        /** Стан, про який звітує гість (виживання): здоров'я й смерть. */
+        volatile double health = 20;
+        volatile boolean dead;
+        long lastInvSave;
+        /** Ціль для істот і стріл (лише у виживанні): удар іде гостю кадром S_HURT, броню й поштовх рахує він. */
+        PlayerTarget target;
         Guest(int id, String name, String look, Conn conn, Pos at) {
             this.id = id; this.name = name; this.look = look; this.conn = conn; this.pos = at.copy(); this.spawn = at.copy();
             src = Sources.of(name, Source.Kind.PLAYER, 0, 16);
         }
+    }
+
+    private PlayerTarget targetOf(Guest g) {
+        return new PlayerTarget() {
+            public Pos body() { Pos c = g.pos.copy(); c.y = g.pos.y - voxelin.core.entity.PlayerEntity.EYE + voxelin.core.entity.PlayerEntity.HEIGHT / 2; return c; }
+            public boolean alive() { return !g.dead && !g.conn.closed(); }
+            public boolean creative() { return false; }
+            public double health() { return g.health; }
+            public void notify(String message) { g.conn.send(chatFrame(message)); }
+            public void hurt(double damage, double kx, double kz) { hurt(damage, kx, kz, 0); }
+            public void hurt(double damage, double kx, double kz, double pierce) {
+                if (!Double.isFinite(damage) || damage <= 0) return;
+                g.conn.send(frame(S_HURT, o -> { o.writeDouble(damage); o.writeDouble(kx); o.writeDouble(kz); o.writeDouble(pierce); }));
+            }
+            public void teleport(long x, int y, long z) {
+                Pos p = Pos.ofBlock(x, y + voxelin.core.entity.PlayerEntity.EYE + 0.02, z);
+                g.pos.cx = p.cx; g.pos.cz = p.cz; g.pos.x = p.x; g.pos.y = p.y; g.pos.z = p.z;
+                g.conn.send(frame(S_TELEPORT, o -> writePos(o, p)));
+            }
+        };
+    }
+
+    // ------------------------------------------------------------------ інвентарі гостей (виживання): у теці світу хоста, guests/<ім'я>.inv
+
+    /** Тека світу (для вимірів - головного світу: інвентар гостя один на всі виміри). */
+    private File guestsDir() {
+        File d = world.dir, p = d.getParentFile();
+        if (p != null && p.getName().equals("dimensions") && p.getParentFile() != null) d = p.getParentFile();
+        return new File(d, "guests");
+    }
+
+    private File invFile(String name) { return new File(guestsDir(), name.toLowerCase(Locale.ROOT) + ".inv"); }
+
+    /** Збережений інвентар гостя: SIZE рядків слотів, 4 броні, вибраний слот; null - нема. */
+    String[] loadInv(String name) {
+        File f = invFile(name);
+        if (!f.isFile() || f.length() > 64 * 1024) return null;
+        try {
+            List<String> l = java.nio.file.Files.readAllLines(f.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+            return l.size() == Inventory.SIZE + 5 ? l.toArray(new String[0]) : null;
+        } catch (IOException e) { return null; }
+    }
+
+    private void saveInv(String name, String[] lines) {
+        try {
+            File d = guestsDir();
+            d.mkdirs();
+            File f = invFile(name), tmp = new File(d, f.getName() + ".tmp");
+            java.nio.file.Files.write(tmp.toPath(), String.join("\n", lines).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Files2.replace(tmp, f);
+        } catch (IOException e) { System.out.println("[Voxelin] ⚠️ інвентар гостя " + name + ": " + e); }
     }
 
     /** Дій (зламати/поставити) за раз; відновлюється по одній за тік - ~20/с. */
@@ -197,6 +254,12 @@ public final class NetServer implements AutoCloseable {
             o.writeBoolean(survival);
         }));
         c.send(timeFrame());
+        if (survival) {
+            String[] inv = loadInv(name);
+            if (inv != null) c.send(frame(S_INV, o -> { o.writeInt(inv.length); for (String l : inv) o.writeUTF(l.length() > 200 ? "" : l); }));
+            g.target = targetOf(g);
+            world.addTarget(g.target);
+        }
         announce(name + " приєднався до гри.");
         return null;
     }
@@ -258,6 +321,20 @@ public final class NetServer implements AutoCloseable {
                 if (g.chats <= 0) { g.conn.send(chatFrame("Не так швидко.")); return; }
                 g.chats--;
                 announce("<" + g.name + "> " + text);
+            }
+            case C_STATE -> {
+                double h = in.readDouble(); boolean dead = in.readBoolean();
+                g.health = Double.isFinite(h) ? Math.max(0, Math.min(20, h)) : 20; g.dead = dead;
+            }
+            case C_INV -> {
+                int n = in.readInt();
+                if (n != Inventory.SIZE + 5) throw new IOException("поганий інвентар");
+                String[] lines = new String[n];
+                for (int i = 0; i < n; i++) lines[i] = str(in, 200).replace("\n", "").replace("\r", "");
+                long now = System.currentTimeMillis();
+                if (!survival || now - g.lastInvSave < 3000) return; // не частіше раз на 3 с
+                g.lastInvSave = now;
+                saveInv(g.name, lines);
             }
             case C_BYE -> drop(g, null);
             default -> throw new IOException("невідомий вид " + f[0]);
@@ -401,6 +478,7 @@ public final class NetServer implements AutoCloseable {
 
     private void drop(Guest g, String why) {
         if (!guests.remove(g)) return;
+        if (g.target != null) world.removeTarget(g.target);
         if (why != null && !g.conn.closed()) g.conn.send(frame(S_KICK, o -> o.writeUTF(why)));
         g.conn.closeAfterSend();
         announce(g.name + " вийшов з гри" + (why == null || why.equals("закрито") ? "." : " (" + why + ")."));
@@ -413,6 +491,7 @@ public final class NetServer implements AutoCloseable {
         if (closed) return;
         closed = true;
         for (Guest g : guests) { g.conn.send(frame(S_KICK, o -> o.writeUTF("хост закрив гру"))); g.conn.closeAfterSend(); }
+        for (Guest g : guests) if (g.target != null) world.removeTarget(g.target);
         guests.clear();
         for (Conn c : handshakes) c.close();
         handshakes.clear();

@@ -86,8 +86,8 @@ public final class Arrows {
         int steps = Math.max(1, (int) Math.ceil(len / STEP));
         double dx = a.vx / steps, dy = a.vy / steps, dz = a.vz / steps, seg = len / steps;
         for (int i = 0; i < steps; i++) {
-            if (a.hostile() && hitsPlayer(a, dx, dy, dz, seg)) {
-                PlayerTarget t = w.playerTarget();
+            PlayerTarget t = a.hostile() ? hitPlayer(a, dx, dy, dz, seg) : null;
+            if (t != null) {
                 double kx = a.vx, kz = a.vz, h = Math.hypot(kx, kz);
                 if (h < 1e-6) { kx = 0; kz = -1; } else { kx /= h; kz /= h; }
                 t.hurt(damage(len, false), kx * 0.5, kz * 0.5); // броня й зношування - як від удару; поштовх слабший за меч
@@ -132,14 +132,18 @@ public final class Arrows {
         return best;
     }
 
-    /** Чи влучає крок стріли в гравця (коробка 0.6 x 1.8 навколо центру тіла). У творчому й мертвого - ні. */
-    private boolean hitsPlayer(Arrow a, double dx, double dy, double dz, double seg) {
-        PlayerTarget t = w.playerTarget();
-        if (t == null || !t.alive() || t.creative() || seg < 1e-9) return false;
-        Pos b = t.body();
-        double bx = b.relX(a.pos.cx), bz = b.relZ(a.pos.cz);
-        double r = Combat.rayBox(a.pos.x, a.pos.y, a.pos.z, dx / seg, dy / seg, dz / seg, bx - 0.3, b.y - 0.9, bz - 0.3, bx + 0.3, b.y + 0.9, bz + 0.3);
-        return r >= 0 && r <= seg;
+    /** У якого гравця влучає крок стріли (коробка 0.6 x 1.8 навколо центру тіла); null - ні в кого. У творчому й мертвих - ні. */
+    private PlayerTarget hitPlayer(Arrow a, double dx, double dy, double dz, double seg) {
+        if (seg < 1e-9) return null;
+        for (PlayerTarget t : w.targets()) {
+            if (!t.alive() || t.creative()) continue;
+            Pos b = t.body();
+            if (Math.abs(b.cx - a.pos.cx) > 2 || Math.abs(b.cz - a.pos.cz) > 2) continue;
+            double bx = b.relX(a.pos.cx), bz = b.relZ(a.pos.cz);
+            double r = Combat.rayBox(a.pos.x, a.pos.y, a.pos.z, dx / seg, dy / seg, dz / seg, bx - 0.3, b.y - 0.9, bz - 0.3, bx + 0.3, b.y + 0.9, bz + 0.3);
+            if (r >= 0 && r <= seg) return t;
+        }
+        return null;
     }
 
     private boolean inSolid(Pos p) {

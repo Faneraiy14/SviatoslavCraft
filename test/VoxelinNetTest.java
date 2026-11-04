@@ -194,7 +194,37 @@ public class VoxelinNetTest {
         sv.sendPos(sv.welcome.spawn(), 0, 0); tickAll(5);
         check(sv.takeTeleport() == null || NetServerDist(srv.guests().get(0).pos, sv.welcome.spawn()) < 0.01, "відродження в точці появи - не стрибок");
         check(NetServerDist(srv.guests().get(0).pos, sv.welcome.spawn()) < 0.01, "хост прийняв відродження");
+        // істоти хоста нападають на гостя (виживання)
+        check(host.targets().size() == 1 && host.targetFor(sv.welcome.spawn()) != null, "гість - ціль для істот");
+        MobType foe = host.mobTypes.all().stream().filter(t -> t.hostile() && t.attackDamage > 0 && !t.flying && !t.ranged() && !t.boss).findFirst().orElseThrow();
+        host.naturalSpawning = false;
+        host.info.time = 18000; // ніч - ніхто не горить
+        Pos near = sv.welcome.spawn().copy(); near.add(1.2, -voxelin.core.entity.PlayerEntity.EYE + 0.05, 0);
+        Mob z = host.spawnMob(foe, near);
+        List<double[]> hits = new ArrayList<>();
+        for (int i = 0; i < 200 && hits.isEmpty(); i++) { host.tick(); tickAll(1); hits.addAll(sv.takeHurts()); }
+        check(!hits.isEmpty() && hits.get(0)[0] > 0, foe.name + " вдарив гостя: " + (hits.isEmpty() ? "-" : hits.get(0)[0]));
+        sv.sendState(0, true);
+        tickAll(3);
+        check(host.targetFor(sv.welcome.spawn()) == null || !host.targetFor(sv.welcome.spawn()).alive(), "мертвого гостя не б'ють");
+        host.killAll(foe);
+        sv.sendState(20, false);
+        // інвентар гостя зберігає хост
+        Inventory gi = new Inventory(host.itemTypes);
+        gi.add("voxelin:dirt", 7);
+        sv.sendInv(gi);
+        tickAll(5);
+        check(new File(host.dir, "guests/шахтар.inv").isFile(), "інвентар гостя записано в теку світу");
         sv.close(); srv.close();
+        tickAll(2);
+        check(host.targets().isEmpty(), "після виходу гостя - не ціль");
+        srv = new NetServer(host, 0, "Хост", "", hostChat::add, true);
+        NetClient back2 = join("Шахтар", srv.code);
+        back2.attach(m2);
+        List<String> inv2 = new ArrayList<>();
+        run(() -> { back2.poll(); String[] l = back2.takeSavedInv(); if (l != null) inv2.addAll(Arrays.asList(l)); return !inv2.isEmpty(); }, 60);
+        check(inv2.size() == Inventory.SIZE + 5 && inv2.get(0).startsWith("voxelin:dirt|7"), "повернувся - речі знову з ним: " + (inv2.isEmpty() ? "-" : inv2.get(0)));
+        back2.close(); srv.close();
         File m2d = m2.dir; m2.close(); WorldArchive.deleteTree(m2d);
         host.close();
         System.out.println("VoxelinNetTest: " + n + " перевірок OK");

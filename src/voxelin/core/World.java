@@ -354,6 +354,40 @@ public final class World implements WorldAccess {
     public void setPlayerTarget(PlayerTarget t) { target = t; }
     /** Гравець для ШІ, стріл і спавнера (може бути null). */
     public PlayerTarget playerTarget() { return target; }
+
+    /** Інші гравці-цілі (гості мережевої гри у виживанні): істоти й стріли б'ють найближчого. */
+    private final List<PlayerTarget> extraTargets = new java.util.concurrent.CopyOnWriteArrayList<>();
+    public void addTarget(PlayerTarget t) { if (t != null && !extraTargets.contains(t)) extraTargets.add(t); }
+    public void removeTarget(PlayerTarget t) { extraTargets.remove(t); }
+
+    /** Усі гравці: хост (якщо є) і гості. */
+    public List<PlayerTarget> targets() {
+        if (extraTargets.isEmpty()) return target == null ? List.of() : List.of(target);
+        List<PlayerTarget> l = new ArrayList<>(1 + extraTargets.size());
+        if (target != null) l.add(target);
+        l.addAll(extraTargets);
+        return l;
+    }
+
+    /** Ціль для істоти в точці at: найближчий живий гравець не в творчому; нікого - головний гравець (як в одиночній грі). */
+    public PlayerTarget targetFor(Pos at) {
+        if (extraTargets.isEmpty()) return target;
+        PlayerTarget best = null;
+        double bd = Double.MAX_VALUE;
+        for (PlayerTarget t : targets()) {
+            if (!t.alive() || t.creative()) continue;
+            double d = dist2(at, t.body());
+            if (d < bd) { bd = d; best = t; }
+        }
+        return best != null ? best : target;
+    }
+
+    /** Квадрат горизонтальної відстані (далекі чанки - «дуже далеко», без переповнення). */
+    private static double dist2(Pos a, Pos b) {
+        if (Math.abs(a.cx - b.cx) > 1024 || Math.abs(a.cz - b.cz) > 1024) return Double.MAX_VALUE;
+        double dx = a.relX(b.cx) - b.x, dz = a.relZ(b.cz) - b.z;
+        return dx * dx + dz * dz;
+    }
     public Random mobRandom() { return mobRng; }
     public MobSpawner spawner() { return spawner; }
 
@@ -495,19 +529,25 @@ public final class World implements WorldAccess {
     private boolean keeperPending;
 
     private void tickMobs() {
-        if (naturalSpawning && info.rule(GameRules.MOB_SPAWNING)) spawner.tick(this, target, mobRng, tick);
+        if (naturalSpawning && info.rule(GameRules.MOB_SPAWNING)) {
+            spawner.tick(this, target, mobRng, tick);
+            for (PlayerTarget t : extraTargets) if (t.alive() && !t.creative()) spawner.tick(this, t, mobRng, tick); // і довкола гостей
+        }
         Pos pc = target == null ? null : target.body();
+        List<Pos> others = new ArrayList<>();
+        for (PlayerTarget t : extraTargets) others.add(t.body());
         for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
             Mob m = it.next();
             if (Math.floorMod(tick + m.hashCode(), 10) == 0) pickPrey(m);
-            m.tick(this, target, mobRng);
+            m.tick(this, targetFor(m.pos), mobRng);
             if (!m.dying && !m.type.fireproof && tick % 10 == 0 && isLava(m.pos.blockX(), m.pos.blockY(), m.pos.blockZ())) hurtMob(m, 4, 0, 0, m.pos); // лава
             if (!m.dying && mobRng.nextInt(m.type.boss ? 160 : 480) == 0) mobSound(m, "idle", m.type.boss ? 1.5f : 0.8f); // голоси - зрідка, у випадковий момент
             if (!m.dying && m.type.flying && Math.floorMod(tick + m.hashCode(), 30) == 0) mobSound(m, "flap", 1f);
             if (m.dying && !m.lootDropped) dropLoot(m);
             if (m.removable()) { it.remove(); continue; }
             if (pc != null) { // далекі зникають (вороги ближче, ніж мирні)
-                double dx = m.pos.relX(pc.cx) - pc.x, dz = m.pos.relZ(pc.cz) - pc.z, d2 = dx * dx + dz * dz;
+                double d2 = dist2(m.pos, pc);
+                for (Pos o : others) d2 = Math.min(d2, dist2(m.pos, o)); // біля гостя теж не зникають
                 if (naturalSpawning && !m.keep && !m.type.persistent && ((m.type.hostile() && d2 > 80 * 80) || d2 > 128 * 128)) it.remove();
             }
         }

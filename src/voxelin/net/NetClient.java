@@ -45,10 +45,16 @@ public final class NetClient implements AutoCloseable {
     private final Deque<String> chat = new ArrayDeque<>();
     /** Дроп від хоста (виживання): {предмет, кількість, зношення}; забирає PlayScreen у інвентар. */
     private final Deque<Object[]> gifts = new ArrayDeque<>();
+    /** Удари істот хоста (виживання): {шкода, kx, kz, пробиття}. */
+    private final Deque<double[]> hurts = new ArrayDeque<>();
+    /** Інвентар гостя, збережений у хоста з минулої гри (SIZE слотів, 4 броні, вибраний слот); забирається один раз. */
+    private String[] savedInv;
     private final Map<ChunkPos, Long> refused = new HashMap<>();
     private Pos teleport;
     private String kicked;
     private boolean started;
+    /** Що надіслати перед виходом (PlayScreen: інвентар). */
+    public Runnable onClose;
     /** Остання надіслана позиція й коли - без руху (екран завантаження) раз на секунду повторюємо, щоб хост не вважав нас зниклими. */
     private Pos lastPos;
     private float lastYaw, lastPitch;
@@ -147,6 +153,17 @@ public final class NetClient implements AutoCloseable {
                 String item = str(in, 96); int count = in.readInt(), damage = in.readInt();
                 if (world.itemTypes.get(item) != null && count > 0 && count <= 64 && damage >= 0 && gifts.size() < 256) gifts.add(new Object[]{item, count, damage});
             }
+            case S_HURT -> {
+                double d = in.readDouble(), kx = in.readDouble(), kz = in.readDouble(), p = in.readDouble();
+                if (Double.isFinite(d + kx + kz + p) && d > 0 && d <= 100 && hurts.size() < 64) hurts.add(new double[]{d, Math.max(-1, Math.min(1, kx)), Math.max(-1, Math.min(1, kz)), Math.max(0, Math.min(1, p))});
+            }
+            case S_INV -> {
+                int n = in.readInt();
+                if (n != Inventory.SIZE + 5) throw new IOException("поганий інвентар");
+                String[] l = new String[n];
+                for (int i = 0; i < n; i++) l[i] = str(in, 200);
+                savedInv = l;
+            }
             case S_PLAYERS -> players(in);
             case S_MOBS -> mobs(in);
             default -> { } // новіший хост: невідоме пропускаємо
@@ -230,6 +247,22 @@ public final class NetClient implements AutoCloseable {
     /** Дроп, що прийшов від хоста (забирається). */
     public List<Object[]> takeGifts() { List<Object[]> l = new ArrayList<>(gifts); gifts.clear(); return l; }
 
+    public List<double[]> takeHurts() { List<double[]> l = new ArrayList<>(hurts); hurts.clear(); return l; }
+    public String[] takeSavedInv() { String[] l = savedInv; savedInv = null; return l; }
+
+    /** Здоров'я й смерть - хосту (щоб істоти не били мертвого й знали, кого бити). */
+    public void sendState(double health, boolean dead) { conn.send(frame(C_STATE, o -> { o.writeDouble(health); o.writeBoolean(dead); })); }
+
+    /** Інвентар на зберігання в хоста (рядки Inventory.encode, броня, вибраний слот). */
+    public void sendInv(Inventory inv) {
+        String[] slots = inv.encode(), armor = inv.encodeArmor();
+        List<String> l = new ArrayList<>();
+        for (String x : slots) l.add(x == null ? "" : x);
+        for (String x : armor) l.add(x == null ? "" : x);
+        l.add(String.valueOf(inv.selected()));
+        conn.send(frame(C_INV, o -> { o.writeInt(l.size()); for (String x : l) o.writeUTF(x); }));
+    }
+
     /** Хост повернув гостя (стрибок позиції) - куди. */
     public Pos takeTeleport() { Pos p = teleport; teleport = null; return p; }
 
@@ -245,6 +278,7 @@ public final class NetClient implements AutoCloseable {
 
     /** Вийти: хост дізнається одразу (а не через таймаут). */
     @Override public void close() {
+        if (onClose != null && started && !conn.closed()) onClose.run(); // напр. останній інвентар хосту
         if (!started) { try { conn.writeNow(frame(C_BYE, null)); } catch (IOException ignored) { } conn.close(); } // ще не грали (відмова на екрані входу)
         else if (!conn.closed()) { conn.send(frame(C_BYE, null)); conn.closeAfterSend(); }
         if (world != null) world.setFeed((cx, cz) -> false); // дзеркало лишається дзеркалом: нічого не генерує саме

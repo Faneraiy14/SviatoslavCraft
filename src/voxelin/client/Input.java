@@ -19,6 +19,10 @@ public final class Input {
     private boolean textActive;
     private long bsHeld, bsLast;
     private final Window window;
+    /** Вікно коду: усі надруковані символи й натиски (з автоповтором) у черзі, щоб редактор нічого не губив між кадрами. */
+    private boolean editActive;
+    private final StringBuilder typed = new StringBuilder();
+    private final java.util.ArrayDeque<int[]> keyEvents = new java.util.ArrayDeque<>();
 
     public Input(Window window) {
         this.window = window;
@@ -27,6 +31,7 @@ public final class Input {
             if (key < 0 || key >= keys.length) return;
             if (action == GLFW_PRESS) { keys[key] = true; keysJust[key] = true; }
             else if (action == GLFW_RELEASE) keys[key] = false;
+            if (editActive && (action == GLFW_PRESS || action == GLFW_REPEAT) && keyEvents.size() < 256) keyEvents.add(new int[]{key, mods});
         });
         glfwSetCursorPosCallback(h, (w, x, y) -> {
             if (firstMouse) { mouseX = x; mouseY = y; firstMouse = false; return; }
@@ -39,6 +44,7 @@ public final class Input {
         });
         glfwSetScrollCallback(h, (w, x, y) -> scroll += y);
         glfwSetCharCallback(h, (w, cp) -> {
+            if (editActive) { if (cp >= 32 && cp != 127 && typed.length() < 4096) typed.appendCodePoint(cp); return; }
             if (!textActive || text.length() >= textMax || cp > 0xFFFF) return;
             char c = (char) cp;
             boolean ok = textCommand ? (c >= 32 && c != 127) : ((cp < 128 || (cp >= 0x0400 && cp <= 0x04FF)) && (Character.isLetterOrDigit(c) || c == ' '));
@@ -67,6 +73,17 @@ public final class Input {
         if (initial != null) text.append(initial.length() > textMax ? initial.substring(0, textMax) : initial);
     }
     public void endText() { textActive = false; }
+
+    /** Почати/закінчити ввід у вікно коду (черги очищаються). */
+    public void beginEdit() { editActive = true; typed.setLength(0); keyEvents.clear(); textActive = false; }
+    public void endEdit() { editActive = false; typed.setLength(0); keyEvents.clear(); }
+    public boolean editActive() { return editActive; }
+    /** Надруковане з минулого кадру. */
+    public String pollTyped() { String t = typed.toString(); typed.setLength(0); return t; }
+    /** Наступний натиск {клавіша, модифікатори GLFW_MOD_*} або null. */
+    public int[] pollKey() { return keyEvents.poll(); }
+    public String clipboard() { String c = glfwGetClipboardString(window.handle()); return c == null ? "" : c; }
+    public void setClipboard(String s) { glfwSetClipboardString(window.handle(), s); }
     public boolean textActive() { return textActive; }
     public String text() { return text.toString(); }
 

@@ -95,6 +95,60 @@ public final class ScriptHost {
 
     public List<Info> list() { List<Info> r = new ArrayList<>(); for (Script s : scripts.values()) r.add(s.info); return r; }
 
+    // ------------------------------------------------------------------ для вікна коду в грі
+
+    /** Чи годиться назва скрипта (тека scripts/<назва>/). */
+    public static boolean validId(String id) { return id != null && id.matches("[a-z0-9_]{1,32}"); }
+
+    /** Назви скриптів на диску (теки з main.nx), за абеткою - і тих, що ще не запущені. */
+    public List<String> ids() {
+        TreeSet<String> out = new TreeSet<>(scripts.keySet());
+        File[] ds = dir.listFiles(File::isDirectory);
+        if (ds != null) for (File d : ds) if (validId(d.getName()) && new File(d, "main.nx").isFile()) out.add(d.getName());
+        return new ArrayList<>(out);
+    }
+
+    public Info info(String id) { Script s = scripts.get(id); return s == null ? null : s.info; }
+
+    /** Останні рядки виводу й помилок (живого процесу або останнього запуску). */
+    public List<String> console(String id) {
+        Script s = scripts.get(id);
+        if (s != null && s.proc != null) return s.proc.console();
+        return lastConsole.getOrDefault(id, List.of());
+    }
+
+    public File mainFile(String id) { return new File(new File(dir, id), "main.nx"); }
+
+    /** Записати main.nx (атомарно) і одразу перезапустити скрипт (не чекаючи перевірки раз на секунду). */
+    public void save(String id, String text) throws IOException {
+        if (!validId(id)) throw new IOException("назва скрипта - малі латинські літери, цифри, _ (до 32)");
+        File f = mainFile(id);
+        f.getParentFile().mkdirs();
+        File tmp = new File(f.getPath() + ".tmp");
+        Files.writeString(tmp.toPath(), text, StandardCharsets.UTF_8);
+        voxelin.core.Files2.replace(tmp, f);
+        Script s = scripts.get(id);
+        if (world == null) return;
+        if (s == null) rescan();
+        else start(s);
+    }
+
+    /** Зупинити скрипт (як /script stop). */
+    public void stop(String id) { Script s = scripts.get(id); if (s != null) stop(s, State.STOPPED, "зупинено у вікні коду"); }
+
+    /** Шаблон нового скрипта. */
+    public static String template(String id) {
+        return "import \"../voxelin.nx\"\n\n"
+                + "// /" + id + " - приклад команди; збережи (Ctrl+S) - і скрипт перезапуститься\n"
+                + "func on_" + id + "(ev) {\n"
+                + "    say(\"Привіт із скрипта " + id + "!\")\n"
+                + "}\n\n"
+                + "func main() {\n"
+                + "    command(\"" + id + "\", \"\", on_" + id + ")\n"
+                + "    vxRun()\n"
+                + "}\n";
+    }
+
     // ------------------------------------------------------------------ життєвий цикл
 
     private void onTick(TickEvent e) {

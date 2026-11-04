@@ -52,6 +52,7 @@ public class VoxelinScriptTest {
             command(ground);
             blockEvent(ground);
             sandbox();
+            editorSave();
             hang();
             crashAndReload();
             stopSaves();
@@ -130,6 +131,19 @@ public class VoxelinScriptTest {
     }
 
     static int count(int y) { int c = 0; for (int x = 0; x < 30; x++) for (int z = 0; z < 20; z++) if (w.getBlock(x, y, z).name().equals("voxelin:stone")) c++; return c; }
+
+    /** Вікно коду: «+ НОВИЙ» пише шаблон через ScriptHost.save - скрипт одразу запускається, команда працює; зміна тексту - перезапуск. */
+    static void editorSave() throws Exception {
+        g.scripts.save("tmpl", ScriptHost.template("tmpl"));
+        tickUntil(() -> { List<String> o = g.commands.execute(Sources.player("Тест"), w, null, "/tmpl"); return o.isEmpty() && saidHas("Привіт із скрипта tmpl"); }, 8000);
+        check(saidHas("Привіт із скрипта tmpl"), "шаблон нового скрипта працює: /tmpl");
+        check(g.scripts.ids().contains("tmpl") && g.scripts.info("tmpl").state == ScriptHost.State.RUNNING, "новий скрипт у списку й працює");
+        g.scripts.save("tmpl", ScriptHost.template("tmpl").replace("Привіт із скрипта", "Змінено:"));
+        tickUntil(() -> { g.commands.execute(Sources.player("Тест"), w, null, "/tmpl"); return saidHas("Змінено: tmpl"); }, 8000);
+        check(saidHas("Змінено: tmpl"), "збереження у вікні коду перезапускає скрипт");
+        g.scripts.stop("tmpl");
+        check(g.scripts.info("tmpl").state == ScriptHost.State.STOPPED, "кнопка ЗУПИНИТИ");
+    }
 
     static void command(int ground) throws Exception {
         List<String> out = g.commands.execute(Sources.player("Тест"), w, new long[]{3, ground + 1, 3}, "/pillar 4");

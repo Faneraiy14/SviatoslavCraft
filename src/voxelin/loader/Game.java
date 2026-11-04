@@ -123,6 +123,23 @@ public final class Game {
         return openAt(d, info);
     }
 
+    /**
+     * Дзеркало чужого світу для гри по мережі: тимчасова тека (видалити після close), той самий генератор (зерно, тип) - для
+     * висоти поверхні й біомів, палітра хоста, творчий режим без читів. Чанки дає хост (World.setFeed), істот не спавнить.
+     */
+    public World openMirror(String name, long seed, WorldInfo.Type type, List<String> palette) throws IOException {
+        if (palette.isEmpty() || !palette.get(0).equals(BlockRegistry.AIR)) throw new IOException("погана палітра хоста");
+        File d = java.nio.file.Files.createTempDirectory("voxelin-guest").toFile();
+        WorldInfo info = WorldInfo.create(d, WorldInfo.isValidName(name) ? name : "Гра по мережі", seed, type);
+        info.palette.clear();
+        info.palette.addAll(palette);
+        info.mode = WorldInfo.Mode.CREATIVE; info.cheats = false;
+        World w = openAt(d, info);
+        w.naturalSpawning = false;
+        w.setFeed((cx, cz) -> false); // до attach - нічого не генерувати
+        return w;
+    }
+
     private World openAt(File d, WorldInfo info) throws IOException {
         voxelin.core.gen.Generator gen = switch (info.type) {
             case END -> new voxelin.core.gen.EndGenerator(info.seed, blocks);

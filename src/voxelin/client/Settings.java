@@ -24,6 +24,8 @@ public final class Settings {
     public int minimap = 1, minimapZoom = 1;
     /** Fullbright (FL Client, клавіша B): найменше світло 0.85 - темряви нема. */
     public boolean fullbright;
+    /** Ім'я в грі по мережі (1-16 літер, цифр, _ або -). Остання адреса хоста - щоб не вводити знову. */
+    public String playerName = "Гравець", lastHost = "";
 
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
     private static int vol(int v) { return clamp(Math.round(v / 10f) * 10, 0, 100); }
@@ -36,6 +38,8 @@ public final class Settings {
         msaa = msaa >= 4 ? 4 : (msaa >= 2 ? 2 : 0);
         if (Float.isNaN(mouseSensitivity)) mouseSensitivity = 0.12f;
         volMaster = vol(volMaster); volBlocks = vol(volBlocks); volMobs = vol(volMobs); volAmbient = vol(volAmbient); volUi = vol(volUi);
+        if (voxelin.net.Protocol.cleanName(playerName) == null) playerName = "Гравець";
+        if (voxelin.net.Protocol.parseAddress(lastHost) == null) lastHost = "";
         minimap = clamp(minimap, 0, 2); minimapZoom = clamp(minimapZoom, 0, Minimap.ZOOMS.length - 1);
         mouseSensitivity = Math.max(0.04f, Math.min(0.30f, Math.round(mouseSensitivity * 100) / 100f));
     }
@@ -56,6 +60,7 @@ public final class Settings {
         s.volMaster = intOf(p, "volume.master", s.volMaster); s.volBlocks = intOf(p, "volume.blocks", s.volBlocks); s.volMobs = intOf(p, "volume.mobs", s.volMobs);
         s.volAmbient = intOf(p, "volume.ambient", s.volAmbient); s.volUi = intOf(p, "volume.ui", s.volUi);
         s.fullbright = "true".equalsIgnoreCase(p.getProperty("fullbright", "false").trim());
+        s.playerName = p.getProperty("player.name", s.playerName).trim(); s.lastHost = p.getProperty("net.host", "").trim();
         s.minimap = intOf(p, "minimap", s.minimap); s.minimapZoom = intOf(p, "minimap.zoom", s.minimapZoom);
         s.clampAll();
         return s;
@@ -78,6 +83,7 @@ public final class Settings {
         p.setProperty("volume.master", String.valueOf(volMaster)); p.setProperty("volume.blocks", String.valueOf(volBlocks)); p.setProperty("volume.mobs", String.valueOf(volMobs));
         p.setProperty("volume.ambient", String.valueOf(volAmbient)); p.setProperty("volume.ui", String.valueOf(volUi));
         p.setProperty("fullbright", String.valueOf(fullbright)); p.setProperty("minimap", String.valueOf(minimap)); p.setProperty("minimap.zoom", String.valueOf(minimapZoom));
+        p.setProperty("player.name", playerName); p.setProperty("net.host", lastHost);
         try {
             File dir = f.getAbsoluteFile().getParentFile();
             if (dir != null && !dir.isDirectory()) dir.mkdirs();

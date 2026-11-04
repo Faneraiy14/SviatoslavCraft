@@ -181,6 +181,14 @@ public class VoxelinLookTest {
         check(hd != null && hd[64 * 3 + 5] == 0xFFFF0000 && hd[64 * 3 + 30] == 0xFF0000FF, "плащ 128x64 зменшено до 64x32");
         check(SkinImages.readCape(png(capes, "bad.png", 64, 64, (x, y) -> -1)) == null, "плащ 64x64 - ні");
         cosmetics(dir);
+        // вигляд для мережі: свої файли не їдуть, сміття з мережі - типове
+        PlayerLook mine = new PlayerLook();
+        mine.skin = "file:me.png"; mine.cape = "seam"; mine.head = BuiltinCosmetics.IDS.get(0); mine.legs = "file:boots";
+        PlayerLook net = PlayerLook.fromNet(mine.toNet());
+        check(net.skin.equals("builtin:traveler") && net.cape.equals("seam") && net.head.equals(mine.head) && net.legs.equals("none"), "вигляд через мережу: " + mine.toNet());
+        PlayerLook evil = PlayerLook.fromNet("file:../../x|file:a.png|file:/etc|zzz|builtin:nope|");
+        check(evil.skin.equals("builtin:traveler") && evil.cape.equals("none") && evil.head.equals("none") && evil.arms.equals("none") && evil.legs.equals("none"), "сміття з мережі - типовий вигляд");
+        check(PlayerLook.fromNet(null).equals(new PlayerLook()) && PlayerLook.fromNet("a|b").equals(new PlayerLook()), "порожнє й неповне");
         System.out.println("VoxelinLookTest: " + n + " перевірок OK");
     }
 }

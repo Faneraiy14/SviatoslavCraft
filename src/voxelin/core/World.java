@@ -94,6 +94,65 @@ public final class World implements WorldAccess {
 
     public void setListener(Listener l) { listener = l; }
 
+    // ------------------------------------------------------------------ мережа: дзеркало світу на гості, спостерігачі й центри гостей на хості
+
+    /** Звідки дзеркало (світ гостя) бере чанки: замість диска й генератора - запит хосту. false - зараз не просити (спробувати пізніше). */
+    public interface ChunkFeed { boolean request(long cx, long cz); }
+    /** Хтось (сервер мережевої гри) хоче знати про кожну зміну блока. Головний потік. */
+    public interface BlockWatcher { void changed(long x, int y, long z); }
+    private volatile ChunkFeed feed;
+    private final List<BlockWatcher> watchers = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** Додаткові центри завантаження {cx, cz, радіус} - гості мережевої гри; світ тримає чанки й довкола них. */
+    private volatile List<long[]> extraCenters = List.of();
+
+    /** Зробити світ дзеркалом: чанки лише з feed (хост), без генерації й диска. */
+    public void setFeed(ChunkFeed f) { feed = f; }
+    /** Дзеркало чужого світу (гра по мережі): не тікає, не зберігається, блоки міняє хост. */
+    public boolean remote() { return feed != null; }
+    public void addWatcher(BlockWatcher w) { watchers.add(w); }
+    public void removeWatcher(BlockWatcher w) { watchers.remove(w); }
+    public void setExtraCenters(List<long[]> centers) { extraCenters = List.copyOf(centers); }
+
+    /** Дані чанка від хоста (формат RegionStorage, номери палітри хоста = палітра цього світу). Розпаковка й світло - у фоні. */
+    public void deliver(long cx, long cz, byte[] data) {
+        ChunkPos k = new ChunkPos(cx, cz);
+        if (closed || !pending.contains(k)) return; // не просили (чи вже вивантажили) - ігноруємо
+        genPool.execute(() -> {
+            try {
+                Chunk c = RegionStorage.decode(cx, cz, data, p2rt);
+                light.initLocal(c);
+                ready.add(c);
+            } catch (Throwable t) {
+                System.out.println("[Voxelin] ⚠️ чанк від хоста " + cx + "," + cz + ": " + t);
+                pending.remove(k);
+            }
+        });
+    }
+
+    /** Хост не дав чанк (далеко) - можна попросити знову. */
+    public void undeliver(long cx, long cz) { pending.remove(new ChunkPos(cx, cz)); }
+
+    /** Блок від хоста (номер палітри): без подій, бюджетів і реакцій - лише стан, світло й перемальовування. */
+    public void setRemote(long x, int y, long z, int pal) {
+        if (closed || y < 0 || y >= Chunk.HEIGHT) return;
+        Chunk c = chunks.get(new ChunkPos(x >> 4, z >> 4));
+        if (c == null) return;
+        int id = pal >= 0 && pal < p2rt.length ? p2rt[pal] : blocks.unknown().id;
+        int old = c.get((int) (x & 15), y, (int) (z & 15));
+        if (old == id) return;
+        c.set((int) (x & 15), y, (int) (z & 15), id);
+        c.modified = false;
+        light.blockChanged(c, (int) (x & 15), y, (int) (z & 15), old, id);
+        if (listener != null) listener.blockChanged(x, y, z);
+    }
+
+    /** Чанк у мережевий формат (номери палітри цього світу). Головний потік. */
+    public byte[] encodeChunk(Chunk c) { return RegionStorage.encode(c, rt2p); }
+    /** Номер палітри світу для id блока цього запуску. */
+    public int paletteOf(int id) { return id >= 0 && id < rt2p.length ? rt2p[id] : 0; }
+
+    private void notifyWatchers(long x, int y, long z) { for (BlockWatcher w : watchers) w.changed(x, y, z); }
+
     // ------------------------------------------------------------------ час доби й здоров'я гравця
 
     @Override public long time() { return info.time; }
@@ -265,7 +324,7 @@ public final class World implements WorldAccess {
                     1 / 16.0, 0, 12 / 16.0, 4 / 16.0, 12 / 16.0, 15 / 16.0, 12 / 16.0, 0, 12 / 16.0, 15 / 16.0, 12 / 16.0, 15 / 16.0});
 
     /** Вміст клітинки змінився без зміни блока (дошки): перебудувати геометрію. */
-    void changed(long x, int y, long z) { Chunk c = chunks.get(new ChunkPos(x >> 4, z >> 4)); if (c != null) c.modified = true; if (listener != null) listener.blockChanged(x, y, z); }
+    void changed(long x, int y, long z) { Chunk c = chunks.get(new ChunkPos(x >> 4, z >> 4)); if (c != null) c.modified = true; if (listener != null) listener.blockChanged(x, y, z); if (!watchers.isEmpty()) notifyWatchers(x, y, z); }
 
     /** Предмет дошки для блока-клітинки дошок: voxelin:oak_boards -> voxelin:oak_board. */
     public static String boardItem(BlockType b) { return b.name.endsWith("_boards") ? b.name.substring(0, b.name.length() - 1) : b.name; }
@@ -401,6 +460,9 @@ public final class World implements WorldAccess {
     }
 
     /** Прибрати всіх істот (type == null) або лише цього виду, без дропу. Повертає, скільки. */
+    /** Прибрати істоту без смерті й дропу (дзеркало мережевої гри: хост її більше не показує). */
+    public boolean removeMob(Mob m) { return mobs.remove(m); }
+
     public int killAll(MobType type) {
         int n = 0;
         for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) { Mob m = it.next(); if (type == null || m.type == type) { it.remove(); n++; } }
@@ -713,6 +775,7 @@ public final class World implements WorldAccess {
         if (!blockEntities.isEmpty()) blockEntityRemovedCheck(x, y, z, nb);
         if (batchDepth > 0) batchChunks.add(c); else light.blockChanged(c, (int) (x & 15), y, (int) (z & 15), old, nb.id);
         if (listener != null) listener.blockChanged(x, y, z);
+        if (!watchers.isEmpty()) notifyWatchers(x, y, z);
         if (boards != null && old != nb.id && boards.isBoards(blocks.get(old))) boards.cleared(x, y, z);
         if (infect) infection.start(x, y, z);
         if (nb.name.equals(Guard.HEAD) || nb.name.equals(Guard.IRON)) Guard.tryBuild(this, x, y, z); // Т із залізних блоків + лампа = Вартовий
@@ -754,21 +817,29 @@ public final class World implements WorldAccess {
             processPending(c);
             if (listener != null) listener.chunkLoaded(c);
         }
-        // замовлення від найближчих до дальніх, не більше 2 черг на потік
+        // замовлення від найближчих до дальніх, не більше 2 черг на потік; центри: гравець і гості мережевої гри
+        List<long[]> centers = new ArrayList<>(1 + extraCenters.size());
+        centers.add(new long[]{centerCx, centerCz, radius});
+        centers.addAll(extraCenters);
         if (pending.size() < 16) {
             List<long[]> want = new ArrayList<>();
-            for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
-                if (dx * dx + dz * dz > radius * radius + radius || !inRange(centerCx + dx, centerCz + dz)) continue;
-                ChunkPos k = new ChunkPos(centerCx + dx, centerCz + dz);
-                if (!chunks.containsKey(k) && !pending.contains(k)) want.add(new long[]{dx * dx + dz * dz, centerCx + dx, centerCz + dz});
+            Set<ChunkPos> seen = new HashSet<>();
+            for (long[] ce : centers) {
+                int r = (int) ce[2];
+                for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) {
+                    if (dx * dx + dz * dz > r * r + r || !inRange(ce[0] + dx, ce[1] + dz)) continue;
+                    ChunkPos k = new ChunkPos(ce[0] + dx, ce[1] + dz);
+                    if (!chunks.containsKey(k) && !pending.contains(k) && seen.add(k)) want.add(new long[]{dx * dx + dz * dz, ce[0] + dx, ce[1] + dz});
+                }
             }
             want.sort(Comparator.comparingLong(a -> a[0]));
             for (long[] w : want) { if (pending.size() >= 16) break; request(w[1], w[2]); }
         }
-        int keep = radius + 2;
         for (Iterator<Chunk> it = chunks.values().iterator(); it.hasNext(); ) {
             Chunk c = it.next();
-            if (Math.abs(c.cx - centerCx) <= keep && Math.abs(c.cz - centerCz) <= keep) continue;
+            boolean near = false;
+            for (long[] ce : centers) if (Math.abs(c.cx - ce[0]) <= ce[2] + 2 && Math.abs(c.cz - ce[1]) <= ce[2] + 2) { near = true; break; }
+            if (near) continue;
             it.remove();
             if (listener != null) listener.chunkUnloaded(c);
             LightEngine.disconnect(c);
@@ -779,6 +850,8 @@ public final class World implements WorldAccess {
 
     private void request(long cx, long cz) {
         ChunkPos k = new ChunkPos(cx, cz);
+        ChunkFeed f = feed;
+        if (f != null) { if (!pending.contains(k) && f.request(cx, cz)) pending.add(k); return; } // дзеркало: чанк надішле хост
         if (!pending.add(k)) return;
         genPool.execute(() -> {
             try {

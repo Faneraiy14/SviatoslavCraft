@@ -42,8 +42,11 @@ public final class Voxelin {
         String autoWorld, screenshot, benchOut = "bench-result.json";
         boolean autoFlat, debug, freeze;
         String menuScreen;
+        /** dev: --lan - одразу відкрити світ для мережі (код - у stdout); --join АДРЕСА/КОД і --name ІМ'Я - зайти гостем без меню. */
+        boolean lan;
+        String join, name;
         /** Автоматичні перевірки (бенчмарк, знімок, заморожений гравець, показ меню): не захоплювати курсор, не відбирати фокус, не слухати мишу. */
-        boolean quiet() { return benchSeconds > 0 || screenshot != null || freeze || menuScreen != null; }
+        boolean quiet() { return benchSeconds > 0 || screenshot != null || freeze || menuScreen != null || lan; }
         double benchSeconds;
         boolean hasTp;
         long tpX, tpZ;
@@ -74,6 +77,9 @@ public final class Voxelin {
                         case "--debug" -> o.debug = true;
                         case "--freeze" -> o.freeze = true;
                         case "--menu" -> o.menuScreen = a[++i];
+                        case "--lan" -> o.lan = true;
+                        case "--join" -> o.join = a[++i];
+                        case "--name" -> o.name = a[++i];
                         case "--size" -> { String[] s = a[++i].split("x"); o.width = Math.max(320, Integer.parseInt(s[0])); o.height = Math.max(240, Integer.parseInt(s[1])); }
                         case "--seed" -> o.seed = Long.parseLong(a[++i]);
                         case "--autoworld" -> { String s = a[++i]; o.autoFlat = s.endsWith(":flat"); o.autoWorld = o.autoFlat ? s.substring(0, s.length() - 5) : s; }
@@ -204,6 +210,12 @@ public final class Voxelin {
         startAudio();
         gui.onClick = () -> audio.play("voxelin:ui.click", null, 1f, 1f, voxelin.client.audio.AudioEngine.Cat.UI);
         if (opts.autoWorld != null) autoWorld();
+        if (opts.join != null) { // dev: адреса/код
+            String[] j = opts.join.split("/");
+            Object[] addr = voxelin.net.Protocol.parseAddress(j[0]);
+            try { joinGame(voxelin.net.NetClient.connect((String) addr[0], (int) addr[1], opts.name != null ? opts.name : settings.playerName, j.length > 1 ? j[1] : "", look.toNet())); }
+            catch (IOException | RuntimeException e) { System.out.println("[Voxelin] ⚠️ --join: " + e.getMessage()); running = false; }
+        }
 
         long last = System.nanoTime(), fpsAt = last;
         double acc = 0;
@@ -267,7 +279,7 @@ public final class Voxelin {
         switch (state) {
             case MENU -> {
                 if (opts.menuScreen != null && frames == 2) { // dev: --menu worlds|create|create-more|rename
-                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "create-more" -> { menus.show(Menus.Screen.CREATE); menus.openMore(); } case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); case "sound" -> menus.show(Menus.Screen.SOUND); case "skin" -> menus.show(Menus.Screen.SKIN); case "import" -> menus.show(Menus.Screen.IMPORT); default -> { } }
+                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "create-more" -> { menus.show(Menus.Screen.CREATE); menus.openMore(); } case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); case "sound" -> menus.show(Menus.Screen.SOUND); case "skin" -> menus.show(Menus.Screen.SKIN); case "import" -> menus.show(Menus.Screen.IMPORT); case "join" -> menus.show(Menus.Screen.JOIN); default -> { } }
                 }
                 glViewport(0, 0, window.fbWidth(), window.fbHeight());
                 glClearColor(0.08f, 0.11f, 0.22f, 1f);
@@ -328,6 +340,34 @@ public final class Voxelin {
         }
     }
 
+    /** Гість мережевої гри (рукостискання вже було): дзеркало світу хоста, далі - звичайне завантаження. */
+    private voxelin.net.NetClient loadingNet;
+
+    void joinGame(voxelin.net.NetClient c) {
+        refreshTextures();
+        try {
+            voxelin.net.NetClient.Welcome w = c.welcome;
+            World mirror = game.openMirror(w.worldName(), w.seed(), w.type(), w.palette());
+            mirror.info.setPlayer(w.spawn(), w.yaw(), w.pitch());
+            c.attach(mirror);
+            loadingNet = c;
+            beginLoadingWorld(mirror);
+        } catch (IOException | RuntimeException e) {
+            c.close();
+            System.out.println("[Voxelin] ⚠️ гра по мережі: " + e);
+            state = State.MENU; menus.show(Menus.Screen.JOIN); menus.message("Не вдалось почати гру: " + e.getMessage(), false);
+        }
+    }
+
+    /** Закрити світ, що вантажився (і з'єднання гостя). */
+    private void dropLoading() {
+        if (loading == null) return;
+        loading.close();
+        if (loading.remote()) voxelin.core.WorldArchive.deleteTree(loading.dir);
+        if (loadingNet != null) { loadingNet.close(); loadingNet = null; }
+        loading = null;
+    }
+
     private void beginLoadingWorld(World w) {
         loading = w;
         WorldInfo i = loading.info;
@@ -343,6 +383,15 @@ public final class Voxelin {
 
     private void loadingFrame() {
         final int r = 2;
+        if (loadingNet != null) {
+            loadingNet.poll();
+            if (loadingNet.kicked() != null) {
+                String why = loadingNet.kicked();
+                dropLoading();
+                state = State.MENU; menus.show(Menus.Screen.JOIN); menus.message("Гру по мережі завершено: " + why, false);
+                return;
+            }
+        }
         loading.update(loadCx, loadCz, r + 1);
         int have = 0, need = 0;
         for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) {
@@ -361,33 +410,36 @@ public final class Voxelin {
         gui.end();
         if (have >= need) {
             try {
-                play = new PlayScreen(this, loading);
+                play = new PlayScreen(this, loading, loadingNet);
+                loadingNet = null;
                 state = State.PLAYING;
                 input.clearPressed();
             } catch (Throwable t) {
                 t.printStackTrace();
-                loading.close(); loading = null;
+                dropLoading();
                 state = State.MENU; menus.show(Menus.Screen.WORLDS);
             }
         } else if (System.currentTimeMillis() - loadingSince > 90_000) {
             System.out.println("[Voxelin] ⚠️ світ не завантажився за 90 с");
-            loading.close(); loading = null;
+            dropLoading();
             state = State.MENU; menus.show(Menus.Screen.WORLDS);
         }
     }
 
     private void leaveWorld() {
-        String name = play.world.info.name;
+        String name = play.world.info.name, why = play.endReason;
+        boolean guest = play.net != null;
         play.close();
         play = null; loading = null;
         if (opts.autoWorld != null || opts.screenshot != null || opts.benchSeconds > 0) { running = false; return; }
         state = State.MENU;
+        if (guest) { menus.show(Menus.Screen.JOIN); if (why != null) menus.message(why, false); return; }
         menus.show(Menus.Screen.WORLDS);
         menus.select(name);
     }
 
     private void shutdown() {
-        try { if (play != null) { play.close(); play = null; } else if (loading != null) { loading.close(); loading = null; } }
+        try { if (play != null) { play.close(); play = null; } else dropLoading(); }
         catch (Throwable t) { System.out.println("[Voxelin] ⚠️ при закритті: " + t); }
         if (audio != null) { if (opts.recordAudio != null) audio.saveRecording(opts.recordAudio); audio.close(); }
         if (game != null) game.close();

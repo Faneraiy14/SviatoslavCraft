@@ -73,6 +73,26 @@ public final class PlayerLook {
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати " + f + ": " + e); }
     }
 
+    /** Для мережі: «скін|плащ|голова|тіло|руки|ноги». Свої файли (file:, launcher) на чужому комп'ютері не існують - замість них типові. */
+    public String toNet() {
+        String sk = skin.startsWith("builtin:") ? skin : "builtin:traveler", cp = cape.startsWith("file:") ? "none" : cape;
+        return String.join("|", sk, cp, net(head), net(body), net(arms), net(legs));
+    }
+
+    private static String net(String c) { return c.startsWith("builtin:") ? c : "none"; }
+
+    /** З мережі: недовірливий рядок -> допустимий вигляд (невідоме - типове, файли - не з мережі). */
+    public static PlayerLook fromNet(String s) {
+        PlayerLook l = new PlayerLook();
+        String[] p = s == null ? new String[0] : s.split("\\|", -1);
+        if (p.length == 6) { l.skin = p[0]; l.cape = p[1]; l.head = p[2]; l.body = p[3]; l.arms = p[4]; l.legs = p[5]; }
+        if (!l.skin.startsWith("builtin:")) l.skin = "builtin:traveler";
+        if (l.cape.startsWith("file:")) l.cape = "none";
+        l.head = net(l.head); l.body = net(l.body); l.arms = net(l.arms); l.legs = net(l.legs);
+        l.clamp();
+        return l;
+    }
+
     public PlayerLook copy() { PlayerLook l = new PlayerLook(); l.skin = skin; l.cape = cape; l.head = head; l.body = body; l.arms = arms; l.legs = legs; return l; }
 
     /** Косметика в слоті (Cosmetic.SLOTS). */

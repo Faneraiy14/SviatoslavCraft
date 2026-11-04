@@ -12,7 +12,7 @@ import static org.lwjgl.glfw.GLFW.*;
 
 /** Меню: головне, список світів, створення й перейменування світу. Малює й обробляє ввід у кадрі (Gui - негайний режим). */
 final class Menus {
-    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS, SOUND, SKIN, IMPORT }
+    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS, SOUND, SKIN, IMPORT, JOIN }
 
     private final Voxelin v;
     Screen screen = Screen.MAIN;
@@ -39,8 +39,12 @@ final class Menus {
         if (s == Screen.IMPORT) { archives = voxelin.core.WorldArchive.list(shareDir()); importSel = 0; }
         if (s == Screen.SKIN) skin = new SkinScreen(v);
         if (s == Screen.CREATE) { flat = false; cataclysms = WorldInfo.Cataclysms.ON; creative = cheats = more = false; rules.clear(); seedText = ""; v.input.beginText(autoName(), false); }
+        if (s == Screen.JOIN) { joinName = v.settings.playerName; joinHost = v.settings.lastHost; joinCode = ""; joinField = joinHost.isEmpty() ? 1 : 2; joinBusy = false; focusJoin(joinField); }
         if (s == Screen.RENAME) { renameFrom = selectedName(); v.input.beginText(renameFrom == null ? "" : renameFrom, false); }
     }
+
+    /** Повідомлення внизу екрана (після show). */
+    void message(String s, boolean ok) { status = s; statusOk = ok; }
 
     void refresh() {
         worlds = v.game.listWorlds();
@@ -80,6 +84,7 @@ final class Menus {
             case SOUND -> sound(g);
             case SKIN -> { if (!skin.draw(g)) show(Screen.MAIN); }
             case IMPORT -> importScreen(g);
+            case JOIN -> join(g);
         }
         Gui.text("Voxelin " + Voxelin.VERSION, 12, Gui.H - 22, 1.8f, 0.55f, 0.6f, 0.7f);
     }
@@ -131,9 +136,10 @@ final class Menus {
         }
         if (g.button("ОДИНОЧНА ГРА", x, y, w, 64) || (v.input.pressed(GLFW_KEY_ENTER) && last == null)) show(Screen.WORLDS);
         if (v.input.pressed(GLFW_KEY_ENTER) && last != null) { v.beginLoading(last); return; }
-        if (g.button("НАЛАШТУВАННЯ", x, y + 80, 150, 56)) { show(Screen.SETTINGS); return; }
-        if (g.button("СКІН", x + 160, y + 80, 115, 56)) { show(Screen.SKIN); return; }
-        if (g.button("ВИХІД", x + 285, y + 80, 115, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) v.quit();
+        if (g.button("ГРА ПО МЕРЕЖІ", x, y + 80, w, 56)) { show(Screen.JOIN); return; }
+        if (g.button("НАЛАШТУВАННЯ", x, y + 148, 175, 56)) { show(Screen.SETTINGS); return; }
+        if (g.button("СКІН", x + 185, y + 148, 100, 56)) { show(Screen.SKIN); return; }
+        if (g.button("ВИХІД", x + 295, y + 148, 105, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) v.quit();
         Gui.text("Enter - " + (last != null ? "продовжити" : "грати") + "   Esc - вихід", Gui.W - 330, Gui.H - 22, 1.6f, 0.55f, 0.6f, 0.75f);
     }
 
@@ -258,6 +264,67 @@ final class Menus {
         }
         if (g.button("НАЗАД", 645, 560, 290, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { show(Screen.WORLDS); return; }
         if (!status.isEmpty()) Gui.textCentered(status, Gui.W / 2f, 650, 2f, statusOk ? 0.5f : 1f, statusOk ? 0.95f : 0.5f, 0.4f);
+    }
+
+    // ------------------------------------------------------------------ гра по мережі (гість)
+
+    private String joinName = "", joinHost = "", joinCode = "";
+    private int joinField;
+    private volatile boolean joinBusy;
+    private volatile voxelin.net.NetClient joined;
+    private volatile String joinError;
+
+    /** Поле вводу: 0 - ім'я, 1 - адреса, 2 - код. Текст попереднього поля зберігається. */
+    private void focusJoin(int f) {
+        joinField = f;
+        v.input.beginText(f == 0 ? joinName : f == 1 ? joinHost : joinCode, f != 0); // адреса й код - будь-які символи (крапки, двокрапка)
+    }
+
+    private void join(Gui g) {
+        voxelin.net.NetClient ok = joined;
+        if (ok != null) { joined = null; joinBusy = false; v.joinGame(ok); return; }
+        if (joinError != null) { status = joinError; statusOk = false; joinError = null; joinBusy = false; }
+        v.input.updateText();
+        String cur = v.input.text();
+        if (joinField == 0) joinName = cur; else if (joinField == 1) joinHost = cur; else joinCode = cur.toUpperCase(java.util.Locale.ROOT);
+        Gui.textCentered("ГРА ПО МЕРЕЖІ", Gui.W / 2f, 70, 4.5f, 1f, 0.85f, 0.3f);
+        Gui.textCentered("Хост: у грі Esc -> ВІДКРИТИ ДЛЯ МЕРЕЖІ - там код і адреса. Гості будують у творчому режимі.", Gui.W / 2f, 130, 1.8f, 0.75f, 0.78f, 0.9f);
+        String[] labels = {"Твоє ім'я", "Адреса хоста (IP або IP:порт)", "Код запрошення"};
+        String[] vals = {joinName, joinHost, joinCode};
+        for (int i = 0; i < 3; i++) {
+            float fy = 190 + i * 112;
+            Gui.text(labels[i], 390, fy, 2.2f, 0.8f, 0.8f, 0.85f);
+            boolean act = joinField == i;
+            Gui.rect(390, fy + 30, 500, 56, 0.05f, 0.05f, 0.1f, 1f);
+            Gui.frame(390, fy + 30, 500, 56, 2, act ? 1f : 0.45f, act ? 0.85f : 0.45f, act ? 0.3f : 0.5f);
+            String t = vals[i] + (act && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "");
+            Gui.text(t, 404, fy + 46, Math.min(3.2f, 470 / Math.max(1, Gui.textWidth(t, 1))), 1, 1, 1);
+            if (!act && !joinBusy && g.over(390, fy + 30, 500, 56) && v.input.clicked(GLFW_MOUSE_BUTTON_LEFT)) focusJoin(i);
+        }
+        if (v.input.pressed(GLFW_KEY_TAB) && !joinBusy) focusJoin((joinField + 1) % 3);
+        boolean go = g.button(joinBusy ? "З'ЄДНАННЯ..." : "ПРИЄДНАТИСЯ", 390, 540, 245, 60, false, !joinBusy) || (v.input.pressed(GLFW_KEY_ENTER) && !joinBusy);
+        if (g.button("НАЗАД", 645, 540, 245, 60, false, !joinBusy) || (v.input.pressed(GLFW_KEY_ESCAPE) && !joinBusy)) { show(Screen.MAIN); return; }
+        if (go) connect();
+        if (!status.isEmpty()) Gui.textCentered(status, Gui.W / 2f, 630, Math.min(2f, 1240 / Gui.textWidth(status, 1)), statusOk ? 0.5f : 1f, statusOk ? 0.95f : 0.5f, 0.4f);
+    }
+
+    /** Перевірити поля й з'єднатись у фоні (рукостискання до ~10 с не морозить меню). */
+    private void connect() {
+        String name = voxelin.net.Protocol.cleanName(joinName);
+        Object[] addr = voxelin.net.Protocol.parseAddress(joinHost);
+        String code = joinCode.trim();
+        if (name == null) { status = "Ім'я: 1-16 літер, цифр, _ або -"; statusOk = false; focusJoin(0); return; }
+        if (addr == null) { status = "Адреса: напр. 192.168.1.5 або 192.168.1.5:24555"; statusOk = false; focusJoin(1); return; }
+        if (code.length() != voxelin.net.Protocol.CODE_LEN) { status = "Код - " + voxelin.net.Protocol.CODE_LEN + " символів (хост бачить його в меню паузи)"; statusOk = false; focusJoin(2); return; }
+        v.settings.playerName = name; v.settings.lastHost = joinHost.trim(); v.settings.save(v.settingsFile);
+        joinBusy = true; status = "З'єднання з " + addr[0] + "..."; statusOk = true;
+        String look = v.look.toNet();
+        Thread t = new Thread(() -> {
+            try { joined = voxelin.net.NetClient.connect((String) addr[0], (int) addr[1], name, code, look); }
+            catch (java.io.IOException | RuntimeException e) { joinError = "Не вдалось: " + e.getMessage(); }
+        }, "voxelin-join");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void play() { String n = selectedName(); if (n != null) v.beginLoading(n); }

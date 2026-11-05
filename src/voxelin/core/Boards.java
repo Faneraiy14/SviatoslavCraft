@@ -120,9 +120,7 @@ public final class Boards {
         try {
             StringBuilder sb = new StringBuilder();
             for (Map.Entry<BlockPos, Long> e : masks.entrySet()) sb.append(e.getKey().x()).append(' ').append(e.getKey().y()).append(' ').append(e.getKey().z()).append(' ').append(Long.toHexString(e.getValue())).append('\n');
-            File tmp = new File(w.dir, "boards.dat.tmp");
-            Files.write(tmp.toPath(), sb.toString().getBytes(StandardCharsets.UTF_8));
-            Files2.replace(tmp, file());
+            w.writeLater(file(), sb.toString());
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати дошки: " + e); }
     }
 

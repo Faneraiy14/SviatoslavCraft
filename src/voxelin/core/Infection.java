@@ -411,9 +411,7 @@ public final class Infection {
         try {
             StringBuilder sb = new StringBuilder();
             for (long[] p : growth) sb.append(p[0]).append(' ').append(p[1]).append(' ').append(p[2]).append('\n');
-            File tmp = new File(w.dir, "infection.dat.tmp");
-            Files.write(tmp.toPath(), sb.toString().getBytes(StandardCharsets.UTF_8));
-            Files2.replace(tmp, file());
+            w.writeLater(file(), sb.toString());
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати зараження: " + e); }
     }
 
@@ -425,9 +423,7 @@ public final class Infection {
             StringBuilder sb = new StringBuilder();
             for (long[] b : blight) sb.append(b[0]).append(' ').append(b[1]).append(' ').append(b[2]).append(' ')
                     .append(w.blocks.get((int) b[3]).name).append(' ').append(w.blocks.get((int) b[4]).name).append('\n');
-            File tmp = new File(w.dir, "blight.dat.tmp");
-            Files.write(tmp.toPath(), sb.toString().getBytes(StandardCharsets.UTF_8));
-            Files2.replace(tmp, f);
+            w.writeLater(f, sb.toString());
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати мутації: " + e); }
     }
 

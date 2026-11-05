@@ -195,6 +195,7 @@ final class PlayScreen {
         say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера, M - мінікарта, C - зум, K - код.");
         if (v.opts.lan && net == null) { lanSurvival = v.opts.lanSurvival; openLan(); if (server != null) System.out.println("[net] code " + server.code + " port " + server.port); }
         if (net != null && net.welcome.survival()) net.onClose = () -> net.sendInv(inv); // речі гостя лишаються в хоста до наступної гри
+        if (net == null) startWorldThread();
         if (net != null) say("Гра по мережі: світ «" + net.welcome.worldName() + "» гравця " + net.welcome.hostName() + (net.welcome.survival() ? ". Режим - виживання: істоти хоста нападають і на тебе; речі хост зберігає до наступної гри (при смерті не губляться); T - чат." : ". Ти будівельник у творчому режимі; T - чат."));
     }
 
@@ -290,7 +291,71 @@ final class PlayScreen {
 
     // ------------------------------------------------------------------ тік
 
+    /** Тік гравця (головний потік) - під замком світу. */
     void tick() {
+        world.lock.lock();
+        try { tickLocked(); } finally { world.lock.unlock(); }
+    }
+
+    // ------------------------------------------------------------------ потік світу
+
+    /** Світ (істоти, предмети, печі, мережевий хост, скрипти) тікає тут, 20 разів на секунду, паралельно з малюванням. Гість світу не тікає. */
+    private Thread worldThread;
+    private volatile boolean worldRun;
+    /** Скільки тривав останній тік світу (нс) - для F3 і тесту швидкодії. */
+    volatile long worldTickNs;
+
+    private void startWorldThread() {
+        worldRun = true;
+        worldThread = new Thread(this::worldLoop, "voxelin-world");
+        worldThread.setDaemon(true);
+        worldThread.start();
+    }
+
+    private void stopWorldThread() {
+        Thread t = worldThread;
+        if (t == null) return;
+        worldRun = false;
+        java.util.concurrent.locks.LockSupport.unpark(t);
+        boolean held = world.lock.isHeldByCurrentThread();
+        int holds = world.lock.getHoldCount();
+        for (int i = 0; i < holds; i++) world.lock.unlock(); // потік світу міг чекати на замок
+        try { t.join(5000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        for (int i = 0; i < holds; i++) world.lock.lock();
+        if (held && t.isAlive()) System.out.println("[Voxelin] ⚠️ потік світу не зупинився за 5 с");
+        worldThread = null;
+    }
+
+    private void worldLoop() {
+        final long step = (long) (Voxelin.TICK * 1e9);
+        long next = System.nanoTime();
+        int errors = 0;
+        while (worldRun) {
+            long now = System.nanoTime();
+            if (now < next) { java.util.concurrent.locks.LockSupport.parkNanos(next - now); continue; }
+            next += step;
+            if (now - next > 5 * step) next = now; // відстали (довгий тік, сон ноутбука) - не наздоганяємо пачкою
+            world.lock.lock();
+            try {
+                if (!worldRun) break;
+                long t0 = System.nanoTime();
+                worldStep();
+                worldTickNs = System.nanoTime() - t0;
+                errors = 0;
+            } catch (Throwable e) {
+                if (errors++ < 3) { System.out.println("[Voxelin] ⚠️ тік світу: " + e); e.printStackTrace(System.out); }
+            } finally { world.lock.unlock(); }
+        }
+    }
+
+    /** Один тік світу (під замком). */
+    private void worldStep() {
+        if (paused && net == null && server == null) return; // одиночна гра: пауза зупиняє світ (у мережевій - ні)
+        world.tick();
+        if (server != null) { server.tick(player.pos, player.yaw, player.pitch); hostView(); }
+    }
+
+    private void tickLocked() {
         if (paused && net == null && server == null) return; // одиночна гра: пауза зупиняє світ (у мережевій - ні)
         ticks++;
         Input in = v.input;
@@ -344,8 +409,7 @@ final class PlayScreen {
         if (ticks % 20 == 0 && net == null && !world.creative() && !vt.dead()) checkGoals();
         if (net != null) { netTick(); return; }
         world.update(player.pos.cx, player.pos.cz, rend.renderDistance + 1);
-        world.tick();
-        if (server != null) { server.tick(player.pos, player.yaw, player.pitch); hostView(); }
+        if (worldThread == null) worldStep(); // окремого потоку нема - тікаємо тут
     }
 
     /** «Шлях»: нові досягнуті цілі - у чат; перше проходження - титри. */
@@ -367,7 +431,13 @@ final class PlayScreen {
     // ------------------------------------------------------------------ кадр
 
     /** Повертає false, коли треба вийти зі світу в меню. */
+    /** Кадр під замком світу; ландшафт малюється без замка (світ тим часом тікає). */
     boolean frame(float alpha) {
+        world.lock.lock();
+        try { return frameLocked(alpha); } finally { world.lock.unlock(); }
+    }
+
+    private boolean frameLocked(float alpha) {
         Input in = v.input;
         if (leaving) return false;
         if (invOpen && openedBlock && !openedKind.equals(world.blocks.get(Math.max(0, world.blockId(openedX, openedY, openedZ))).interact)) closeInventory(); // блок зламано/зник
@@ -471,9 +541,14 @@ final class PlayScreen {
         glClearColor(rend.fogColor[0], rend.fogColor[1], rend.fogColor[2], 1f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         long t0 = System.nanoTime();
-        rend.update(cam);
-        long t1 = System.nanoTime();
-        rend.render(cam);
+        int holds = world.lock.getHoldCount();
+        for (int i = 0; i < holds; i++) world.lock.unlock(); // ландшафт: лише меші й чанки (ConcurrentHashMap) - світ може тікати
+        long t1;
+        try {
+            rend.update(cam);
+            t1 = System.nanoTime();
+            rend.render(cam);
+        } finally { for (int i = 0; i < holds; i++) world.lock.lock(); }
         overlay3d();
         long t2 = System.nanoTime();
         updNs = t1 - t0; renNs = t2 - t1;
@@ -1052,8 +1127,8 @@ final class PlayScreen {
                 int id = world.blockId(px + dx, py + dy, pz + dz);
                 if (id > 0 && "chest".equals(world.blocks.get(id).interact)) { openRemote("chest", px + dx, py + dy, pz + dz); devChest = 1; System.out.println("[net] dev: скриня " + (px + dx) + " " + (py + dy) + " " + (pz + dz)); }
             }
-        } else if (remoteMenu != null && remoteEntity instanceof ChestEntity ce && inv.get(0) != null && ticks % 20 == 0) { remoteMenu.click(0, 0, true); }
-        else if (remoteEntity instanceof ChestEntity ce && !ce.isEmpty()) { devChest = 2; System.out.println("[net] dev: у скрині хоста: " + ce.encode()); }
+        } else if (remoteMenu != null && inv.get(0) != null && ticks % 20 == 0) remoteMenu.click(0, 0, true);
+        else if (remoteEntity instanceof ChestEntity ce && inv.get(0) == null && !ce.isEmpty()) { devChest = 2; System.out.println("[net] dev: слот 1 порожній, у скрині хоста: " + ce.encode()); }
     }
 
     /** «назва|кількість|зношення» -> стек (порожньо чи бите - null). */
@@ -1429,6 +1504,7 @@ final class PlayScreen {
 
     /** Зберегти позицію й закрити (виклик при виході зі світу чи гри). */
     void close() {
+        stopWorldThread(); // далі світ лише в цьому потоці
         sounds.close();
         world.sound = voxelin.core.SoundSink.NONE;
         if (code != null) code.end();

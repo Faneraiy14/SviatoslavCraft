@@ -47,6 +47,12 @@ public final class World implements WorldAccess {
     private final RegionStorage storage;
     private final int[] rt2p, p2rt;
     private final ConcurrentHashMap<ChunkPos, Chunk> chunks = new ConcurrentHashMap<>();
+    /**
+     * Замок світу. Клієнт тікає світ в окремому потоці (PlayScreen.worldLoop), а гравець, ввід і малювання істот - у головному; хто міняє
+     * чи читає стан світу (крім блоків чанків - їх і так читають потоки мешингу), тримає цей замок. Справедливий: головний потік не голодує.
+     * Тести й однопотокові програми можуть його не брати.
+     */
+    public final java.util.concurrent.locks.ReentrantLock lock = new java.util.concurrent.locks.ReentrantLock(true);
     private final Set<ChunkPos> pending = ConcurrentHashMap.newKeySet();
     private final ConcurrentLinkedQueue<Chunk> ready = new ConcurrentLinkedQueue<>();
     /** Знімки чанків, чергованих на запис: повторне завантаження бере звідси, а не зі ще не оновленого файлу. */
@@ -584,9 +590,7 @@ public final class World implements WorldAccess {
         try {
             StringBuilder sb = new StringBuilder();
             for (long k : marks) sb.append(k).append('\n');
-            File tmp = new File(dir, "marks.dat.tmp");
-            java.nio.file.Files.write(tmp.toPath(), sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            Files2.replace(tmp, marksFile());
+            writeLater(marksFile(), sb.toString());
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати відмітки: " + e); }
     }
 
@@ -608,9 +612,7 @@ public final class World implements WorldAccess {
                 if (m.keep) sb.append(' ').append(1);
                 sb.append('\n');
             }
-            File tmp = new File(dir, "mobs.dat.tmp");
-            java.nio.file.Files.write(tmp.toPath(), sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            Files2.replace(tmp, mobsFile());
+            writeLater(mobsFile(), sb.toString());
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати істот: " + e); }
     }
 
@@ -702,9 +704,7 @@ public final class World implements WorldAccess {
         try {
             StringBuilder sb = new StringBuilder();
             for (BlockEntity e : blockEntities.values()) sb.append(e.x).append(' ').append(e.y).append(' ').append(e.z).append(' ').append(e.kind()).append(' ').append(e.encode()).append('\n');
-            File tmp = new File(dir, "blockentities.dat.tmp");
-            java.nio.file.Files.write(tmp.toPath(), sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            Files2.replace(tmp, blockEntitiesFile());
+            writeLater(blockEntitiesFile(), sb.toString());
         } catch (IOException ex) { System.out.println("[Voxelin] ⚠️ не вдалось записати блок-сутності: " + ex); }
     }
 
@@ -733,9 +733,7 @@ public final class World implements WorldAccess {
         try {
             StringBuilder sb = new StringBuilder();
             for (ItemEntity e : items) sb.append(e.pos.cx).append(' ').append(e.pos.cz).append(' ').append(e.pos.x).append(' ').append(e.pos.y).append(' ').append(e.pos.z).append(' ').append(e.item).append(' ').append(e.count).append(' ').append(e.damage).append('\n');
-            File tmp = new File(dir, "items.dat.tmp");
-            java.nio.file.Files.write(tmp.toPath(), sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            Files2.replace(tmp, itemsFile());
+            writeLater(itemsFile(), sb.toString());
         } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати предмети: " + e); }
     }
 
@@ -926,20 +924,25 @@ public final class World implements WorldAccess {
         pathBudget = Pathfinder.BUDGET_PER_TICK;
         info.time++;
         if (!info.rule(GameRules.DAYLIGHT)) info.dayShift--;
-        tickItems();
-        arrows.tick();
-        tickBlockEntities();
-        tickMobs();
-        Herobrine.tick(this, target, mobRng, tick);
-        VillageLife.tick(this, target, tick);
-        infection.tick(tick, target);
-        Rift.tick(this);
+        long[] tp = PROF ? new long[12] : null; int pi = 0;
+        if (PROF) tp[pi++] = System.nanoTime();
+        tickItems(); if (PROF) tp[pi++] = System.nanoTime();
+        arrows.tick(); if (PROF) tp[pi++] = System.nanoTime();
+        tickBlockEntities(); if (PROF) tp[pi++] = System.nanoTime();
+        tickMobs(); if (PROF) tp[pi++] = System.nanoTime();
+        Herobrine.tick(this, target, mobRng, tick); if (PROF) tp[pi++] = System.nanoTime();
+        VillageLife.tick(this, target, tick); if (PROF) tp[pi++] = System.nanoTime();
+        infection.tick(tick, target); if (PROF) tp[pi++] = System.nanoTime();
+        Rift.tick(this); if (PROF) tp[pi++] = System.nanoTime();
         budgets.clear();
-        events.post(new TickEvent(this, tick));
-        if (System.currentTimeMillis() - lastAutosave > 30_000) { lastAutosave = System.currentTimeMillis(); autosave(); }
+        events.post(new TickEvent(this, tick)); if (PROF) tp[pi++] = System.nanoTime();
+        if (System.currentTimeMillis() - lastAutosave > 30_000) { lastAutosave = System.currentTimeMillis(); startAutosave(); }
+        autosaveStep();
+        if (PROF) { tp[pi++] = System.nanoTime(); if (tp[pi - 1] - tp[0] > 5_000_000) { StringBuilder sb = new StringBuilder("[tickprof] " + (tp[pi - 1] - tp[0]) / 1_000_000 + " мс: items arrows be mobs hero village infect rift events save ="); for (int i = 1; i < pi; i++) sb.append(' ').append((tp[i] - tp[i - 1]) / 100_000 / 10.0); System.out.println(sb); } }
     }
 
     public long tickCount() { return tick; }
+    private static final boolean PROF = Boolean.getBoolean("voxelin.tickprof");
 
     private int pathBudget = Pathfinder.BUDGET_PER_TICK;
     /** Чи можна ще шукати шлях у цьому тіку (усім істотам разом - не більше Pathfinder.BUDGET_PER_TICK). */
@@ -947,6 +950,43 @@ public final class World implements WorldAccess {
     /** Скільки пошуків шляху лишилось у цьому тіку (для тестів). */
     public int pathBudgetLeft() { return pathBudget; }
 
+    /**
+     * Записати файл світу атомарно (tmp -> заміна). Поки світ відкритий - на потоці диска (порядок записів зберігається: один потік),
+     * щоб тік світу не чекав на диск; під час закриття - одразу. Текст збирається тут, у викликача, - фон бачить лише готові байти.
+     */
+    void writeLater(File target, String text) throws IOException {
+        byte[] data = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (closed || io.isShutdown()) { writeNow(target, data); return; }
+        io.execute(() -> { try { writeNow(target, data); } catch (IOException e) { System.out.println("[Voxelin] ⚠️ не вдалось записати " + target.getName() + ": " + e); } });
+    }
+
+    private static void writeNow(File target, byte[] data) throws IOException {
+        File tmp = new File(target.getParentFile(), target.getName() + ".tmp");
+        java.nio.file.Files.write(tmp.toPath(), data);
+        Files2.replace(tmp, target);
+    }
+
+    /** Автозбереження частинами: копія чанка - на потоці світу, тож усі змінені за один тік тримали б світ десятки мілісекунд. */
+    private final ArrayDeque<ChunkPos> autosaveQueue = new ArrayDeque<>();
+    static final int AUTOSAVE_PER_TICK = 24;
+
+    private void startAutosave() {
+        syncPlayerData();
+        autosaveQueue.clear();
+        for (Chunk c : chunks.values()) if (c.modified) autosaveQueue.add(c.pos());
+        if (autosaveQueue.isEmpty()) io.execute(this::flushQuiet);
+    }
+
+    private void autosaveStep() {
+        if (autosaveQueue.isEmpty()) return;
+        for (int n = 0; n < AUTOSAVE_PER_TICK && !autosaveQueue.isEmpty(); n++) {
+            Chunk c = chunks.get(autosaveQueue.poll());
+            if (c != null && c.modified) saveAsync(c); // вивантажений уже збережено при вивантаженні
+        }
+        if (autosaveQueue.isEmpty()) io.execute(this::flushQuiet);
+    }
+
+    /** Зберегти все одразу (не частинами). */
     public void autosave() {
         syncPlayerData();
         for (Chunk c : chunks.values()) if (c.modified) saveAsync(c);

@@ -149,9 +149,23 @@ public final class WorldRenderer implements World.Listener {
         for (Chunk c : world.loadedChunks()) chunkLoaded(c);
     }
 
-    // ------------------------------------------------------------------ події світу (головний потік)
+    // ------------------------------------------------------------------ події світу
 
-    @Override public void chunkLoaded(Chunk c) {
+    /**
+     * Події світу приходять з будь-якого потоку (світ тікає у своєму, див. PlayScreen.worldLoop), а набори dirty/urgent і GL-буфери
+     * належать головному потоку - тому подія лише стає в чергу, а розбирає її update() на головному потоці.
+     */
+    private final ConcurrentLinkedQueue<Runnable> events = new ConcurrentLinkedQueue<>();
+
+    @Override public void chunkLoaded(Chunk c) { events.add(() -> onChunkLoaded(c)); }
+    @Override public void chunkUnloaded(Chunk c) { events.add(() -> onChunkUnloaded(c)); }
+    @Override public void lightChanged(Chunk c, int sy) { events.add(() -> onLightChanged(c, sy)); }
+    @Override public void blockChanged(long x, int y, long z) { events.add(() -> onBlockChanged(x, y, z)); }
+
+    /** Розібрати події світу (головний потік). */
+    private void drainEvents() { for (Runnable r; (r = events.poll()) != null; ) r.run(); }
+
+    private void onChunkLoaded(Chunk c) {
         for (int sy = 0; sy < Chunk.SECTIONS; sy++) if (c.section(sy) != null) dirty.add(new SectionPos(c.cx, sy, c.cz));
         long[][] nb = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
         for (long[] d : nb) {
@@ -161,7 +175,7 @@ public final class WorldRenderer implements World.Listener {
         }
     }
 
-    @Override public void chunkUnloaded(Chunk c) {
+    private void onChunkUnloaded(Chunk c) {
         for (int sy = 0; sy < Chunk.SECTIONS; sy++) {
             SectionPos k = new SectionPos(c.cx, sy, c.cz);
             dirty.remove(k); urgent.remove(k);
@@ -170,12 +184,12 @@ public final class WorldRenderer implements World.Listener {
         }
     }
 
-    @Override public void lightChanged(Chunk c, int sy) {
+    private void onLightChanged(Chunk c, int sy) {
         SectionPos k = new SectionPos(c.cx, sy, c.cz);
         if (meshes.containsKey(k) && !urgent.contains(k)) dirty.add(k); // секції без меша світло не змінює
     }
 
-    @Override public void blockChanged(long x, int y, long z) {
+    private void onBlockChanged(long x, int y, long z) {
         long cx = x >> 4, cz = z >> 4;
         int sy = y >> 4, lx = (int) (x & 15), ly = y & 15, lz = (int) (z & 15);
         urgent.add(new SectionPos(cx, sy, cz));
@@ -231,6 +245,7 @@ public final class WorldRenderer implements World.Listener {
 
     /** Раз на кадр: термінові секції - одразу, решта - у фон за відстанню; вивантаження готових мешів на GPU з лімітом. */
     public void update(Camera cam) {
+        drainEvents();
         final long ccx = cam.pos.cx, ccz = cam.pos.cz;
         int n = 0;
         for (Iterator<SectionPos> it = urgent.iterator(); it.hasNext() && n < 12; n++) {
@@ -387,7 +402,7 @@ public final class WorldRenderer implements World.Listener {
     }
 
     public int meshCountLoaded() { return meshes.size(); }
-    public int pending() { return dirty.size() + inFlight.size() + urgent.size(); }
+    public int pending() { return dirty.size() + inFlight.size() + urgent.size() + events.size(); }
 
     public void close() {
         if (closed) return;

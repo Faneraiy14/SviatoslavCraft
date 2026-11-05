@@ -154,6 +154,8 @@ public final class World implements WorldAccess {
 
     /** Чанк у мережевий формат (номери палітри цього світу). Головний потік. */
     public byte[] encodeChunk(Chunk c) { return RegionStorage.encode(c, rt2p); }
+    /** Кодування для іншого потоку: копію знімаємо тут (під замком світу), кодуємо - деінде. */
+    public java.util.function.Supplier<byte[]> encodeLater(Chunk c) { Chunk copy = snapshot(c); int[] pal = rt2p; return () -> RegionStorage.encode(copy, pal); }
     /** Номер палітри світу для id блока цього запуску. */
     public int paletteOf(int id) { return id >= 0 && id < rt2p.length ? rt2p[id] : 0; }
 

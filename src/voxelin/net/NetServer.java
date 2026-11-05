@@ -42,6 +42,8 @@ public final class NetServer implements AutoCloseable {
         Session session;
         /** Останній інвентар від гостя (C_INV) - записується при виході, навіть якщо щойно було збереження. */
         String[] invLines;
+        /** Чанки, що кодуються у фоні: зміни блоків у них за цей час (досилаються одразу після чанка). */
+        final Map<ChunkPos, List<long[]>> encoding = new HashMap<>();
         Guest(int id, String name, String look, Conn conn, Pos at) {
             this.id = id; this.name = name; this.look = look; this.conn = conn; this.pos = at.copy(); this.spawn = at.copy();
             src = Sources.of(name, Source.Kind.PLAYER, 0, 16);
@@ -127,6 +129,10 @@ public final class NetServer implements AutoCloseable {
 
     private final World world;
     private final ServerSocket server;
+    /** Кодування чанків для гостей - у фоні (тік світу не чекає на стиснення). */
+    private final java.util.concurrent.ExecutorService encoder = java.util.concurrent.Executors.newFixedThreadPool(2, r -> { Thread t = new Thread(r, "voxelin-net-encode"); t.setDaemon(true); return t; });
+    private record Encoded(Guest g, ChunkPos k, byte[] data) {}
+    private final ConcurrentLinkedQueue<Encoded> encoded = new ConcurrentLinkedQueue<>();
     public final String code;
     public final int port;
     public final String hostName;
@@ -219,6 +225,7 @@ public final class NetServer implements AutoCloseable {
             if (g.conn.closed()) drop(g, g.conn.error());
         }
         for (Guest g : guests) if (g.session != null) sessionTick(g);
+        deliverEncoded();
         sendChunks();
         if (tick % 2 == 0) sendPlayers();
         if (tick % 4 == 0) sendMobs();
@@ -316,6 +323,7 @@ public final class NetServer implements AutoCloseable {
             }
             case C_CHUNK -> {
                 ChunkPos k = new ChunkPos(in.readLong(), in.readLong());
+                if (g.encoding.containsKey(k)) return; // уже в дорозі
                 if (g.wants.size() >= MAX_WANTS || g.wants.contains(k) || !near(g, k, MAX_VIEW + 1)) { g.conn.send(noChunk(k)); return; }
                 g.wants.add(k);
             }
@@ -525,6 +533,8 @@ public final class NetServer implements AutoCloseable {
         ChunkPos k = new ChunkPos(x >> 4, z >> 4);
         byte[] f = null;
         for (Guest g : guests) {
+            List<long[]> pend = g.encoding.get(k);
+            if (pend != null) { if (pend.size() < 4096) pend.add(new long[]{x, y, z}); continue; } // чанк ще кодується - після нього
             if (!g.sent.contains(k)) continue;
             if (f == null) f = blockFrame(x, y, z, world.paletteOf(Math.max(0, world.blockId(x, y, z))));
             g.conn.send(f);
@@ -546,13 +556,28 @@ public final class NetServer implements AutoCloseable {
                 if (c == null && !loadable(g, k)) { it.remove(); g.conn.send(noChunk(k)); continue; } // хост його не вантажить - хай гість спитає пізніше
                 if (c == null) continue; // хост ще вантажить довкола гостя
                 it.remove();
-                byte[] data = world.encodeChunk(c);
-                g.conn.send(frame(S_CHUNK, o -> { o.writeLong(k.cx()); o.writeLong(k.cz()); o.writeInt(data.length); o.write(data); }));
-                g.sent.add(k);
+                if (g.encoding.size() >= 16) { g.wants.addFirst(k); break; } // фон не встигає - решту пізніше
+                java.util.function.Supplier<byte[]> job = world.encodeLater(c);
+                g.encoding.put(k, new ArrayList<>());
+                encoder.execute(() -> { try { encoded.add(new Encoded(g, k, job.get())); } catch (RuntimeException e) { encoded.add(new Encoded(g, k, null)); } });
                 budget--; per++;
             }
         }
         rr++;
+    }
+
+    /** Готові чанки - гостям, одразу за ними - блоки, що змінились, поки чанк кодувався (їхній поточний стан). */
+    private void deliverEncoded() {
+        for (Encoded e; (e = encoded.poll()) != null; ) {
+            Guest g = e.g();
+            List<long[]> pend = g.encoding.remove(e.k());
+            if (pend == null || !guests.contains(g)) continue;
+            if (e.data() == null) { g.conn.send(noChunk(e.k())); continue; } // хай попросить знову
+            final ChunkPos k = e.k(); final byte[] data = e.data();
+            g.conn.send(frame(S_CHUNK, o -> { o.writeLong(k.cx()); o.writeLong(k.cz()); o.writeInt(data.length); o.write(data); }));
+            g.sent.add(k);
+            for (long[] b : pend) g.conn.send(blockFrame(b[0], (int) b[1], b[2], world.paletteOf(Math.max(0, world.blockId(b[0], (int) b[1], b[2])))));
+        }
     }
 
     private void sendPlayers() {
@@ -616,6 +641,7 @@ public final class NetServer implements AutoCloseable {
         handshakes.clear();
         for (Socket s; (s = accepted.poll()) != null; ) try { s.close(); } catch (IOException ignored) {}
         try { server.close(); } catch (IOException ignored) {}
+        encoder.shutdownNow();
         world.removeWatcher(watcher);
         world.setExtraCenters(List.of());
     }

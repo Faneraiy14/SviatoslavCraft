@@ -93,7 +93,8 @@ EX="$DIST/examples-src"; mkdir -p "$EX/hello-mod"
 cp -r examples/hello-mod/src "$EX/hello-mod/"
 sed 's|../../voxelin-api.jar|voxelin-api.jar|' examples/hello-mod/build.sh > "$EX/hello-mod/build.sh"
 cp examples/hello-script/main.nx "$EX/main.nx"
-( cd "$EX" && zip -r -q ../voxelin-examples.zip . )
+# tar.gz, а не zip: у релізі має бути рівно один .zip - сама гра (за ним FL Launcher)
+tar czf "$DIST/voxelin-examples.tar.gz" -C "$EX" .
 ( cd "$DIST" && zip -r -q "$ARTIFACT.zip" "$ARTIFACT" )
 
 echo "== Тег v$VERSION =="
@@ -101,7 +102,7 @@ git tag "v$VERSION"
 git push origin "v$VERSION"
 
 echo "== Реліз на GitHub ($RELEASES_REPO) =="
-gh release create "v$VERSION" "$DIST/$ARTIFACT.zip" "$DIST/voxelin-api.jar" "$DIST/voxelin-examples.zip" \
+gh release create "v$VERSION" "$DIST/$ARTIFACT.zip" "$DIST/voxelin-api.jar" "$DIST/voxelin-examples.tar.gz" \
     --repo "$RELEASES_REPO" \
     --title "v$VERSION" \
     --notes "Voxelin v$VERSION (Linux + Windows, x64, потрібна Java 21)"

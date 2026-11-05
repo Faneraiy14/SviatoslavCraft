@@ -112,6 +112,7 @@ public class VoxelinStoryTest {
         check(w.spawnRitualBossesIfNeeded() == 0, "вбитий не відроджується");
         w.hurtMob(b, 10_000, 0, 0, b.pos);
         check(w.info.ritualKills == 3 && w.info.ritualStage == 2 && w.info.records.contains("voxelin:ritual_done"), "Ритуал звершено");
+        check(w.skyLevel() == World.END_SKY_SEALED && World.END_SKY_SEALED > World.END_SKY, "після Ритуалу небо Краю світлішає");
         boolean heart = false, wings = false;
         for (voxelin.core.entity.ItemEntity e : w.itemEntities()) { if (e.item.equals("voxelin:seam_heart")) heart = true; if (e.item.equals(Inventory.WINGS)) wings = true; }
         check(heart && wings, "Серце Шву й Крила Шву випали");

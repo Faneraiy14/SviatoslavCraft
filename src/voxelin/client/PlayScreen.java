@@ -506,7 +506,7 @@ final class PlayScreen {
         rend.ambient = v.settings.fullbright ? FULLBRIGHT : netherDim ? 0.16f : 0.04f;
         double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : (endDim || betweenDim || netherDim ? world.skyLevel() : DayCycle.sky(phase));
         rend.skyBrightness = (float) sky;
-        float[] horizon = endDim ? new float[]{0.10f, 0.05f, 0.16f} : netherDim ? new float[]{0.24f, 0.06f, 0.05f} : betweenDim ? betweenSky() : DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
+        float[] horizon = endDim ? (world.info.ritualStage >= 2 ? new float[]{0.30f, 0.27f, 0.42f} : new float[]{0.10f, 0.05f, 0.16f}) : netherDim ? new float[]{0.24f, 0.06f, 0.05f} : betweenDim ? betweenSky() : DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
         double gloom = world.infection.gloom(); // зараження: небо темніє й сивіє (попередження з DESIGN.md)
         if (gloom > 0) { float k = (float) (1 - gloom), gr = (horizon[0] + horizon[1] + horizon[2]) / 3f;
             horizon = new float[]{(horizon[0] * 0.5f + gr * 0.5f) * k + 0.04f * (float) gloom, (horizon[1] * 0.5f + gr * 0.5f) * k, (horizon[2] * 0.5f + gr * 0.5f) * k + 0.06f * (float) gloom}; }

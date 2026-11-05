@@ -171,8 +171,9 @@ public final class World implements WorldAccess {
     public long dayNumber() { return DayCycle.day(info.time + info.dayShift, dayTicks()); }
     public boolean rule(String id) { return info.rule(id); }
     /** Яскравість неба 0.12..1 за часом доби; в Енді стала. */
-    public double skyLevel() { return info.type == WorldInfo.Type.END ? END_SKY : info.type == WorldInfo.Type.BETWEEN ? BETWEEN_SKY : info.type == WorldInfo.Type.NETHER ? 0 : DayCycle.sky(dayPhase()); }
-    public static final double END_SKY = 0.35, BETWEEN_SKY = 0.6;
+    public double skyLevel() { return info.type == WorldInfo.Type.END ? (info.ritualStage >= 2 ? END_SKY_SEALED : END_SKY) : info.type == WorldInfo.Type.BETWEEN ? BETWEEN_SKY : info.type == WorldInfo.Type.NETHER ? 0 : DayCycle.sky(dayPhase()); }
+    /** Небо Краю: після Ритуалу (Шов запечатано) світліше - видимий наслідок перемоги в самому Краї. */
+    public static final double END_SKY = 0.35, END_SKY_SEALED = 0.6, BETWEEN_SKY = 0.6;
     /** "overworld", "end" або "between". */
     public String dimension() { return Dimensions.of(info.type); }
 

@@ -317,6 +317,7 @@ public final class NetServer implements AutoCloseable {
             writePos(o, spawn); o.writeFloat((hostYaw + 180) % 360); o.writeFloat(0);
             o.writeInt(MAX_VIEW);
             o.writeBoolean(survival);
+            o.writeBoolean(dedicated()); // з 1.2.1, у кінці: старі клієнти його просто не читають
         }));
         c.send(timeFrame());
         Pos back = dedicated() ? loadPos(name) : null; // сервер без вікна: повернути туди, де гість вийшов (відродження - як і раніше на точці появи)

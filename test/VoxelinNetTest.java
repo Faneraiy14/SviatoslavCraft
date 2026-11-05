@@ -51,6 +51,7 @@ public class VoxelinNetTest {
         // вхід
         cli = join("Гість", srv.code.toLowerCase());
         check(cli.welcome.seed() == 5 && cli.welcome.type() == WorldInfo.Type.FLAT && cli.welcome.worldName().equals("Хата") && cli.welcome.palette().equals(host.info.palette), "привітання: зерно, тип, палітра");
+        check(!cli.welcome.dedicated() && cli.welcome.where().equals("світ «Хата» гравця " + cli.welcome.hostName()), "гість гравця: «світ … гравця …»: " + cli.welcome.where());
         check(Math.abs(NetServerDist(cli.welcome.spawn(), hostPos) - 2.5) < 0.01, "гість з'являється за 2.5 блока від хоста");
         hostPos = cli.welcome.spawn().copy(); // далі хост стоїть там само, де гість (перевірки відстаней простіші)
         check(joinErr("гість", srv.code).contains("зайняте"), "те саме ім'я (без огляду на регістр) - відмова");

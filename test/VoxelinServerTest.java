@@ -44,6 +44,7 @@ public class VoxelinServerTest {
 
         NetClient cli = join(s, "Гість", "ferma42");
         check(cli.welcome.survival() && cli.welcome.worldName().equals("Острів"), "привітання: виживання, світ");
+        check(cli.welcome.dedicated() && cli.welcome.where().equals("сервер «Сервер», світ «Острів»"), "гість сервера бачить «сервер», а не «світ гравця Сервер»: " + cli.welcome.where());
         check(dist(cli.welcome.spawn(), spawn) < 0.01, "гість з'являється на точці появи світу");
         check(threwJoin(s, "Сервер", "FERMA42").contains("зайняте"), "ім'я сервера зайняте");
         World mirror = s.game.openMirror(cli.welcome.worldName(), cli.welcome.seed(), cli.welcome.type(), cli.welcome.palette(), true);

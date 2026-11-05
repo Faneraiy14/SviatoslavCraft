@@ -60,6 +60,33 @@ cat > "$PKG/server.bat" << 'RUNEOF'
 cd /d "%~dp0"
 java -Djava.awt.headless=true -cp "out;lib/*" voxelin.server.DedicatedServer %*
 RUNEOF
+# сервер у Docker з готової збірки (у репозиторії - Dockerfile, що збирає з коду)
+cat > "$PKG/Dockerfile" << 'RUNEOF'
+# Сервер Voxelin у Docker: docker build -t voxelin-server . && docker run -it -p 24555:24555 -v voxelin-data:/data voxelin-server
+# Усе своє (server.properties з кодом, saves/, mods/, config/) - у /data; параметри - після назви образу (--world, --survival, ...).
+# Консоль: docker attach <контейнер> (вийти, не зупиняючи, - Ctrl+P Ctrl+Q); docker stop - світ зберігається.
+FROM eclipse-temurin:21-jre
+COPY out /opt/voxelin/out
+COPY lib /opt/voxelin/lib
+RUN rm -f /opt/voxelin/lib/*natives-windows*.jar
+WORKDIR /data
+VOLUME /data
+EXPOSE 24555
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["java", "-Djava.awt.headless=true", "-Dfile.encoding=UTF-8", "-cp", "/opt/voxelin/out:/opt/voxelin/lib/*", "voxelin.server.DedicatedServer"]
+RUNEOF
+cat > "$PKG/docker-compose.yml" << 'RUNEOF'
+# docker compose up -d   (код запрошення: docker compose logs; консоль: docker attach <контейнер>)
+services:
+  voxelin:
+    build: .
+    ports: ["24555:24555"]
+    volumes: ["./server-data:/data"]
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    # command: ["--world", "Острів", "--survival"]
+RUNEOF
 # для модерів: API (компілювати моди проти нього) і приклади поруч з архівом гри
 cp voxelin-api.jar "$DIST/voxelin-api.jar"
 EX="$DIST/examples-src"; mkdir -p "$EX/hello-mod"
@@ -78,6 +105,18 @@ gh release create "v$VERSION" "$DIST/$ARTIFACT.zip" "$DIST/voxelin-api.jar" "$DI
     --repo "$RELEASES_REPO" \
     --title "v$VERSION" \
     --notes "Voxelin v$VERSION (Linux + Windows, x64, потрібна Java 21)"
+
+echo "== Список версій на FL Hub (/voxelin/versions.json - за ним Docker, хостинги, /voxelin/download) =="
+HUB="$HOME/Projects/fl-hub-php"
+PROTO=$(grep -o 'VERSION = [0-9]*' src/voxelin/net/Protocol.java | grep -o '[0-9]*$')
+if [ -d "$HUB/public" ]; then
+    python3 tools/versions.py add "$VERSION" "$DIST/$ARTIFACT.zip" "$HUB/public/voxelin-versions.json" --protocol "$PROTO"
+    tar cf - -C "$HUB/public" voxelin-versions.json | ssh vps 'cd ~/web/flhub.luchezarikcentr.com/public_html && tar xf -'
+    curl -fsS https://flhub.luchezarikcentr.com/voxelin/versions.json | grep -q "\"$VERSION\"" && echo "на сайті: $VERSION"
+    ( cd "$HUB" && git add public/voxelin-versions.json && git commit -q -m "Voxelin $VERSION у списку версій" && git push -q ) || echo "⚠ закомітити fl-hub-php вручну"
+else
+    echo "⚠ немає $HUB - додай версію вручну: tools/versions.py add $VERSION $DIST/$ARTIFACT.zip <fl-hub-php>/public/voxelin-versions.json --protocol $PROTO"
+fi
 
 echo "== Готово: v$VERSION =="
 echo "https://github.com/$RELEASES_REPO/releases/tag/v$VERSION"

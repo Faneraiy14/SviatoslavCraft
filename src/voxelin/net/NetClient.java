@@ -18,7 +18,10 @@ public final class NetClient implements AutoCloseable {
     public record MenuState(int seq, String kind, long x, int y, long z, String[] slots, String cursor, String data, int cookTotal) {}
 
     /** Що хост сказав при вході. */
-    public record Welcome(int id, String hostName, String worldName, long seed, WorldInfo.Type type, List<String> palette, Pos spawn, float yaw, float pitch, int view, boolean survival) {}
+    public record Welcome(int id, String hostName, String worldName, long seed, WorldInfo.Type type, List<String> palette, Pos spawn, float yaw, float pitch, int view, boolean survival, boolean dedicated) {
+        /** Як назвати, куди зайшов: «сервер «X»» чи «світ «Y» гравця X». */
+        public String where() { return dedicated ? "сервер «" + hostName + "», світ «" + worldName + "»" : "світ «" + worldName + "» гравця " + hostName; }
+    }
 
     /** Інший гравець (хост чи гість): позиція з мережі (target) і показана (pos, плавно доганяє). */
     public static final class Remote {
@@ -96,12 +99,16 @@ public final class NetClient implements AutoCloseable {
             float yaw = in.readFloat(), pitch = in.readFloat();
             int view = Math.max(2, Math.min(MAX_VIEW, in.readInt()));
             boolean survival = in.readBoolean();
+            boolean dedicated = false; // хост до 1.2.1 цього не надсилає
+            try { dedicated = in.readBoolean(); } catch (EOFException e) { }
             if (spawn == null) throw new IOException("погана точка появи");
-            return new NetClient(c, new Welcome(id, hostName, world, seed, type, pal, spawn, Float.isFinite(yaw) ? yaw : 0, Float.isFinite(pitch) ? pitch : 0, view, survival), nm);
+            return new NetClient(c, new Welcome(id, hostName, world, seed, type, pal, spawn, Float.isFinite(yaw) ? yaw : 0, Float.isFinite(pitch) ? pitch : 0, view, survival, dedicated), nm);
         } catch (SocketTimeoutException e) { c.close(); throw new IOException("хост не відповів"); }
         catch (EOFException e) { c.close(); throw new IOException("хост закрив з'єднання"); }
         catch (IOException e) { c.close(); throw e; }
     }
+
+    private String who() { return welcome.dedicated() ? "сервер" : "хост"; }
 
     /** Почати гру: дзеркало світу бере чанки звідси. */
     public void attach(World mirror) {
@@ -125,13 +132,13 @@ public final class NetClient implements AutoCloseable {
             byte[] f = conn.poll();
             if (f == null) break;
             try { handle(f); }
-            catch (IOException | RuntimeException e) { kicked = "хост надіслав погані дані: " + e.getMessage(); conn.close(); return; }
+            catch (IOException | RuntimeException e) { kicked = who() + " надіслав погані дані: " + e.getMessage(); conn.close(); return; }
         }
         if (refused.size() > 512) refused.clear();
         smooth();
         if (started && System.currentTimeMillis() - lastSent > 1000) sendPos(lastPos != null ? lastPos : welcome.spawn(), lastYaw, lastPitch);
         if (kicked == null && conn.closed()) kicked = conn.error() == null ? "з'єднання розірвано" : conn.error();
-        if (kicked == null && System.currentTimeMillis() - conn.lastRecv > TIMEOUT_MS) { kicked = "хост не відповідає"; conn.close(); }
+        if (kicked == null && System.currentTimeMillis() - conn.lastRecv > TIMEOUT_MS) { kicked = who() + " не відповідає"; conn.close(); }
     }
 
     private void handle(byte[] f) throws IOException {

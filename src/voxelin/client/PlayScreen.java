@@ -197,7 +197,7 @@ final class PlayScreen {
         if (v.opts.lan && net == null) { lanSurvival = v.opts.lanSurvival; openLan(); if (server != null) System.out.println("[net] code " + server.code + " port " + server.port); }
         if (net != null && net.welcome.survival()) net.onClose = () -> net.sendInv(inv); // речі гостя лишаються в хоста до наступної гри
         if (net == null) startWorldThread();
-        if (net != null) say("Гра по мережі: світ «" + net.welcome.worldName() + "» гравця " + net.welcome.hostName() + (net.welcome.survival() ? ". Режим - виживання: істоти хоста нападають і на тебе; речі хост зберігає до наступної гри (при смерті не губляться); T - чат." : ". Ти будівельник у творчому режимі; T - чат."));
+        if (net != null) say("Гра по мережі: " + net.welcome.where() + (net.welcome.survival() ? (net.welcome.dedicated() ? ". Режим - виживання: істоти нападають; речі сервер зберігає до наступного входу (при смерті не губляться); T - чат." : ". Режим - виживання: істоти хоста нападають і на тебе; речі хост зберігає до наступної гри (при смерті не губляться); T - чат.") : ". Ти будівельник у творчому режимі; T - чат."));
     }
 
     /** Дальність малювання: у гостя - не більше, ніж дає хост (він вантажить світ довкола кожного гостя). */
@@ -467,7 +467,7 @@ final class PlayScreen {
                 v.settings.fullbright = !v.settings.fullbright; v.settings.save(v.settingsFile);
                 say(v.settings.fullbright ? "Fullbright: світло скрізь (B - вимкнути)." : "Fullbright вимкнено.");
             }
-            if (in.pressed(GLFW_KEY_K) && !invOpen) { if (net != null) say("Скрипти працюють у світі хоста - тут їх не змінити."); else { code = new CodeScreen(v, v.game.scripts, null); invOpen = true; grab(false); } }
+            if (in.pressed(GLFW_KEY_K) && !invOpen) { if (net != null) say(net.welcome.dedicated() ? "Скрипти працюють на сервері - тут їх не змінити." : "Скрипти працюють у світі хоста - тут їх не змінити."); else { code = new CodeScreen(v, v.game.scripts, null); invOpen = true; grab(false); } }
             if (in.pressed(GLFW_KEY_J) && !invOpen) { journal = new JournalScreen(world); invOpen = true; grab(false); }
             if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); }
         }
@@ -722,7 +722,7 @@ final class PlayScreen {
             return;
         }
         if (hit == null || t.placesBlock == null) return;
-        if (world.boards.isBoards(world.blocks.byName(t.placesBlock))) { say("Дошки в чужому світі ставить лише хост."); return; }
+        if (world.boards.isBoards(world.blocks.byName(t.placesBlock))) { say(net.welcome.dedicated() ? "Дошки на сервері гості не ставлять." : "Дошки в чужому світі ставить лише хост."); return; }
         if (!player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
             sounds.block(world.blocks.byName(t.placesBlock), hit.px(), hit.py(), hit.pz(), "place");
             if (!world.creative()) inv.takeSelected(); // хост поставить (або поверне справжній стан блока)
@@ -1384,7 +1384,7 @@ final class PlayScreen {
         }
         Gui.rect(0, 0, Gui.W, Gui.H, 0.02f, 0.03f, 0.08f, 0.6f);
         Gui.textCentered("ПАУЗА", Gui.W / 2f, 130, 6f, 1f, 0.85f, 0.35f);
-        String sub = net != null ? "гра по мережі: світ «" + world.info.name + "» гравця " + net.welcome.hostName() + (net.players().size() > 1 ? ", ще гравців: " + (net.players().size() - 1) : "")
+        String sub = net != null ? "гра по мережі: " + net.welcome.where() + (net.players().size() > (net.welcome.dedicated() ? 0 : 1) ? ", ще гравців: " + (net.players().size() - (net.welcome.dedicated() ? 0 : 1)) : "")
                 : world.info.name + "  -  день " + world.dayNumber() + (server != null ? "  -  світ відкрито для мережі, гра не зупиняється" : "");
         Gui.textCentered(sub, Gui.W / 2f, server != null ? 196 : 200, Math.min(2.2f, 1240 / Gui.textWidth(sub, 1)), 0.7f, 0.74f, 0.88f);
         boolean lanRow = net == null && server == null; // зайвий рядок «режим гостей» - кнопки щільніше

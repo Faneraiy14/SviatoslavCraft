@@ -35,6 +35,10 @@ public class VoxelinServerTest {
         check(s.net.dedicated() && s.net.code.equals("FERMA42") && s.net.port > 0, "сервер слухає, код великими літерами");
         Pos spawn = s.spawn();
         check(s.world.chunk(spawn.cx, spawn.cz) != null, "точка появи завантажена ще до гостей");
+        List<String> events = Collections.synchronizedList(new ArrayList<>());
+        s.game.events.on("test", voxelin.api.event.PlayerJoinEvent.class, e -> events.add("join " + e.name + " " + e.guest));
+        s.game.events.on("test", voxelin.api.event.PlayerLeaveEvent.class, e -> events.add("leave " + e.name + " " + e.reason));
+        s.game.events.on("test", voxelin.api.event.ChatEvent.class, e -> { events.add("chat " + e.name + " " + e.text); if (e.text.contains("реклама")) e.cancel(); });
         Thread loop = new Thread(s::run, "voxelin-world");
         loop.start();
 
@@ -72,6 +76,12 @@ public class VoxelinServerTest {
         s.enqueue("/time set 6000");
         wait(() -> log.stream().anyMatch(l -> l.contains("Час")), "команда гри від консолі");
 
+        // події модів: вхід, чат (мод може не пропустити), вихід
+        check(events.contains("join Гість true"), "PlayerJoinEvent для гостя: " + events);
+        cli.chat("купуйте реклама");
+        cli.chat("привіт");
+        wait(() -> { cli.poll(); return cli.takeChat().stream().anyMatch(l -> l.contains("<Гість> привіт")); }, "звичайний чат гостя доходить");
+        check(events.contains("chat Гість купуйте реклама") && log.stream().noneMatch(l -> l.contains("реклама")), "ChatEvent: мод скасував повідомлення - ніхто його не побачив");
         // інвентар гостя зберігається у світі сервера
         Inventory inv = new Inventory();
         inv.add("voxelin:stone", 5, 0);
@@ -80,6 +90,7 @@ public class VoxelinServerTest {
         s.enqueue("kick Гість дякую");
         wait(() -> { cli.poll(); return cli.kicked() != null; }, "kick");
         check(cli.kicked().contains("дякую"), "причина кіка дійшла: " + cli.kicked());
+        check(events.contains("leave Гість дякую"), "PlayerLeaveEvent з причиною: " + events);
         cli.close();
         File invFile = new File(s.world.dir, "guests/гість.inv");
         wait(invFile::isFile, "інвентар гостя записано при виході");

@@ -1,5 +1,6 @@
 package voxelin.loader;
 
+import voxelin.api.ModConfig;
 import voxelin.content.VanillaContent;
 import voxelin.core.*;
 import voxelin.core.gen.TerrainGenerator;
@@ -31,6 +32,10 @@ public final class Game {
 
     public Game(File savesDir, File modsDir) {
         this.savesDir = savesDir;
+        // сервіси API - до завантаження модів (ванільний вміст теж їх бачить). Нова частина API - тут один рядок.
+        File configDir = new File(modsDir != null ? modsDir.getAbsoluteFile().getParentFile() : savesDir.getAbsoluteFile().getParentFile(), "config");
+        Map<String, ModConfig> configs = new HashMap<>();
+        mods.services.provide(ModConfig.class, id -> { synchronized (configs) { return configs.computeIfAbsent(id, k -> new ModConfigFile(configDir, k)); } });
         ModLoader.ModInfo v = mods.load(new VanillaContent(), "voxelin", "(вбудований)");
         if (v.status != ModLoader.Status.OK) throw new IllegalStateException("ванільний вміст не завантажився: " + v.message);
         if (modsDir != null && modsDir.isDirectory()) mods.loadDir(modsDir);

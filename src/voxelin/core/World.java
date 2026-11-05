@@ -360,6 +360,8 @@ public final class World implements WorldAccess {
     }
 
     public List<Mob> mobs() { return Collections.unmodifiableList(mobs); }
+    /** Шина подій модів (мережевий хост і клієнт повідомляють через неї про вхід/вихід гравців і чат). */
+    public EventBus events() { return events; }
     public void setPlayerTarget(PlayerTarget t) { target = t; }
     /** Гравець для ШІ, стріл і спавнера (може бути null). */
     public PlayerTarget playerTarget() { return target; }
@@ -523,6 +525,7 @@ public final class World implements WorldAccess {
     private void dropLoot(Mob m) {
         if (m.lootDropped) return;
         m.lootDropped = true;
+        if (events.has(MobDeathEvent.class)) events.post(new MobDeathEvent(this, m.type.name, m.type.boss, m.pos.blockX(), m.pos.blockY(), m.pos.blockZ())); // одна точка на кожну смерть
         mobSound(m, "death", m.type.boss ? 1.5f : 0.8f);
         if (m.type.boss && m.type.name.equals("voxelin:ender_dragon")) { info.dragonDead = true; unlockRecord("voxelin:dragon"); keeperPending = true; } // смерть дракона записується у світ (не відроджується)
         if (m.type.name.equals(WEAVER) || m.type.name.equals(UNRAVELER)) ritualBossDied(m);

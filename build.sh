@@ -2,6 +2,7 @@
 # Без Maven - напряму javac проти jar-ів LWJGL у lib/.
 #   ./build.sh         - зібрати в out/ і зробити voxelin-api.jar (API для модів)
 #   ./build.sh test    - ще й прогнати тести (ядро, мешер) у тимчасовій теці
+#   ./build.sh api-snapshot - прийняти зміни API модів (docs/api-signatures.txt)
 set -e
 cd "$(dirname "$0")"
 mkdir -p out
@@ -15,9 +16,15 @@ if [ "$1" = "test" ]; then
     trap 'echo "(тимчасова тека тестів: $T)"' EXIT
     javac -encoding UTF-8 -cp "out:lib/*" -d "$T/classes" test/*.java
     OUT="$PWD/out"
-    for t in VoxelinSettingsTest VoxelinCoreTest VoxelinMeshTest VoxelinLightTest VoxelinSurvivalTest VoxelinMiningTest VoxelinMenuTest VoxelinCreativeTest VoxelinCraftTest VoxelinFurnaceTest VoxelinMobTest VoxelinPathTest VoxelinMobSkinTest VoxelinChestTest VoxelinStructureTest VoxelinTempleTest VoxelinTradeTest VoxelinVillageTest VoxelinVillageLifeTest VoxelinDefenseTest VoxelinRulesTest VoxelinBoardsTest VoxelinBowTest VoxelinSkeletonTest VoxelinNetheriteTest VoxelinNetherTest VoxelinMythTest VoxelinArmorTest VoxelinEndTest VoxelinDragonTest VoxelinStoryTest VoxelinNotesTest VoxelinInfectionTest VoxelinBetweenTest VoxelinAudioTest VoxelinLookTest VoxelinMinimapTest VoxelinCodeTest VoxelinBlocksTest VoxelinShareTest VoxelinNetTest VoxelinServerTest VoxelinProgressTest VoxelinScriptTest; do
+    for t in VoxelinSettingsTest VoxelinCoreTest VoxelinMeshTest VoxelinLightTest VoxelinSurvivalTest VoxelinMiningTest VoxelinMenuTest VoxelinCreativeTest VoxelinCraftTest VoxelinFurnaceTest VoxelinMobTest VoxelinPathTest VoxelinMobSkinTest VoxelinChestTest VoxelinStructureTest VoxelinTempleTest VoxelinTradeTest VoxelinVillageTest VoxelinVillageLifeTest VoxelinDefenseTest VoxelinRulesTest VoxelinBoardsTest VoxelinBowTest VoxelinSkeletonTest VoxelinNetheriteTest VoxelinNetherTest VoxelinMythTest VoxelinArmorTest VoxelinEndTest VoxelinDragonTest VoxelinStoryTest VoxelinNotesTest VoxelinInfectionTest VoxelinBetweenTest VoxelinAudioTest VoxelinLookTest VoxelinMinimapTest VoxelinCodeTest VoxelinBlocksTest VoxelinShareTest VoxelinNetTest VoxelinServerTest VoxelinApiTest VoxelinProgressTest VoxelinScriptTest; do
         ( mkdir -p "$T/run-$t" && cd "$T/run-$t" && java -cp "$OUT:$PWD/../classes:$OLDPWD/lib/*" "$t" "$OUT" )
     done
+fi
+if [ "$1" = "api-snapshot" ]; then
+    # Свідомо прийняти зміни публічного API модів: знімок сигнатур, з яким звіряє VoxelinApiTest
+    T="$(mktemp -d "${TMPDIR:-/tmp}/voxelin-api.XXXXXX")"
+    javac -encoding UTF-8 -cp "out:lib/*" -d "$T" test/VoxelinApiTest.java
+    java -cp "out:$T:lib/*" VoxelinApiTest "$PWD/out" --write docs/api-signatures.txt
 fi
 if [ "$1" = "balance" ]; then
     T="$(mktemp -d "${TMPDIR:-/tmp}/voxelin-balance.XXXXXX")"

@@ -127,6 +127,7 @@ final class PlayScreen {
             public void teleport(long x, int y, long z) { player.teleport(Pos.ofBlock(x, y + PlayerEntity.EYE + 0.02, z)); }
         };
         world.setPlayerTarget(playerTarget);
+        if (net == null) world.events().post(new voxelin.api.event.PlayerJoinEvent(world, v.settings.playerName, false)); // гість: світ хоста, події там
         if (!world.remote() && world.dimension().equals("end")) { world.populateEnd(); world.unlockRecord("voxelin:end_arrival"); }
         if (!world.remote() && world.dimension().equals(Dimensions.BETWEEN)) world.unlockRecord("voxelin:between");
         icons = new IconAtlas(v.textures, world);
@@ -1157,7 +1158,7 @@ final class PlayScreen {
             for (String r : actions.command(line, o)) say(r);
         } else if (net != null) net.chat(line); // хост розішле всім, і нам теж
         else if (server != null) server.say(line);
-        else say("<" + v.settings.playerName + "> " + line);
+        else if (!world.events().post(new voxelin.api.event.ChatEvent(world, v.settings.playerName, line, false)).isCancelled()) say("<" + v.settings.playerName + "> " + line);
     }
 
     /** Блок під ногами гравця {x, y, z} - для ~ у командах. */
@@ -1505,6 +1506,7 @@ final class PlayScreen {
     /** Зберегти позицію й закрити (виклик при виході зі світу чи гри). */
     void close() {
         stopWorldThread(); // далі світ лише в цьому потоці
+        if (net == null) world.events().post(new voxelin.api.event.PlayerLeaveEvent(world, v.settings.playerName, false, null));
         sounds.close();
         world.sound = voxelin.core.SoundSink.NONE;
         if (code != null) code.end();

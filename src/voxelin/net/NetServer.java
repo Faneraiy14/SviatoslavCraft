@@ -327,6 +327,7 @@ public final class NetServer implements AutoCloseable {
             world.addTarget(g.target);
         }
         announce(name + " приєднався до гри.");
+        world.events().post(new voxelin.api.event.PlayerJoinEvent(world, name, true));
         return null;
     }
 
@@ -390,6 +391,7 @@ public final class NetServer implements AutoCloseable {
                 if (text.startsWith("/")) { g.conn.send(chatFrame("Команди в чужому світі недоступні.")); return; }
                 if (g.chats <= 0) { g.conn.send(chatFrame("Не так швидко.")); return; }
                 g.chats--;
+                if (world.events().post(new voxelin.api.event.ChatEvent(world, g.name, text, true)).isCancelled()) return; // мод не пропустив
                 announce("<" + g.name + "> " + text);
             }
             case C_STATE -> {
@@ -649,7 +651,11 @@ public final class NetServer implements AutoCloseable {
     private void announce(String s) { broadcast(chatFrame(s)); if (chatOut != null) chatOut.accept(s); }
 
     /** Хост пише в чат. */
-    public void say(String text) { String t = cleanChat(text); if (!t.isEmpty()) announce("<" + hostName + "> " + t); }
+    public void say(String text) {
+        String t = cleanChat(text);
+        if (t.isEmpty() || world.events().post(new voxelin.api.event.ChatEvent(world, hostName, t, false)).isCancelled()) return;
+        announce("<" + hostName + "> " + t);
+    }
 
     private void drop(Guest g, String why) {
         if (!guests.remove(g)) return;
@@ -658,6 +664,7 @@ public final class NetServer implements AutoCloseable {
         if (why != null && !g.conn.closed()) g.conn.send(frame(S_KICK, o -> o.writeUTF(why)));
         g.conn.closeAfterSend();
         announce(g.name + " вийшов з гри" + (why == null || why.equals("закрито") ? "." : " (" + why + ")."));
+        world.events().post(new voxelin.api.event.PlayerLeaveEvent(world, g.name, true, why));
     }
 
     public boolean closed() { return closed; }
@@ -669,6 +676,7 @@ public final class NetServer implements AutoCloseable {
         for (Guest g : guests) farewell(g);
         for (Guest g : guests) { g.conn.send(frame(S_KICK, o -> o.writeUTF("хост закрив гру"))); g.conn.closeAfterSend(); }
         for (Guest g : guests) if (g.target != null) world.removeTarget(g.target);
+        for (Guest g : guests) world.events().post(new voxelin.api.event.PlayerLeaveEvent(world, g.name, true, "хост закрив гру"));
         guests.clear();
         for (Conn c : handshakes) c.close();
         handshakes.clear();

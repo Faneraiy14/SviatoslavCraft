@@ -1,0 +1,373 @@
+C voxelin.api.ArmorSlot enum
+C voxelin.api.BlockRef interface
+C voxelin.api.BlockSettings class final
+C voxelin.api.BlockSettings$Drop class final
+C voxelin.api.ChunkData interface
+C voxelin.api.Commands interface
+C voxelin.api.Commands$CommandException class final extends java.lang.Exception
+C voxelin.api.Commands$Context interface
+C voxelin.api.Commands$Handler interface
+C voxelin.api.Events interface
+C voxelin.api.ItemHolder interface
+C voxelin.api.ItemRef interface
+C voxelin.api.ItemSettings class final
+C voxelin.api.LootSettings class final
+C voxelin.api.LootSettings$Entry class final
+C voxelin.api.MobRef interface
+C voxelin.api.MobSettings class final
+C voxelin.api.MobSettings$Behavior enum
+C voxelin.api.MobSettings$Part class final
+C voxelin.api.MobSettings$Trade class final
+C voxelin.api.ModConfig interface
+C voxelin.api.ModContext interface
+C voxelin.api.RecipeSettings class final
+C voxelin.api.Registries interface
+C voxelin.api.Source interface
+C voxelin.api.Source$Kind enum
+C voxelin.api.ToolKind enum
+C voxelin.api.Vitality interface
+C voxelin.api.VoxelinApi class final
+C voxelin.api.VoxelinMod interface
+C voxelin.api.WorldAccess interface
+C voxelin.api.event.BlockChangeEvent class final
+C voxelin.api.event.ChatEvent class final
+C voxelin.api.event.ChunkGeneratedEvent class final
+C voxelin.api.event.MobDeathEvent class final
+C voxelin.api.event.PlayerJoinEvent class final
+C voxelin.api.event.PlayerLeaveEvent class final
+C voxelin.api.event.TickEvent class final
+C voxelin.api.event.WorldOpenEvent class final
+F voxelin.api.ArmorSlot.BOOTS : voxelin.api.ArmorSlot static final
+F voxelin.api.ArmorSlot.CHEST : voxelin.api.ArmorSlot static final
+F voxelin.api.ArmorSlot.HELMET : voxelin.api.ArmorSlot static final
+F voxelin.api.ArmorSlot.LEGS : voxelin.api.ArmorSlot static final
+F voxelin.api.BlockSettings$Drop.chance : float final
+F voxelin.api.BlockSettings$Drop.item : java.lang.String final
+F voxelin.api.BlockSettings$Drop.max : int final
+F voxelin.api.BlockSettings$Drop.min : int final
+F voxelin.api.LootSettings$Entry.item : java.lang.String final
+F voxelin.api.LootSettings$Entry.max : int final
+F voxelin.api.LootSettings$Entry.min : int final
+F voxelin.api.LootSettings$Entry.weight : int final
+F voxelin.api.MobSettings$Behavior.GUARD : voxelin.api.MobSettings$Behavior static final
+F voxelin.api.MobSettings$Behavior.HOSTILE : voxelin.api.MobSettings$Behavior static final
+F voxelin.api.MobSettings$Behavior.NEUTRAL_DAY : voxelin.api.MobSettings$Behavior static final
+F voxelin.api.MobSettings$Behavior.PASSIVE : voxelin.api.MobSettings$Behavior static final
+F voxelin.api.MobSettings$Part.BODY : int static final
+F voxelin.api.MobSettings$Part.HEAD : int static final
+F voxelin.api.MobSettings$Part.LIMB : int static final
+F voxelin.api.MobSettings$Part.WING : int static final
+F voxelin.api.MobSettings$Part.cx : float final
+F voxelin.api.MobSettings$Part.cz : float final
+F voxelin.api.MobSettings$Part.d : float final
+F voxelin.api.MobSettings$Part.face : boolean final
+F voxelin.api.MobSettings$Part.h : float final
+F voxelin.api.MobSettings$Part.pattern : java.lang.String final
+F voxelin.api.MobSettings$Part.rgb : int final
+F voxelin.api.MobSettings$Part.role : int final
+F voxelin.api.MobSettings$Part.swing : int final
+F voxelin.api.MobSettings$Part.w : float final
+F voxelin.api.MobSettings$Part.y0 : float final
+F voxelin.api.MobSettings$Trade.in : java.lang.String final
+F voxelin.api.MobSettings$Trade.inCount : int final
+F voxelin.api.MobSettings$Trade.out : java.lang.String final
+F voxelin.api.MobSettings$Trade.outCount : int final
+F voxelin.api.MobSettings.PATTERNS : java.util.Set<java.lang.String> static final
+F voxelin.api.Source$Kind.CONSOLE : voxelin.api.Source$Kind static final
+F voxelin.api.Source$Kind.MOD : voxelin.api.Source$Kind static final
+F voxelin.api.Source$Kind.PLAYER : voxelin.api.Source$Kind static final
+F voxelin.api.Source$Kind.SCRIPT : voxelin.api.Source$Kind static final
+F voxelin.api.ToolKind.AXE : voxelin.api.ToolKind static final
+F voxelin.api.ToolKind.NONE : voxelin.api.ToolKind static final
+F voxelin.api.ToolKind.PICKAXE : voxelin.api.ToolKind static final
+F voxelin.api.ToolKind.SHOVEL : voxelin.api.ToolKind static final
+F voxelin.api.VoxelinApi.FEATURES : java.util.Set<java.lang.String> static final
+F voxelin.api.VoxelinApi.MIN_COMPATIBLE : int static final
+F voxelin.api.VoxelinApi.VERSION : int static final
+F voxelin.api.event.BlockChangeEvent.newBlock : voxelin.api.BlockRef final
+F voxelin.api.event.BlockChangeEvent.oldBlock : voxelin.api.BlockRef final
+F voxelin.api.event.BlockChangeEvent.source : voxelin.api.Source final
+F voxelin.api.event.BlockChangeEvent.world : voxelin.api.WorldAccess final
+F voxelin.api.event.BlockChangeEvent.x : long final
+F voxelin.api.event.BlockChangeEvent.y : int final
+F voxelin.api.event.BlockChangeEvent.z : long final
+F voxelin.api.event.ChatEvent.guest : boolean final
+F voxelin.api.event.ChatEvent.name : java.lang.String final
+F voxelin.api.event.ChatEvent.text : java.lang.String final
+F voxelin.api.event.ChatEvent.world : voxelin.api.WorldAccess final
+F voxelin.api.event.ChunkGeneratedEvent.chunk : voxelin.api.ChunkData final
+F voxelin.api.event.ChunkGeneratedEvent.seed : long final
+F voxelin.api.event.MobDeathEvent.boss : boolean final
+F voxelin.api.event.MobDeathEvent.mob : java.lang.String final
+F voxelin.api.event.MobDeathEvent.world : voxelin.api.WorldAccess final
+F voxelin.api.event.MobDeathEvent.x : long final
+F voxelin.api.event.MobDeathEvent.y : int final
+F voxelin.api.event.MobDeathEvent.z : long final
+F voxelin.api.event.PlayerJoinEvent.guest : boolean final
+F voxelin.api.event.PlayerJoinEvent.name : java.lang.String final
+F voxelin.api.event.PlayerJoinEvent.world : voxelin.api.WorldAccess final
+F voxelin.api.event.PlayerLeaveEvent.guest : boolean final
+F voxelin.api.event.PlayerLeaveEvent.name : java.lang.String final
+F voxelin.api.event.PlayerLeaveEvent.reason : java.lang.String final
+F voxelin.api.event.PlayerLeaveEvent.world : voxelin.api.WorldAccess final
+F voxelin.api.event.TickEvent.tick : long final
+F voxelin.api.event.TickEvent.world : voxelin.api.WorldAccess final
+F voxelin.api.event.WorldOpenEvent.world : voxelin.api.WorldAccess final
+K voxelin.api.BlockSettings$Drop(java.lang.String, int, int, float)
+K voxelin.api.BlockSettings()
+K voxelin.api.Commands$CommandException(java.lang.String)
+K voxelin.api.ItemSettings()
+K voxelin.api.LootSettings$Entry(java.lang.String, int, int, int)
+K voxelin.api.LootSettings()
+K voxelin.api.MobSettings$Part(float, float, float, float, float, float, int, int)
+K voxelin.api.MobSettings$Part(float, float, float, float, float, float, int, int, int, java.lang.String, boolean)
+K voxelin.api.MobSettings$Trade(java.lang.String, int, java.lang.String, int)
+K voxelin.api.MobSettings()
+K voxelin.api.event.BlockChangeEvent(voxelin.api.WorldAccess, voxelin.api.Source, long, int, long, voxelin.api.BlockRef, voxelin.api.BlockRef)
+K voxelin.api.event.ChatEvent(voxelin.api.WorldAccess, java.lang.String, java.lang.String, boolean)
+K voxelin.api.event.ChunkGeneratedEvent(voxelin.api.ChunkData, long)
+K voxelin.api.event.MobDeathEvent(voxelin.api.WorldAccess, java.lang.String, boolean, long, int, long)
+K voxelin.api.event.PlayerJoinEvent(voxelin.api.WorldAccess, java.lang.String, boolean)
+K voxelin.api.event.PlayerLeaveEvent(voxelin.api.WorldAccess, java.lang.String, boolean, java.lang.String)
+K voxelin.api.event.TickEvent(voxelin.api.WorldAccess, long)
+K voxelin.api.event.WorldOpenEvent(voxelin.api.WorldAccess)
+M voxelin.api.ArmorSlot.valueOf(java.lang.String) : voxelin.api.ArmorSlot static
+M voxelin.api.ArmorSlot.values() : voxelin.api.ArmorSlot[] static
+M voxelin.api.BlockRef.id() : int
+M voxelin.api.BlockRef.name() : java.lang.String
+M voxelin.api.BlockSettings.absorb(int) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.absorbValue() : int
+M voxelin.api.BlockSettings.color() : int
+M voxelin.api.BlockSettings.color(int) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.dropList() : java.util.List<voxelin.api.BlockSettings$Drop>
+M voxelin.api.BlockSettings.drops(java.lang.String) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.drops(java.lang.String, int, int, float) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.hardness(float) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.hardnessValue() : float
+M voxelin.api.BlockSettings.hasNoDrops() : boolean
+M voxelin.api.BlockSettings.hasNoItem() : boolean
+M voxelin.api.BlockSettings.interact(java.lang.String) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.interactKind() : java.lang.String
+M voxelin.api.BlockSettings.isLiquid() : boolean
+M voxelin.api.BlockSettings.isOpaque() : boolean
+M voxelin.api.BlockSettings.isSolid() : boolean
+M voxelin.api.BlockSettings.isTranslucent() : boolean
+M voxelin.api.BlockSettings.isUnbreakable() : boolean
+M voxelin.api.BlockSettings.light(int) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.lightLevel() : int
+M voxelin.api.BlockSettings.liquid(boolean) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.minTier(int) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.minTierValue() : int
+M voxelin.api.BlockSettings.noDrops() : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.noItem() : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.opaque(boolean) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.qualified(java.lang.String) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.shape(java.lang.String) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.shapeValue() : java.lang.String
+M voxelin.api.BlockSettings.solid(boolean) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.sound(java.lang.String) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.soundValue() : java.lang.String
+M voxelin.api.BlockSettings.texture(java.lang.String) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.textureBottom() : java.lang.String
+M voxelin.api.BlockSettings.textureSide() : java.lang.String
+M voxelin.api.BlockSettings.textureTop() : java.lang.String
+M voxelin.api.BlockSettings.textures(java.lang.String, java.lang.String, java.lang.String) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.title(java.lang.String) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.titleText() : java.lang.String
+M voxelin.api.BlockSettings.tool(voxelin.api.ToolKind) : voxelin.api.BlockSettings
+M voxelin.api.BlockSettings.toolKind() : voxelin.api.ToolKind
+M voxelin.api.BlockSettings.translucent(boolean) : voxelin.api.BlockSettings
+M voxelin.api.ChunkData.chunkX() : long
+M voxelin.api.ChunkData.chunkZ() : long
+M voxelin.api.ChunkData.get(int, int, int) : voxelin.api.BlockRef
+M voxelin.api.ChunkData.height() : int
+M voxelin.api.ChunkData.set(int, int, int, voxelin.api.BlockRef) : void
+M voxelin.api.Commands$Context.args() : java.util.List<java.lang.String>
+M voxelin.api.Commands$Context.origin() : long[]
+M voxelin.api.Commands$Context.reply(java.lang.String) : void
+M voxelin.api.Commands$Context.source() : voxelin.api.Source
+M voxelin.api.Commands$Context.world() : voxelin.api.WorldAccess
+M voxelin.api.Commands$Handler.run(voxelin.api.Commands$Context) : void
+M voxelin.api.Commands.register(java.lang.String, java.lang.String, int, voxelin.api.Commands$Handler) : void
+M voxelin.api.Events.on(java.lang.Class<E>, java.util.function.Consumer<E>) : void
+M voxelin.api.ItemHolder.clear() : void
+M voxelin.api.ItemHolder.give(java.lang.String, int) : int
+M voxelin.api.ItemRef.name() : java.lang.String
+M voxelin.api.ItemSettings.armor(voxelin.api.ArmorSlot, int, int) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.armorPointsValue() : int
+M voxelin.api.ItemSettings.armorSlotValue() : voxelin.api.ArmorSlot
+M voxelin.api.ItemSettings.armorTierValue() : int
+M voxelin.api.ItemSettings.attack(float) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.attackValue() : float
+M voxelin.api.ItemSettings.color(int) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.colorValue() : int
+M voxelin.api.ItemSettings.durability(int) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.durabilityValue() : int
+M voxelin.api.ItemSettings.fireproof() : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.fireproofValue() : boolean
+M voxelin.api.ItemSettings.food(int) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.foodValue() : int
+M voxelin.api.ItemSettings.maxStack(int) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.maxStackValue() : int
+M voxelin.api.ItemSettings.placesBlock(java.lang.String) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.placesBlockName() : java.lang.String
+M voxelin.api.ItemSettings.qualified(java.lang.String) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.speedValue() : float
+M voxelin.api.ItemSettings.texture(java.lang.String) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.textureName() : java.lang.String
+M voxelin.api.ItemSettings.tierValue() : int
+M voxelin.api.ItemSettings.title(java.lang.String) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.titleText() : java.lang.String
+M voxelin.api.ItemSettings.tool(voxelin.api.ToolKind, int, float) : voxelin.api.ItemSettings
+M voxelin.api.ItemSettings.toolKind() : voxelin.api.ToolKind
+M voxelin.api.LootSettings.entry(java.lang.String, int, int, int) : voxelin.api.LootSettings
+M voxelin.api.LootSettings.entryList() : java.util.List<voxelin.api.LootSettings$Entry>
+M voxelin.api.LootSettings.maxRollsValue() : int
+M voxelin.api.LootSettings.minRollsValue() : int
+M voxelin.api.LootSettings.qualified(java.lang.String) : voxelin.api.LootSettings
+M voxelin.api.LootSettings.rolls(int, int) : voxelin.api.LootSettings
+M voxelin.api.MobRef.name() : java.lang.String
+M voxelin.api.MobSettings$Behavior.valueOf(java.lang.String) : voxelin.api.MobSettings$Behavior static
+M voxelin.api.MobSettings$Behavior.values() : voxelin.api.MobSettings$Behavior[] static
+M voxelin.api.MobSettings$Part.arm() : boolean
+M voxelin.api.MobSettings.armPart(float, float, float, float, float, float, int, boolean) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.armorPierce(float) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.armorPierceValue() : float
+M voxelin.api.MobSettings.attack(float, float, float) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.attackDamageValue() : float
+M voxelin.api.MobSettings.behavior(voxelin.api.MobSettings$Behavior) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.behaviorValue() : voxelin.api.MobSettings$Behavior
+M voxelin.api.MobSettings.boss(boolean) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.bossValue() : boolean
+M voxelin.api.MobSettings.burnsInSun(boolean) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.burnsInSunValue() : boolean
+M voxelin.api.MobSettings.cooldownValue() : float
+M voxelin.api.MobSettings.detect(float) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.detectValue() : float
+M voxelin.api.MobSettings.dialog(java.lang.String) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.dialogKind() : java.lang.String
+M voxelin.api.MobSettings.dimension(java.lang.String) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.dimensionValue() : java.lang.String
+M voxelin.api.MobSettings.dropList() : java.util.List<voxelin.api.BlockSettings$Drop>
+M voxelin.api.MobSettings.drops(java.lang.String, int, int, float) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.eyeColor() : int
+M voxelin.api.MobSettings.face(int) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.fireproof() : voxelin.api.MobSettings
+M voxelin.api.MobSettings.fireproofValue() : boolean
+M voxelin.api.MobSettings.flying(boolean) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.flyingValue() : boolean
+M voxelin.api.MobSettings.greeting(java.lang.String[]) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.greetingList() : java.util.List<java.lang.String>
+M voxelin.api.MobSettings.head(float, float, float, float, float, float, int) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.health(float) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.healthValue() : float
+M voxelin.api.MobSettings.heightValue() : float
+M voxelin.api.MobSettings.homeRadius(float) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.homeRadiusValue() : float
+M voxelin.api.MobSettings.invulnerable(boolean) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.invulnerableValue() : boolean
+M voxelin.api.MobSettings.legPart(float, float, float, float, float, float, int, boolean) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.onHead() : voxelin.api.MobSettings
+M voxelin.api.MobSettings.part(float, float, float, float, float, float, int) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.partList() : java.util.List<voxelin.api.MobSettings$Part>
+M voxelin.api.MobSettings.pattern(java.lang.String) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.persistent(boolean) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.persistentValue() : boolean
+M voxelin.api.MobSettings.qualified(java.lang.String) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.ranged(float, float, float) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.rangedCooldownValue() : float
+M voxelin.api.MobSettings.rangedRangeValue() : float
+M voxelin.api.MobSettings.rangedSpeedValue() : float
+M voxelin.api.MobSettings.reachValue() : float
+M voxelin.api.MobSettings.size(float, float) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.spawnOn(java.lang.String[]) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.spawnOnList() : java.util.List<java.lang.String>
+M voxelin.api.MobSettings.speed(float) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.speedValue() : float
+M voxelin.api.MobSettings.title(java.lang.String) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.titleText() : java.lang.String
+M voxelin.api.MobSettings.trade(java.lang.String, int, java.lang.String, int) : voxelin.api.MobSettings
+M voxelin.api.MobSettings.tradeList() : java.util.List<voxelin.api.MobSettings$Trade>
+M voxelin.api.MobSettings.widthValue() : float
+M voxelin.api.MobSettings.wingPart(float, float, float, float, float, float, int, boolean) : voxelin.api.MobSettings
+M voxelin.api.ModConfig.get(java.lang.String, java.lang.String) : java.lang.String
+M voxelin.api.ModConfig.getBool(java.lang.String, boolean) : boolean
+M voxelin.api.ModConfig.getInt(java.lang.String, int) : int
+M voxelin.api.ModConfig.save() : void
+M voxelin.api.ModConfig.set(java.lang.String, java.lang.String) : void
+M voxelin.api.ModContext.api(java.lang.Class<T>) : T default
+M voxelin.api.ModContext.apiVersion() : int
+M voxelin.api.ModContext.commands() : voxelin.api.Commands
+M voxelin.api.ModContext.events() : voxelin.api.Events
+M voxelin.api.ModContext.has(java.lang.String) : boolean default
+M voxelin.api.ModContext.log(java.lang.String) : void
+M voxelin.api.ModContext.modId() : java.lang.String
+M voxelin.api.ModContext.registries() : voxelin.api.Registries
+M voxelin.api.RecipeSettings.ingredients() : java.util.List<java.lang.String>
+M voxelin.api.RecipeSettings.isShaped() : boolean
+M voxelin.api.RecipeSettings.isSmelting() : boolean
+M voxelin.api.RecipeSettings.key(char, java.lang.String) : voxelin.api.RecipeSettings
+M voxelin.api.RecipeSettings.key(char, java.lang.String, int) : voxelin.api.RecipeSettings
+M voxelin.api.RecipeSettings.keys() : java.util.Map<java.lang.Character, java.lang.String>
+M voxelin.api.RecipeSettings.mirrorAllowed() : boolean
+M voxelin.api.RecipeSettings.noMirror() : voxelin.api.RecipeSettings
+M voxelin.api.RecipeSettings.perCell(char) : int
+M voxelin.api.RecipeSettings.qualified(java.lang.String) : voxelin.api.RecipeSettings
+M voxelin.api.RecipeSettings.result(java.lang.String, int) : voxelin.api.RecipeSettings
+M voxelin.api.RecipeSettings.resultCount() : int
+M voxelin.api.RecipeSettings.resultItem() : java.lang.String
+M voxelin.api.RecipeSettings.rows() : java.lang.String[]
+M voxelin.api.RecipeSettings.shaped(java.lang.String[]) : voxelin.api.RecipeSettings static
+M voxelin.api.RecipeSettings.shapeless(java.lang.String[]) : voxelin.api.RecipeSettings static
+M voxelin.api.RecipeSettings.smeltInputItem() : java.lang.String
+M voxelin.api.RecipeSettings.smeltSeconds() : float
+M voxelin.api.RecipeSettings.smelting(java.lang.String, float) : voxelin.api.RecipeSettings static
+M voxelin.api.Registries.block(java.lang.String, voxelin.api.BlockSettings) : voxelin.api.BlockRef
+M voxelin.api.Registries.findBlock(java.lang.String) : voxelin.api.BlockRef
+M voxelin.api.Registries.findItem(java.lang.String) : voxelin.api.ItemRef
+M voxelin.api.Registries.findMob(java.lang.String) : voxelin.api.MobRef
+M voxelin.api.Registries.fuel(java.lang.String, float) : void
+M voxelin.api.Registries.item(java.lang.String, voxelin.api.ItemSettings) : voxelin.api.ItemRef
+M voxelin.api.Registries.loot(java.lang.String, voxelin.api.LootSettings) : void
+M voxelin.api.Registries.mob(java.lang.String, voxelin.api.MobSettings) : voxelin.api.MobRef
+M voxelin.api.Registries.recipe(java.lang.String, voxelin.api.RecipeSettings) : void
+M voxelin.api.Registries.record(java.lang.String, java.lang.String, java.lang.String) : void
+M voxelin.api.Registries.structure(java.lang.String, java.lang.String) : void
+M voxelin.api.Registries.tag(java.lang.String, java.lang.String[]) : void
+M voxelin.api.Registries.texture(java.lang.String, int[]) : void
+M voxelin.api.Source$Kind.valueOf(java.lang.String) : voxelin.api.Source$Kind static
+M voxelin.api.Source$Kind.values() : voxelin.api.Source$Kind[] static
+M voxelin.api.Source.blockBudgetPerTick() : int
+M voxelin.api.Source.kind() : voxelin.api.Source$Kind
+M voxelin.api.Source.name() : java.lang.String
+M voxelin.api.Source.permission() : int
+M voxelin.api.ToolKind.valueOf(java.lang.String) : voxelin.api.ToolKind static
+M voxelin.api.ToolKind.values() : voxelin.api.ToolKind[] static
+M voxelin.api.Vitality.damage(double) : void
+M voxelin.api.Vitality.dead() : boolean
+M voxelin.api.Vitality.feed(double) : void
+M voxelin.api.Vitality.heal(double) : void
+M voxelin.api.Vitality.health() : double
+M voxelin.api.Vitality.hunger() : double
+M voxelin.api.Vitality.maxHealth() : double
+M voxelin.api.VoxelinApi.has(java.lang.String) : boolean static
+M voxelin.api.VoxelinMod.init(voxelin.api.ModContext) : void
+M voxelin.api.WorldAccess.batch(java.lang.Runnable) : void default
+M voxelin.api.WorldAccess.dayTicks() : long default
+M voxelin.api.WorldAccess.gameMode() : java.lang.String default
+M voxelin.api.WorldAccess.getBlock(long, int, long) : voxelin.api.BlockRef
+M voxelin.api.WorldAccess.height() : int
+M voxelin.api.WorldAccess.items(voxelin.api.Source) : voxelin.api.ItemHolder default
+M voxelin.api.WorldAccess.locate(java.lang.String, long, long) : long[] default
+M voxelin.api.WorldAccess.name() : java.lang.String
+M voxelin.api.WorldAccess.seed() : long
+M voxelin.api.WorldAccess.setBlock(voxelin.api.Source, long, int, long, voxelin.api.BlockRef) : boolean
+M voxelin.api.WorldAccess.setGameMode(java.lang.String) : boolean default
+M voxelin.api.WorldAccess.setTime(long) : void default
+M voxelin.api.WorldAccess.teleport(voxelin.api.Source, long, int, long) : boolean default
+M voxelin.api.WorldAccess.time() : long default
+M voxelin.api.WorldAccess.vitality(voxelin.api.Source) : voxelin.api.Vitality default
+M voxelin.api.event.BlockChangeEvent.cancel() : void
+M voxelin.api.event.BlockChangeEvent.isCancelled() : boolean
+M voxelin.api.event.ChatEvent.cancel() : void
+M voxelin.api.event.ChatEvent.isCancelled() : boolean

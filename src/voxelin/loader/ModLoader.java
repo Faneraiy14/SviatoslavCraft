@@ -11,7 +11,9 @@ import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 
 /**
- * Завантажувач модів: mods/*.jar з рядками маніфесту Voxelin-Mod (клас), Voxelin-Mod-Id, Voxelin-Api.
+ * Завантажувач модів: mods/*.jar з рядками маніфесту Voxelin-Mod (клас), Voxelin-Mod-Id, Voxelin-Api і необов'язковим
+ * Voxelin-Api-Requires (можливості через кому, VoxelinApi.FEATURES) - без них мод не вантажиться з поясненням «онови гру».
+ * Завжди частина гри: нема модів у mods/ - нічого не робить.
  * Кожен мод - окремий ClassLoader. Мод з новішим API, без потрібних рядків або з винятком у init() позначається й пропускається:
  * гра стартує в будь-якому разі. Ванільний вміст проходить через той самий ModContext (load(mod, id)).
  */
@@ -35,6 +37,8 @@ public final class ModLoader {
     private final CommandRegistry commands;
     private final Map<String, int[][]> textures;
     private final List<ModInfo> mods = new ArrayList<>();
+    /** Сервіси API (ctx.api) - Game реєструє їх до завантаження модів. */
+    public final ServiceRegistry services = new ServiceRegistry();
 
     public ModLoader(BlockRegistry blocks, ItemRegistry items, RecipeRegistry recipes, MobRegistry mobTypes, LootRegistry loot, StructureRegistry structures, RecordRegistry records, EventBus events, CommandRegistry commands, Map<String, int[][]> textures) {
         this.blocks = blocks; this.items = items; this.recipes = recipes; this.mobTypes = mobTypes; this.loot = loot; this.structures = structures; this.records = records; this.events = events; this.commands = commands; this.textures = textures;
@@ -65,6 +69,7 @@ public final class ModLoader {
     public ModInfo loadJar(File jar) {
         String id = jar.getName(), cls;
         int api;
+        String requires;
         try (JarFile jf = new JarFile(jar)) {
             Attributes a = jf.getManifest() == null ? null : jf.getManifest().getMainAttributes();
             if (a == null || a.getValue("Voxelin-Mod") == null || a.getValue("Voxelin-Mod-Id") == null)
@@ -72,6 +77,7 @@ public final class ModLoader {
             cls = a.getValue("Voxelin-Mod").trim();
             id = a.getValue("Voxelin-Mod-Id").trim();
             try { api = Integer.parseInt(String.valueOf(a.getValue("Voxelin-Api")).trim()); } catch (NumberFormatException e) { api = -1; }
+            requires = a.getValue("Voxelin-Api-Requires");
         } catch (Exception e) {
             return add(new ModInfo(id, jar.getName(), Status.FAILED, "не вдалось прочитати jar: " + e));
         }
@@ -79,6 +85,9 @@ public final class ModLoader {
             return add(new ModInfo(id, jar.getName(), Status.INCOMPATIBLE, "мод зібрано під застарілий API " + api + " (гра підтримує " + VoxelinApi.MIN_COMPATIBLE + ".." + VoxelinApi.VERSION + ", координати стали long) - онови мод"));
         if (api > VoxelinApi.VERSION)
             return add(new ModInfo(id, jar.getName(), Status.INCOMPATIBLE, "потрібен API " + api + ", гра надає " + VoxelinApi.VERSION + " - онови гру"));
+        List<String> missing = missingFeatures(requires);
+        if (!missing.isEmpty())
+            return add(new ModInfo(id, jar.getName(), Status.INCOMPATIBLE, "цій версії гри бракує можливостей " + String.join(", ", missing) + " - онови гру"));
         try {
             URLClassLoader cl = new URLClassLoader(new URL[]{jar.toURI().toURL()}, ModLoader.class.getClassLoader());
             Object o = Class.forName(cls, true, cl).getDeclaredConstructor().newInstance();
@@ -87,6 +96,14 @@ public final class ModLoader {
         } catch (Throwable t) {
             return add(new ModInfo(id, jar.getName(), Status.FAILED, "не вдалось створити " + cls + ": " + t));
         }
+    }
+
+    /** Можливості з рядка «a, b, c», яких гра не має. */
+    static List<String> missingFeatures(String requires) {
+        List<String> out = new ArrayList<>();
+        if (requires == null) return out;
+        for (String f : requires.split(",")) if (!f.isBlank() && !VoxelinApi.has(f)) out.add(f.trim());
+        return out;
     }
 
     private ModInfo add(ModInfo m) {
@@ -153,6 +170,7 @@ public final class ModLoader {
             public Events events() { return ev; }
             public Commands commands() { return cmd; }
             public void log(String m) { System.out.println("[" + modId + "] " + m); }
+            public <T> T api(Class<T> service) { return service == null ? null : services.get(service, modId); }
         };
     }
 }

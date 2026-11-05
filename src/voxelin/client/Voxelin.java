@@ -42,7 +42,7 @@ public final class Voxelin {
         String autoWorld, screenshot, benchOut = "bench-result.json";
         boolean autoFlat, debug, freeze;
         String menuScreen;
-        /** dev: --lan - одразу відкрити світ для мережі (код - у stdout); --join АДРЕСА/КОД і --name ІМ'Я - зайти гостем без меню. */
+        /** dev: --lan - одразу відкрити світ для мережі (код - у stdout); --join АДРЕСА/КОД - зайти гостем без меню. --name ІМ'Я - ім'я гравця (лаунчер передає нік). */
         boolean lan, lanSurvival;
         String join, name;
         /** Автоматичні перевірки (бенчмарк, знімок, заморожений гравець, показ меню): не захоплювати курсор, не відбирати фокус, не слухати мишу. */
@@ -153,6 +153,7 @@ public final class Voxelin {
         File base = opts.saves.getAbsoluteFile().getParentFile();
         settingsFile = new File(base == null ? new File(".") : base, "settings.properties");
         settings = Settings.load(settingsFile);
+        if (opts.name != null && voxelin.net.Protocol.cleanName(opts.name) != null) settings.playerName = voxelin.net.Protocol.cleanName(opts.name); // нік від лаунчера (FL Launcher: --name)
         lookFile = new File(settingsFile.getParentFile(), "player.properties");
         look = voxelin.client.look.PlayerLook.load(lookFile);
         if (opts.skin != null && !lookFile.isFile()) look.skin = "launcher"; // перший запуск з лаунчера - його скін

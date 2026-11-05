@@ -87,6 +87,11 @@ final class Menus {
             case JOIN -> join(g);
         }
         Gui.text("Voxelin " + Voxelin.VERSION, 12, Gui.H - 22, 1.8f, 0.55f, 0.6f, 0.7f);
+        voxelin.loader.UpdateCheck.Update u = v.update;
+        if (u != null && screen == Screen.MAIN) {
+            String line = u.lines().get(0) + " " + u.lines().get(u.lines().size() - 1);
+            Gui.text(line, 12, Gui.H - 44, Math.min(1.6f, (Gui.W - 24) / Math.max(1f, Gui.textWidth(line, 1))), 1f, 0.85f, 0.35f);
+        }
     }
 
     /** Об'ємний логотип: кілька темних шарів зі зсувом (бік «блока»), чорний контур, золотий верх зі світлішою верхньою половиною. */

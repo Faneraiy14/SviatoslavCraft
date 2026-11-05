@@ -25,6 +25,8 @@ public final class WorldInfo {
     public long seed;
     public Type type = Type.NORMAL;
     public long created;
+    /** Якою версією гри світ збережено востаннє (null - до 1.3.1, коли це ще не записувалось). */
+    public String gameVersion;
     /** Останнє місце гравця (світові одиниці, кути); hasPlayer=false - світ ще не відкривали. */
     public boolean hasPlayer;
     public long playerCx, playerCz;
@@ -117,6 +119,7 @@ public final class WorldInfo {
         w.seed = Long.parseLong(p.getProperty("seed", "0").trim());
         try { w.type = Type.valueOf(p.getProperty("type", "NORMAL").trim()); } catch (IllegalArgumentException e) { w.type = Type.NORMAL; }
         w.created = Long.parseLong(p.getProperty("created", "0").trim());
+        w.gameVersion = p.getProperty("game");
         w.hasPlayer = "true".equals(p.getProperty("hasPlayer"));
         if (w.hasPlayer) try {
             w.playerCx = Long.parseLong(p.getProperty("pcx").trim()); w.playerCz = Long.parseLong(p.getProperty("pcz").trim());
@@ -186,6 +189,7 @@ public final class WorldInfo {
         if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("не вдалось створити " + dir);
         Properties p = new Properties();
         p.setProperty("format", String.valueOf(FORMAT));
+        p.setProperty("game", GameVersion.VERSION);
         p.setProperty("name", name);
         p.setProperty("seed", String.valueOf(seed));
         p.setProperty("type", type.name());

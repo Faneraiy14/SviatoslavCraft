@@ -21,7 +21,8 @@ import static org.lwjgl.opengl.GL11.*;
  *   --debug  --freeze                     показати F3 одразу / без фізики гравця (для знімків) · --screenshot файл.png   знімок і вихід · --bench СЕКУНД [--bench-out файл.json]   тест швидкодії і вихід
  */
 public final class Voxelin {
-    public static final String VERSION = "1.3.0";
+    /** Версія гри - з voxelin.core.GameVersion (одне місце для клієнта, сервера й світів). */
+    public static final String VERSION = voxelin.core.GameVersion.VERSION;
     public static final double TICK = 0.05;
 
     static final class Options {
@@ -159,6 +160,11 @@ public final class Voxelin {
         if (opts.skin != null && !lookFile.isFile()) look.skin = "launcher"; // перший запуск з лаунчера - його скін
         applySettings();
         this.game = new Game(opts.saves, opts.mods);
+        if (opts.screenshot == null && opts.benchSeconds <= 0 && opts.autoWorld == null) { // звичайна гра: тихо глянути, чи є нова версія
+            Thread uc = new Thread(() -> update = voxelin.loader.UpdateCheck.check(voxelin.loader.UpdateCheck.MANIFEST, VERSION, voxelin.net.Protocol.VERSION, voxelin.api.VoxelinApi.VERSION, false), "voxelin-update-check");
+            uc.setDaemon(true);
+            uc.start();
+        }
         System.out.println("[Voxelin] " + VERSION + ", блоків: " + game.blocks.size() + ", модів: " + game.mods.mods().size() + ", saves=" + opts.saves.getAbsolutePath());
     }
 
@@ -182,6 +188,9 @@ public final class Voxelin {
     }
 
     static volatile boolean crashed;
+
+    /** Нова версія (null - нема чи нема інтернету) - головне меню показує рядок. */
+    volatile voxelin.loader.UpdateCheck.Update update;
 
     /** Що робилось у момент падіння - для звіту. */
     String whereNow() {

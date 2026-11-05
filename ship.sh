@@ -110,7 +110,13 @@ echo "== Список версій на FL Hub (/voxelin/versions.json - за н
 HUB="$HOME/Projects/fl-hub-php"
 PROTO=$(grep -oP '\bVERSION = \K[0-9]+' src/voxelin/net/Protocol.java)
 if [ -d "$HUB/public" ]; then
-    python3 tools/versions.py add "$VERSION" "$DIST/$ARTIFACT.zip" "$HUB/public/voxelin-versions.json" --protocol "$PROTO"
+    MINPROTO=$(grep -oP '\bMIN_VERSION = \K[0-9]+' src/voxelin/net/Protocol.java)
+    API=$(grep -oP '\bVERSION = \K[0-9]+' src/voxelin/api/VoxelinApi.java)
+    APIMIN=$(grep -oP '\bMIN_COMPATIBLE = \K[0-9]+' src/voxelin/api/VoxelinApi.java)
+    # несумісні зміни цієї версії (по рядку) - гра й сервери покажуть їх у «є оновлення»: docs/breaking/<версія>.txt
+    BRK=()
+    if [ -f "docs/breaking/$VERSION.txt" ]; then while IFS= read -r l; do [ -n "$l" ] && BRK+=(--breaking "$l"); done < "docs/breaking/$VERSION.txt"; fi
+    python3 tools/versions.py add "$VERSION" "$DIST/$ARTIFACT.zip" "$HUB/public/voxelin-versions.json" --protocol "$PROTO" --min-protocol "$MINPROTO" --api "$API" --api-min "$APIMIN" "${BRK[@]}"
     tar cf - -C "$HUB/public" voxelin-versions.json | ssh vps 'cd ~/web/flhub.luchezarikcentr.com/public_html && tar xf -'
     curl -fsS https://flhub.luchezarikcentr.com/voxelin/versions.json | grep -q "\"$VERSION\"" && echo "на сайті: $VERSION"
     ( cd "$HUB" && git add public/voxelin-versions.json && git commit -q -m "Voxelin $VERSION у списку версій" && git push -q ) || echo "⚠ закомітити fl-hub-php вручну"

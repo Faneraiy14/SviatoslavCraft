@@ -148,8 +148,36 @@ public final class Game {
 
     public World openWorld(String name) throws IOException {
         File d = worldDir(name);
+        WorldInfo info = WorldInfo.load(d);
+        backupIfVersionChanged(d, info);
         if (scripts != null) scripts.setWorldDir(d);
-        return openAt(d, WorldInfo.load(d));
+        return openAt(d, info);
+    }
+
+    /** Остання резервна копія (для повідомлень; null - не робилась). */
+    public volatile File lastBackup;
+
+    /**
+     * Світ востаннє збережено іншою версією гри (оновили гру чи сервер на хостингу) - спершу копія цілого світу в
+     * backups/<світ>-<стара версія>-<дата>.vxworld поруч із saves/, потім відкриття. Невдала копія не заважає грі (лише попередження).
+     */
+    void backupIfVersionChanged(File d, WorldInfo info) {
+        String was = info.gameVersion;
+        if (was != null && was.equals(GameVersion.VERSION)) return;
+        String[] files = d.list((x, n) -> !n.equals(WorldInfo.FILE));
+        if (files == null || files.length == 0) return; // щойно створений - копіювати нічого
+        File dir = new File(savesDir.getAbsoluteFile().getParentFile(), "backups");
+        String stamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HH.mm").format(new Date());
+        File out = new File(dir, d.getName() + "-" + (was == null ? "до-1.3.1" : was) + "-" + stamp + WorldArchive.EXT);
+        try {
+            if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("не вдалось створити " + dir);
+            WorldArchive.export(d, out);
+            lastBackup = out;
+            System.out.println("[Voxelin] світ «" + info.name + "» збережено версією " + (was == null ? "до 1.3.1" : was) + ", а це " + GameVersion.VERSION
+                    + (was != null && GameVersion.compare(was, GameVersion.VERSION) > 0 ? " (СТАРІША! краще відкрити новішою)" : "") + " - копію зроблено: " + out);
+        } catch (IOException | RuntimeException e) {
+            System.out.println("[Voxelin] ⚠️ не вдалось зробити копію світу перед відкриттям новою версією: " + e.getMessage());
+        }
     }
 
     /** Відкрити вимір світу (поки що «end»): окрема тека <світ>/dimensions/<вимір>/ із власним WorldInfo; створюється при першому відкритті. */

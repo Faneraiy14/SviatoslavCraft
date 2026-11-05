@@ -35,6 +35,10 @@ public final class DedicatedServer {
         public String world = "server", code, name = "Сервер";
         public long seed = new Random().nextLong();
         public boolean flat, survival = true;
+        /** Раз на 12 годин дивитись, чи вийшла нова версія (лише повідомлення в консоль; сам сервер не оновлюється). */
+        public boolean updateCheck = true;
+        /** Звідки брати список версій (тести - свій). */
+        public String manifest = voxelin.loader.UpdateCheck.MANIFEST;
         public int port = Protocol.DEFAULT_PORT;
         File saves = new File("saves"), mods = new File("mods"), file = new File("server.properties");
         /** Що з прапорців (на цей запуск, не у файл). */
@@ -50,6 +54,7 @@ public final class DedicatedServer {
                     case "--flat" -> flags.put("flat", "true");
                     case "--survival" -> flags.put("mode", "survival");
                     case "--creative" -> flags.put("mode", "creative");
+                    case "--no-update-check" -> flags.put("update-check", "false");
                     case "--help", "-h" -> { System.out.println(USAGE); System.exit(0); }
                     case "--world", "--seed", "--port", "--code", "--name", "--saves", "--mods", "--config" -> {
                         if (i + 1 >= a.length) throw new IllegalArgumentException(k + ": бракує значення");
@@ -65,7 +70,7 @@ public final class DedicatedServer {
             boolean had = c.file.isFile();
             if (had) try (Reader r = new InputStreamReader(new FileInputStream(c.file), StandardCharsets.UTF_8)) { p.load(r); }
                 catch (IOException e) { throw new UncheckedIOException("не вдалось прочитати " + c.file, e); }
-            for (String key : List.of("world", "seed", "flat", "mode", "port", "code", "name")) if (p.containsKey(key)) c.set(key, p.getProperty(key).trim());
+            for (String key : List.of("world", "seed", "flat", "mode", "port", "code", "name", "update-check")) if (p.containsKey(key)) c.set(key, p.getProperty(key).trim());
             boolean fresh = !had || !p.containsKey("code");
             if (c.code == null) c.code = Protocol.newCode();
             for (Map.Entry<String, String> e : flags.entrySet()) { c.set(e.getKey(), e.getValue()); c.explicit.add(e.getKey()); }
@@ -81,6 +86,7 @@ public final class DedicatedServer {
                 case "mode" -> { if (!v.equals("survival") && !v.equals("creative")) throw new IllegalArgumentException("mode: survival або creative"); survival = v.equals("survival"); }
                 case "port" -> { int n = Integer.parseInt(v); if (n < 0 || n > 65535) throw new IllegalArgumentException("port: 1-65535 (0 - будь-який вільний)"); port = n; }
                 case "code" -> { if (!NetServer.validCode(v)) throw new IllegalArgumentException("code: " + Protocol.CODE_LEN + "-16 латинських літер і цифр"); code = v.toUpperCase(Locale.ROOT); }
+                case "update-check" -> updateCheck = !v.equalsIgnoreCase("false");
                 case "name" -> { String n = Protocol.cleanName(v); if (n == null) throw new IllegalArgumentException("name: 1-16 літер, цифр, _ або -"); name = n; }
                 default -> throw new IllegalArgumentException(key);
             }
@@ -90,8 +96,9 @@ public final class DedicatedServer {
             String text = "# Voxelin: сервер без вікна. Зміни набувають сили після перезапуску.\n"
                     + "# world - тека світу в saves/ (нема - створиться з seed і flat); mode - survival або creative (режим гостей)\n"
                     + "# code - код запрошення (" + Protocol.CODE_LEN + "-16 латинських літер і цифр): його вводять гості разом з адресою\n"
+                    + "# update-check - писати в консоль, коли вийде нова версія Voxelin (сам сервер не оновлюється ніколи)\n"
                     + "world=" + world + "\nseed=" + seed + "\nflat=" + flat + "\nmode=" + (survival ? "survival" : "creative")
-                    + "\nport=" + port + "\ncode=" + code + "\nname=" + name + "\n";
+                    + "\nport=" + port + "\ncode=" + code + "\nname=" + name + "\nupdate-check=" + updateCheck + "\n";
             try {
                 File parent = file.getAbsoluteFile().getParentFile();
                 if (parent != null) parent.mkdirs();
@@ -211,7 +218,7 @@ public final class DedicatedServer {
         switch (word) {
             case "help", "?" -> log("""
                     команди: list - хто в грі · say ТЕКСТ (або просто текст) - у чат · kick ІМ'Я [ЧОМУ] · save - зберегти світ · code - код і адреси
-                             status - тік і чанки · stop - зберегти й вийти · /КОМАНДА - команда гри від імені консолі (/time, /weather, /gamerule ...)""");
+                             status - тік і чанки · update - чи є нова версія · stop - зберегти й вийти · /КОМАНДА - команда гри від імені консолі (/time, /weather, /gamerule ...)""");
             case "list" -> {
                 List<NetServer.Guest> gs = net.guests();
                 if (gs.isEmpty()) log("у грі нікого (до " + Protocol.MAX_GUESTS + " гостей)");
@@ -227,6 +234,7 @@ public final class DedicatedServer {
             case "code" -> printInvite();
             case "status" -> log(String.format(Locale.ROOT, "тік %.2f мс (найдовший за хвилину %.1f), чанків %d, істот %d, гостей %d, день %d",
                     tickNs / 1e6, worstNs / 1e6, world.chunkCount(), world.mobs().size(), net.guests().size(), world.dayNumber()));
+            case "update" -> checkUpdates(true);
             case "stop", "exit", "quit" -> { log("зупинка..."); running = false; }
             default -> {
                 if (line.startsWith("/")) {
@@ -249,6 +257,22 @@ public final class DedicatedServer {
             for (String l; running && (l = r.readLine()) != null; ) console.add(l);
         } catch (IOException ignored) { }
         // кінець stdin (запуск у фоні, </dev/null) - сервер працює далі, зупинка - сигналом
+    }
+
+    /** Про яку версію вже сказали (щоб не повторювати кожні 12 годин). */
+    private volatile String announced;
+
+    /** Перевірити оновлення у фоні; asked - з консолі (тоді «оновлень нема» теж кажемо). */
+    void checkUpdates(boolean asked) {
+        Thread t = new Thread(() -> {
+            voxelin.loader.UpdateCheck.Update u = voxelin.loader.UpdateCheck.check(cfg.manifest, GameVersion.VERSION, Protocol.VERSION, voxelin.api.VoxelinApi.VERSION, true);
+            if (u == null) { if (asked) log("оновлень нема (або не вдалось перевірити) - зараз " + GameVersion.VERSION); return; }
+            if (!asked && u.version().equals(announced)) return;
+            announced = u.version();
+            for (String l : u.lines()) log("🔔 " + l);
+        }, "voxelin-update-check");
+        t.setDaemon(true);
+        t.start();
     }
 
     /** Чому зупинились (для гостей) і з яким кодом вийти; null - звичайна зупинка. */
@@ -299,6 +323,12 @@ public final class DedicatedServer {
         catch (Throwable e) { CrashReport.report(new File("crash-reports"), "запуск сервера", e, null, null, System.out::println); System.exit(1); return; }
         s.log("Voxelin " + voxelin.client.Voxelin.VERSION + " · світ «" + cfg.world + "» · модів " + s.game.mods.mods().size() + (s.net.contentCount() > 0 ? " (їхній вміст гості отримують від сервера: записів " + s.net.contentCount() + ")" : ""));
         s.printInvite();
+        if (s.game.lastBackup != null) s.log("світ збережено іншою версією гри - перед відкриттям зроблено копію: " + s.game.lastBackup);
+        if (cfg.updateCheck) {
+            Thread uc = new Thread(() -> { while (s.running) { s.checkUpdates(false); try { Thread.sleep(12L * 3600 * 1000); } catch (InterruptedException e) { return; } } }, "voxelin-update-timer");
+            uc.setDaemon(true);
+            uc.start();
+        }
         s.log("консоль: help - список команд");
         Thread worldThread = new Thread(s::run, "voxelin-world");
         Runtime.getRuntime().addShutdownHook(new Thread(() -> { if (s.running) { s.log("сигнал - зупинка..."); s.stop(); } }, "voxelin-stop"));

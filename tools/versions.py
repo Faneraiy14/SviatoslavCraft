@@ -2,14 +2,17 @@
 """Публічний список версій Voxelin (як version_manifest у Mojang): за ним хостинги, Docker і лаунчери
 самі знаходять потрібну збірку, перевіряють sha256 і знають, як її запустити.
 
-  tools/versions.py add ВЕРСІЯ АРХІВ.zip ФАЙЛ.json [--protocol N] [--time ISO] [--snapshot]   додати/оновити версію
+  tools/versions.py add ВЕРСІЯ АРХІВ.zip ФАЙЛ.json [--protocol N] [--min-protocol N] [--api N] [--api-min N]
+                        [--breaking "що зламалось" ...] [--time ISO] [--snapshot]   додати/оновити версію
   tools/versions.py check ФАЙЛ.json                                           перевірити формат
 
 Формат (format 1) - лише додаємо поля, нічого не перейменовуємо:
   latest: {release, server}       остання версія і остання з сервером без вікна
   versions[]: id, type (release|snapshot), releaseTime, java, protocol (мережевий; гості й хост
     сумісні, якщо однаковий), download {url, sha256, size, dir - тека всередині архіву},
-    client {mainClass, classpath}, server {mainClass, classpath, port} або null (до 1.2.0 сервера не було)
+    client {mainClass, classpath}, server {mainClass, classpath, port} або null (до 1.2.0 сервера не було),
+    minProtocol (найстаріший протокол хоста, на який ця гра ще заходить), api / apiMin (API модів: надає / ще вантажить),
+    breaking [] - несумісні зміни людською мовою (гра й сервер показують їх у «є оновлення»), notes - сторінка релізу
 Шлях класів - відносно dir; '*' - усі jar-и теки (як у java -cp).
 """
 import hashlib, json, os, re, sys, datetime
@@ -21,7 +24,7 @@ def vkey(v):
     return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
 
 
-def entry(ver, zpath, when, kind, protocol):
+def entry(ver, zpath, when, kind, protocol, extra):
     data = open(zpath, "rb").read()
     name = os.path.basename(zpath)
     modern = vkey(ver) >= (0, 1, 0)  # з 0.1.0 гра - voxelin.client.Voxelin
@@ -34,6 +37,8 @@ def entry(ver, zpath, when, kind, protocol):
         "client": {"mainClass": "voxelin.client.Voxelin" if modern else "com.sviatoslav.craft.game.SviatoslavCraft", "classpath": ["out", "lib/*"]},
         "server": {"mainClass": "voxelin.server.DedicatedServer", "classpath": ["out", "lib/*"], "port": 24555} if vkey(ver) >= (1, 2, 0) else None,
     }
+    e.update({k: v for k, v in extra.items() if v is not None})
+    e["notes"] = f"https://github.com/{REPO}/releases/tag/v{ver}"
     return e
 
 
@@ -63,8 +68,11 @@ def main(a):
     when = a[a.index("--time") + 1] if "--time" in a else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     kind = "snapshot" if "--snapshot" in a else "release"
     protocol = int(a[a.index("--protocol") + 1]) if "--protocol" in a else None
+    opt = lambda f: int(a[a.index(f) + 1]) if f in a else None
+    extra = {"minProtocol": opt("--min-protocol"), "api": opt("--api"), "apiMin": opt("--api-min"),
+             "breaking": [a[i + 1] for i, x in enumerate(a) if x == "--breaking"]}
     m = json.load(open(out, encoding="utf-8")) if os.path.exists(out) else {"format": 1, "latest": {}, "versions": []}
-    m["versions"] = [v for v in m["versions"] if v["id"] != ver] + [entry(ver, zpath, when, kind, protocol)]
+    m["versions"] = [v for v in m["versions"] if v["id"] != ver] + [entry(ver, zpath, when, kind, protocol, extra)]
     m["versions"].sort(key=lambda v: vkey(v["id"]), reverse=True)
     rel = [v for v in m["versions"] if v["type"] == "release"]
     m["latest"] = {"release": rel[0]["id"] if rel else None,

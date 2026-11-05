@@ -583,7 +583,7 @@ public final class ItemTextureGen {
         int[] a = new int[256];
         for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
             double nx = (x - 7.5) / 6.5, ny = (y - 7) / 6.5;
-            double v = Math.pow(nx * nx + ny * ny - 0.6, 3) - nx * nx * Math.pow(-ny, 3) * 1.4;
+            double v = StrictMath.pow(nx * nx + ny * ny - 0.6, 3) - nx * nx * StrictMath.pow(-ny, 3) * 1.4;
             if (v <= 0) a[x + y * N] = hash(x, y, 97) % 5 == 0 ? 0xFFFFF0FF : (y < 6 ? 0xFFF0C0FF : 0xFFC060E0);
         }
         return outlined(a);

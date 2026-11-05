@@ -285,7 +285,7 @@ public final class TextureGen {
     // ---- Незер (29.10.2026)
     /** Лава: помаранчеві хвилі з жовтими прожилками й темними плямами кірки. */
     public static int[] lava() { return make((x, y) -> {
-        double w = Math.sin((x + y * 0.6) * 0.8) + Math.sin((y - x * 0.4) * 0.7);
+        double w = StrictMath.sin((x + y * 0.6) * 0.8) + StrictMath.sin((y - x * 0.4) * 0.7);
         int c = rgb(222 + (int) (w * 14), 92 + (int) (w * 22), 18);
         if (w > 1.2) c = rgb(255, 200, 70);
         if (rnd(71, x / 2, y / 2) < 0.08) c = rgb(150, 44, 14);
@@ -323,7 +323,7 @@ public final class TextureGen {
     /** Портал Незеру: напівпрозорий червоно-фіолетовий вир. */
     public static int[] netherPortal() { return make((x, y) -> {
         double d = Math.hypot(x - 7.5, y - 7.5), a = Math.atan2(y - 7.5, x - 7.5);
-        double s = Math.sin(d * 1.3 + a * 2);
+        double s = StrictMath.sin(d * 1.3 + a * 2);
         return argb(185, 150 + (int) (s * 50), 30, 120 + (int) (s * 40));
     }); }
 

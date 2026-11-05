@@ -87,6 +87,9 @@ public class VoxelinServerTest {
         inv.add("voxelin:stone", 5, 0);
         cli.sendInv(inv);
         Thread.sleep(200);
+        Pos moved = at.copy(); moved.add(10, 0, 0); moved.normalize(); // відійшов на 10 блоків - сервер запам'ятає
+        cli.sendPos(moved, 0, 0);
+        Thread.sleep(300);
         s.enqueue("kick Гість дякую");
         wait(() -> { cli.poll(); return cli.kicked() != null; }, "kick");
         check(cli.kicked().contains("дякую"), "причина кіка дійшла: " + cli.kicked());
@@ -96,6 +99,15 @@ public class VoxelinServerTest {
         wait(invFile::isFile, "інвентар гостя записано при виході");
         check(Files.readString(invFile.toPath()).contains("voxelin:stone"), "у файлі інвентаря камінь");
         mirror.close();
+        // повторний вхід: туди, де вийшов
+        NetClient back = join(s, "Гість", "FERMA42");
+        World mirror2 = s.game.openMirror(back.welcome.worldName(), back.welcome.seed(), back.welcome.type(), back.welcome.palette(), true);
+        back.attach(mirror2); // як у грі: після входу підключається дзеркало світу
+        wait(() -> { back.poll(); Pos t = back.takeTeleport(); if (t != null) tp[0] = t; return tp[0] != null; }, "повторний вхід: телепорт на місце виходу");
+        check(dist(tp[0], moved) < 0.01 && dist(back.welcome.spawn(), spawn) < 0.01, "гість повертається туди, де вийшов, а точка відродження - та сама");
+        back.close();
+        mirror2.close();
+        wait(() -> s.net.guests().isEmpty(), "гість вийшов");
 
         // зупинка з консолі: світ зберігається
         s.enqueue("stop");
@@ -110,6 +122,8 @@ public class VoxelinServerTest {
         System.out.println("VoxelinServerTest: " + n + " перевірок OK");
         System.exit(0);
     }
+
+    static final Pos[] tp = new Pos[1];
 
     static int id(DedicatedServer s, long x, int y, long z) { return locked(s, () -> s.world.blockId(x, y, z)); }
 

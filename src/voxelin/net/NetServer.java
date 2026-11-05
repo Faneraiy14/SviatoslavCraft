@@ -319,6 +319,8 @@ public final class NetServer implements AutoCloseable {
             o.writeBoolean(survival);
         }));
         c.send(timeFrame());
+        Pos back = dedicated() ? loadPos(name) : null; // сервер без вікна: повернути туди, де гість вийшов (відродження - як і раніше на точці появи)
+        if (back != null) { g.pos.cx = back.cx; g.pos.cz = back.cz; g.pos.x = back.x; g.pos.y = back.y; g.pos.z = back.z; c.send(frame(S_TELEPORT, o -> writePos(o, back))); }
         if (survival) {
             String[] inv = loadInv(name);
             if (inv != null) c.send(frame(S_INV, o -> { o.writeInt(inv.length); for (String l : inv) o.writeUTF(l.length() > 200 ? "" : l); }));
@@ -499,6 +501,36 @@ public final class NetServer implements AutoCloseable {
     private void farewell(Guest g) {
         if (g.session != null) endSession(g);
         if (survival && g.invLines != null) saveInv(g.name, g.invLines);
+        if (dedicated()) savePos(g);
+    }
+
+    // ------------------------------------------------------------------ позиція гостя (сервер без вікна): guests/<ім'я>.pos
+
+    private File posFile(String name) { return new File(guestsDir(), name.toLowerCase(Locale.ROOT) + ".pos"); }
+
+    private void savePos(Guest g) {
+        try {
+            File d = guestsDir();
+            d.mkdirs();
+            File f = posFile(g.name), tmp = new File(d, f.getName() + ".tmp");
+            String line = g.pos.cx + " " + g.pos.cz + " " + g.pos.x + " " + g.pos.y + " " + g.pos.z;
+            java.nio.file.Files.write(tmp.toPath(), line.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Files2.replace(tmp, f);
+        } catch (IOException e) { System.out.println("[Voxelin] ⚠️ позиція гостя " + g.name + ": " + e); }
+    }
+
+    /** Де гість вийшов минулого разу; null - нема або файл зіпсовано. */
+    Pos loadPos(String name) {
+        File f = posFile(name);
+        if (!f.isFile() || f.length() > 256) return null;
+        try {
+            String[] p = java.nio.file.Files.readString(f.toPath()).trim().split("\\s+");
+            if (p.length != 5) return null;
+            double x = Double.parseDouble(p[2]), y = Double.parseDouble(p[3]), z = Double.parseDouble(p[4]);
+            if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z) || Math.abs(x) > 64 || Math.abs(z) > 64 || y < 0 || y > 1024) return null;
+            Pos pos = new Pos(Long.parseLong(p[0]), Long.parseLong(p[1]), x, y, z);
+            return World.inRange(pos.cx, pos.cz) ? pos : null;
+        } catch (IOException | RuntimeException e) { return null; }
     }
 
     private void give(Guest g, String item, int count, int damage) {

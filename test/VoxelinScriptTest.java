@@ -49,6 +49,7 @@ public class VoxelinScriptTest {
         try {
             basics(groundName, ground);
             budget();
+            newEvents();
             command(ground);
             blockEvent(ground);
             sandbox();
@@ -106,6 +107,9 @@ public class VoxelinScriptTest {
             func main() {
                 on("tick", onTick)
                 on("block", onBlock)
+                on("chat", func(ev) { say("чат: " + mapGet(ev, "name") + " " + mapGet(ev, "text")) })
+                on("mob_death", func(ev) { say("загинув: " + mapGet(ev, "mob") + " у " + mapGet(ev, "x")) })
+                on("join", func(ev) { say("увійшов: " + mapGet(ev, "name") + " гість " + mapGet(ev, "guest")) })
                 command("pillar", "<висота>", onPillar)
                 vxRun()
             }
@@ -120,6 +124,18 @@ public class VoxelinScriptTest {
         ScriptHost.Info i = info("builder");
         check(i != null && i.state == ScriptHost.State.RUNNING, "builder працює");
         check(new File(scripts, "voxelin.nx").isFile(), "гра поклала помічник scripts/voxelin.nx");
+    }
+
+    /** Події 1.1.0 (chat, mob_death, join) доходять і до скриптів. */
+    static void newEvents() throws Exception {
+        // події 1.1.0 доходять і до скриптів
+        g.events.post(new voxelin.api.event.ChatEvent(w, "Тест", "привіт", false));
+        g.events.post(new voxelin.api.event.MobDeathEvent(w, "voxelin:zombie", false, 7, 64, -3));
+        g.events.post(new voxelin.api.event.PlayerJoinEvent(w, "Друг", true));
+        tickUntil(() -> saidHas("чат: Тест привіт") && saidHas("загинув: voxelin:zombie у 7") && saidHas("увійшов: Друг гість "), 8000);
+        check(saidHas("чат: Тест привіт"), "скрипт отримав chat: " + said);
+        check(saidHas("загинув: voxelin:zombie у 7"), "скрипт отримав mob_death");
+        check(saidHas("увійшов: Друг гість "), "скрипт отримав join");
     }
 
     static void budget() throws Exception {

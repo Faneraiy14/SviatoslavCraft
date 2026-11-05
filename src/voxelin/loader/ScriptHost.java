@@ -28,7 +28,7 @@ public final class ScriptHost {
     public static final int API = 1;
     static final int BLOCKS_PER_TICK = 256, STUCK_TICKS = 100, MAX_OPS_PER_TICK = 4000, STUCK_MS = 5000, MEMORY_MB = 512;
     static final long TIME_BUDGET_US = 4000, REPLY_WAIT_US = 300;
-    private static final Set<String> EVENTS = Set.of("tick", "second", "block", "world");
+    private static final Set<String> EVENTS = Set.of("tick", "second", "block", "world", "join", "leave", "mob_death", "chat");
 
     public enum State { RUNNING, STOPPED, CRASHED, KILLED, NO_NX }
 
@@ -72,6 +72,11 @@ public final class ScriptHost {
         this.blocks = blocks;
         events.on("scripts", TickEvent.class, this::onTick);
         events.on("scripts", BlockChangeEvent.class, this::onBlock);
+        // ті самі події, що й у jar-модів (1.1.0); скрипт лише дізнається - скасувати чат зі скрипта не можна (він в окремому процесі)
+        events.on("scripts", voxelin.api.event.PlayerJoinEvent.class, e -> { Map<String, Object> m = event("join", "name", e.name); m.put("guest", e.guest); emit("join", m); });
+        events.on("scripts", voxelin.api.event.PlayerLeaveEvent.class, e -> { Map<String, Object> m = event("leave", "name", e.name); m.put("guest", e.guest); m.put("reason", e.reason); emit("leave", m); });
+        events.on("scripts", voxelin.api.event.MobDeathEvent.class, e -> { Map<String, Object> m = event("mob_death", "mob", e.mob); m.put("boss", e.boss); m.put("x", e.x); m.put("y", e.y); m.put("z", e.z); emit("mob_death", m); });
+        events.on("scripts", voxelin.api.event.ChatEvent.class, e -> { Map<String, Object> m = event("chat", "name", e.name); m.put("text", e.text); m.put("guest", e.guest); emit("chat", m); });
         commands.register("scripts", "script", "list | reload <назва|all> | stop <назва> | log <назва>", 0, this::command);
     }
 
@@ -418,6 +423,11 @@ public final class ScriptHost {
             });
             s.commands.add(n);
         } catch (IllegalArgumentException e) { error(s, e.getMessage()); }
+    }
+
+    /** Подію - кожному скрипту, що на неї підписався. */
+    private void emit(String kind, Map<String, Object> ev) {
+        for (Script s : scripts.values()) if (s.proc != null && s.subs.contains(kind)) s.proc.send(ev);
     }
 
     private void onBlock(BlockChangeEvent e) {

@@ -104,7 +104,8 @@ func worldTime() {
     return vxRequest(vxOp("time"))
 }
 
-// Підписка на подію: "tick" (20/с), "second" (раз на секунду), "block" (гравець змінив блок), "world" (новий світ чи вимір), "stop" (скрипт зупиняють).
+// Підписка на подію: "tick" (20/с), "second" (раз на секунду), "block" (гравець змінив блок), "world" (новий світ чи вимір), "stop" (скрипт зупиняють),
+// "join" / "leave" (гравець чи гість: name, guest, reason), "mob_death" (mob, boss, x, y, z), "chat" (name, text, guest).
 func on(event, handler) {
     mapSet(vxHandlers, event, handler)
     if (event != "stop") {

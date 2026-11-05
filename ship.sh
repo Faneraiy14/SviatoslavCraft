@@ -108,7 +108,7 @@ gh release create "v$VERSION" "$DIST/$ARTIFACT.zip" "$DIST/voxelin-api.jar" "$DI
 
 echo "== Список версій на FL Hub (/voxelin/versions.json - за ним Docker, хостинги, /voxelin/download) =="
 HUB="$HOME/Projects/fl-hub-php"
-PROTO=$(grep -o 'VERSION = [0-9]*' src/voxelin/net/Protocol.java | grep -o '[0-9]*$')
+PROTO=$(grep -oP '\bVERSION = \K[0-9]+' src/voxelin/net/Protocol.java)
 if [ -d "$HUB/public" ]; then
     python3 tools/versions.py add "$VERSION" "$DIST/$ARTIFACT.zip" "$HUB/public/voxelin-versions.json" --protocol "$PROTO"
     tar cf - -C "$HUB/public" voxelin-versions.json | ssh vps 'cd ~/web/flhub.luchezarikcentr.com/public_html && tar xf -'

@@ -162,6 +162,7 @@ public final class Voxelin {
     }
 
     public static void main(String[] args) {
+        if (Arrays.asList(args).contains("--server")) { voxelin.server.DedicatedServer.main(args); return; } // без вікна й GL
         Options o = Options.parse(args);
         Voxelin v = null;
         try {

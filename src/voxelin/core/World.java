@@ -553,8 +553,8 @@ public final class World implements WorldAccess {
             if (!m.dying && m.type.flying && Math.floorMod(tick + m.hashCode(), 30) == 0) mobSound(m, "flap", 1f);
             if (m.dying && !m.lootDropped) dropLoot(m);
             if (m.removable()) { it.remove(); continue; }
-            if (pc != null) { // далекі зникають (вороги ближче, ніж мирні)
-                double d2 = dist2(m.pos, pc);
+            if (pc != null || !others.isEmpty()) { // далекі зникають (вороги ближче, ніж мирні); сервер без вікна - лише за гостями
+                double d2 = pc != null ? dist2(m.pos, pc) : Double.MAX_VALUE;
                 for (Pos o : others) d2 = Math.min(d2, dist2(m.pos, o)); // біля гостя теж не зникають
                 if (naturalSpawning && !m.keep && !m.type.persistent && ((m.type.hostile() && d2 > 80 * 80) || d2 > 128 * 128)) it.remove();
             }
@@ -761,6 +761,8 @@ public final class World implements WorldAccess {
     // ------------------------------------------------------------------ читання
 
     public Chunk chunk(long cx, long cz) { return chunks.get(new ChunkPos(cx, cz)); }
+    /** Скільки чанків завантажено. */
+    public int chunkCount() { return chunks.size(); }
     public Collection<Chunk> loadedChunks() { return chunks.values(); }
 
     /** id блока; незавантажений чанк -> -1. Безпечно з будь-якого потоку. */

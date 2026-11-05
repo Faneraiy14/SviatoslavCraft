@@ -47,6 +47,19 @@ cat > "$PKG/run.bat" << 'RUNEOF'
 cd /d "%~dp0"
 java -cp "out;lib/*" voxelin.client.Voxelin
 RUNEOF
+cat > "$PKG/server.sh" << 'RUNEOF'
+#!/bin/bash
+# Сервер без вікна (налаштування - server.properties, створюється з першим запуском; --help - параметри)
+set -e
+cd "$(dirname "$0")"
+java -Djava.awt.headless=true -cp "out:lib/*" voxelin.server.DedicatedServer "$@"
+RUNEOF
+chmod +x "$PKG/server.sh"
+cat > "$PKG/server.bat" << 'RUNEOF'
+@echo off
+cd /d "%~dp0"
+java -Djava.awt.headless=true -cp "out;lib/*" voxelin.server.DedicatedServer %*
+RUNEOF
 ( cd "$DIST" && zip -r -q "$ARTIFACT.zip" "$ARTIFACT" )
 
 echo "== Тег v$VERSION =="

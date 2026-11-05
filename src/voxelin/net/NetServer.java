@@ -156,15 +156,44 @@ public final class NetServer implements AutoCloseable {
     private volatile boolean closed;
     private final Pos hostPos = new Pos();
     private float hostYaw, hostPitch;
+    /** Сервер без вікна: точка появи гостей (хоста-гравця нема). null - звичайний хост. */
+    private final java.util.function.Supplier<Pos> spawnPoint;
+
+    /** Чи це сервер без вікна (без хоста-гравця). */
+    public boolean dedicated() { return spawnPoint != null; }
+
+    /** Свій код: CODE_LEN..16 латинських літер і цифр. */
+    public static boolean validCode(String c) {
+        if (c == null || c.length() < CODE_LEN || c.length() > 16) return false;
+        for (char ch : c.toCharArray()) if (!(ch < 128 && Character.isLetterOrDigit(ch))) return false;
+        return true;
+    }
+
+    /** Сервер без вікна: тік без хоста-гравця. */
+    public void tick() { if (!dedicated()) throw new IllegalStateException("лише для сервера без вікна"); tick(hostPos, 0, 0); }
+
+    /** Від'єднати гостя на прохання хоста (консоль сервера). */
+    public boolean kick(String name, String why) {
+        for (Guest g : new ArrayList<>(guests)) if (g.name.equalsIgnoreCase(name)) { drop(g, why == null || why.isBlank() ? "від'єднав хост" : why); return true; }
+        return false;
+    }
 
     /** Відкрити світ для мережі на порту (0 - будь-який вільний). chatOut - що показати в чаті хоста. */
     public NetServer(World world, int port, String hostName, String hostLook, Consumer<String> chatOut) throws IOException { this(world, port, hostName, hostLook, chatOut, false); }
 
-    public NetServer(World world, int port, String hostName, String hostLook, Consumer<String> chatOut, boolean survival) throws IOException {
+    public NetServer(World world, int port, String hostName, String hostLook, Consumer<String> chatOut, boolean survival) throws IOException { this(world, port, hostName, hostLook, chatOut, survival, null, null); }
+
+    /**
+     * fixedCode - свій код запрошення (сервер без вікна: код не міняється між запусками; null - випадковий). spawnPoint - не null для сервера
+     * без вікна: хоста-гравця нема (його не видно гостям, він не займає місця), гості з'являються в цій точці.
+     */
+    public NetServer(World world, int port, String hostName, String hostLook, Consumer<String> chatOut, boolean survival, String fixedCode, java.util.function.Supplier<Pos> spawnPoint) throws IOException {
         this.survival = survival;
+        this.spawnPoint = spawnPoint;
+        if (fixedCode != null && !validCode(fixedCode)) throw new IllegalArgumentException("код запрошення: " + CODE_LEN + "-16 літер і цифр");
         if (world.remote()) throw new IllegalStateException("дзеркало чужого світу не можна відкрити для мережі");
         this.world = world; this.hostName = hostName; this.hostLook = hostLook; this.chatOut = chatOut;
-        code = Protocol.newCode();
+        code = fixedCode != null ? fixedCode.toUpperCase(Locale.ROOT) : Protocol.newCode();
         server = new ServerSocket();
         server.setReuseAddress(true);
         server.bind(new InetSocketAddress(port));
@@ -270,10 +299,14 @@ public final class NetServer implements AutoCloseable {
         if (name == null) return "ім'я: 1-16 літер, цифр, _ або -";
         if (name.equalsIgnoreCase(hostName) || guests.stream().anyMatch(g -> g.name.equalsIgnoreCase(name))) return "ім'я " + name + " вже зайняте";
         if (guests.size() >= MAX_GUESTS) return "світ повний (" + MAX_GUESTS + " гостей)";
-        double[] d = Raycast.dir(hostYaw, 0); // гість з'являється за 2.5 блока перед хостом, обличчям до нього
-        Pos spawn = hostPos.copy();
-        spawn.add(d[0] * SPAWN_AHEAD, 0, d[2] * SPAWN_AHEAD);
-        spawn.normalize();
+        Pos spawn;
+        if (spawnPoint != null) spawn = spawnPoint.get().copy(); // сервер без вікна: на точці появи світу
+        else {
+            double[] d = Raycast.dir(hostYaw, 0); // гість з'являється за 2.5 блока перед хостом, обличчям до нього
+            spawn = hostPos.copy();
+            spawn.add(d[0] * SPAWN_AHEAD, 0, d[2] * SPAWN_AHEAD);
+            spawn.normalize();
+        }
         Guest g = new Guest(nextId++, name, look, c, spawn);
         guests.add(g);
         c.send(frame(S_WELCOME, o -> {
@@ -492,7 +525,7 @@ public final class NetServer implements AutoCloseable {
     /** Блок не ставиться в тіло хоста чи іншого гостя. */
     private boolean insidePlayer(long x, int y, long z) {
         List<Pos> bodies = new ArrayList<>();
-        bodies.add(hostPos);
+        if (!dedicated()) bodies.add(hostPos);
         for (Guest o : guests) bodies.add(o.pos);
         for (Pos p : bodies) {
             if (p.blockX() != x || p.blockZ() != z) continue;
@@ -583,7 +616,7 @@ public final class NetServer implements AutoCloseable {
     private void sendPlayers() {
         for (Guest to : guests) {
             List<Object[]> list = new ArrayList<>();
-            list.add(new Object[]{0, hostName, hostLook, hostPos, hostYaw, hostPitch});
+            if (!dedicated()) list.add(new Object[]{0, hostName, hostLook, hostPos, hostYaw, hostPitch});
             for (Guest g : guests) if (g != to) list.add(new Object[]{g.id, g.name, g.look, g.pos, g.yaw, g.pitch});
             to.conn.send(frame(S_PLAYERS, o -> {
                 o.writeInt(list.size());

@@ -127,14 +127,15 @@ final class PlayScreen {
             public void teleport(long x, int y, long z) { player.teleport(Pos.ofBlock(x, y + PlayerEntity.EYE + 0.02, z)); }
         };
         world.setPlayerTarget(playerTarget);
+        if (net == null) v.game.players.attach(hostPlayers); // моди бачать гравця (сервіс Players)
         if (net == null) world.events().post(new voxelin.api.event.PlayerJoinEvent(world, v.settings.playerName, false)); // гість: світ хоста, події там
         if (!world.remote() && world.dimension().equals("end")) { world.populateEnd(); world.unlockRecord("voxelin:end_arrival"); }
         if (!world.remote() && world.dimension().equals(Dimensions.BETWEEN)) world.unlockRecord("voxelin:between");
         icons = new IconAtlas(v.textures, world);
         skins = new voxelin.client.render.MobSkins(world.mobTypes.all(), new java.io.File("textures"));
         java.util.function.Consumer<Inventory.Stack> dropper = st -> { if (st != null && world.remote()) inv.add(st.item, st.count, st.damage); else if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); };
-        invScreen = InventoryScreen.craft("ІНВЕНТАР", new CraftMenu(world.itemTypes, v.game.recipes, inv, 2), inv, world, icons, dropper);
-        benchScreen = InventoryScreen.craft("ВЕРСТАК", new CraftMenu(world.itemTypes, v.game.recipes, inv, 3), inv, world, icons, dropper);
+        invScreen = InventoryScreen.craft("ІНВЕНТАР", new CraftMenu(world.itemTypes, world.recipes, inv, 2), inv, world, icons, dropper);
+        benchScreen = InventoryScreen.craft("ВЕРСТАК", new CraftMenu(world.itemTypes, world.recipes, inv, 3), inv, world, icons, dropper);
         invScreen.vitals = vt;
         activeScreen = invScreen;
         prevHealth = vt.health();
@@ -190,7 +191,7 @@ final class PlayScreen {
             FurnaceEntity demo = new FurnaceEntity(0, 0, 0);
             demo.input = new Inventory.Stack("voxelin:raw_iron", 5); demo.fuel = new Inventory.Stack("voxelin:coal", 3); demo.output = new Inventory.Stack("voxelin:iron_ingot", 2);
             demo.burnLeft = 900; demo.burnTotal = 1600; demo.progress = 120; demo.cookTotal = 200;
-            activeScreen = InventoryScreen.furnace(new FurnaceMenu(world.itemTypes, v.game.recipes, inv, demo), inv, world, icons, st -> { });
+            activeScreen = InventoryScreen.furnace(new FurnaceMenu(world.itemTypes, world.recipes, inv, demo), inv, world, icons, st -> { });
             invOpen = true;
         }
         say("Voxelin " + Voxelin.VERSION + ". T або / - команди, E - інвентар, F3 - відладка, F5 - камера, M - мінікарта, C - зум, K - код.");
@@ -208,6 +209,9 @@ final class PlayScreen {
         try {
             try { server = new voxelin.net.NetServer(world, voxelin.net.Protocol.DEFAULT_PORT, v.settings.playerName, v.look.toNet(), this::say, lanSurvival); }
             catch (java.io.IOException busy) { server = new voxelin.net.NetServer(world, 0, v.settings.playerName, v.look.toNet(), this::say, lanSurvival); }
+            server.setContent(v.game.mods.content()); // гості бачать вміст моїх модів без самих модів
+            server.setCommands(v.game.commands); // гості можуть виконувати команди модів для всіх
+            v.game.players.attach(server.players);
             say("Світ відкрито для мережі. Код: " + server.code + ", адреса: " + lanLine() + ". Гості - " + (lanSurvival ? "у виживанні." : "у творчому режимі."));
         } catch (java.io.IOException e) { say("Не вдалось відкрити для мережі: " + e.getMessage()); }
     }
@@ -292,10 +296,35 @@ final class PlayScreen {
 
     // ------------------------------------------------------------------ тік
 
+    /** Що моди зробили з гравцем через Players (з потоку світу) - виконується на початку тіку гравця. */
+    private final java.util.concurrent.ConcurrentLinkedQueue<Runnable> fromMods = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    /** Гравець цього вікна для сервісу Players модів (у своїй грі й коли світ відкрито для мережі). */
+    private final voxelin.api.Players hostPlayers = new voxelin.api.Players() {
+        private boolean me(String n) { return n != null && n.equalsIgnoreCase(v.settings.playerName); }
+        public List<String> online() { return List.of(v.settings.playerName); }
+        public boolean isOnline(String n) { return me(n); }
+        public long[] position(String n) { if (!me(n)) return null; Pos p = player.pos; return new long[]{p.blockX(), (int) Math.floor(p.y - PlayerEntity.EYE + 0.05), p.blockZ()}; }
+        public boolean teleport(String n, long x, int y, long z) {
+            if (!me(n) || y < 0 || y > world.height() + 64) return false;
+            Pos to = Pos.ofBlock(x, y + PlayerEntity.EYE + 0.02, z);
+            if (!World.inRange(to.cx, to.cz)) return false;
+            fromMods.add(() -> player.teleport(to));
+            return true;
+        }
+        public boolean message(String n, String text) { if (!me(n)) return false; fromMods.add(() -> say(text)); return true; }
+        public boolean give(String n, String item, int count) {
+            if (!me(n) || world.itemTypes.get(item) == null) return false;
+            fromMods.add(() -> { int left = inv.add(item, count, 0); if (left > 0) say("Інвентар повний - " + InventoryScreen.titleOf(world, item) + " x" + left + " пропало."); });
+            return true;
+        }
+        public boolean kick(String n, String reason) { return false; }
+    };
+
     /** Тік гравця (головний потік) - під замком світу. */
     void tick() {
         world.lock.lock();
-        try { tickLocked(); } finally { world.lock.unlock(); }
+        try { for (Runnable r; (r = fromMods.poll()) != null; ) r.run(); tickLocked(); } finally { world.lock.unlock(); }
     }
 
     // ------------------------------------------------------------------ потік світу
@@ -666,7 +695,7 @@ final class PlayScreen {
             else if ("furnace".equals(target.interact)) {
                 FurnaceEntity fe = world.furnaceAt(hit.x(), hit.y(), hit.z());
                 if (fe != null) {
-                    activeScreen = InventoryScreen.furnace(new FurnaceMenu(world.itemTypes, v.game.recipes, inv, fe), inv, world, icons, st -> { if (st != null && world.remote()) inv.add(st.item, st.count, st.damage); else if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
+                    activeScreen = InventoryScreen.furnace(new FurnaceMenu(world.itemTypes, world.recipes, inv, fe), inv, world, icons, st -> { if (st != null && world.remote()) inv.add(st.item, st.count, st.damage); else if (st != null) world.spawnItem(bodyPos(), st.item, st.count, st.damage, true); });
                     openedX = hit.x(); openedY = hit.y(); openedZ = hit.z(); openedBlock = true; openedKind = "furnace";
                     invOpen = true; grab(false);
                 }
@@ -1093,7 +1122,7 @@ final class PlayScreen {
         net.openContainer(x, y, z, inv);
         Menu m;
         if (kind.equals("chest")) { ChestEntity ce = new ChestEntity(x, y, z); remoteEntity = ce; m = new ChestMenu(world.itemTypes, inv, ce); activeScreen = InventoryScreen.container("СКРИНЯ", (ChestMenu) m, inv, world, icons, st -> { }); }
-        else { FurnaceEntity fe = new FurnaceEntity(x, y, z); remoteEntity = fe; m = new FurnaceMenu(world.itemTypes, v.game.recipes, inv, fe); activeScreen = InventoryScreen.furnace((FurnaceMenu) m, inv, world, icons, st -> { }); }
+        else { FurnaceEntity fe = new FurnaceEntity(x, y, z); remoteEntity = fe; m = new FurnaceMenu(world.itemTypes, world.recipes, inv, fe); activeScreen = InventoryScreen.furnace((FurnaceMenu) m, inv, world, icons, st -> { }); }
         m.remote = net::menuOp;
         remoteMenu = m;
         openedX = x; openedY = y; openedZ = z; openedBlock = true; openedKind = kind;
@@ -1397,7 +1426,7 @@ final class PlayScreen {
             if (g.button("РЕЖИМ ГОСТЕЙ: " + (lanSurvival ? "ВИЖИВАННЯ" : "ТВОРЧИЙ"), x, y += step, w, h)) { lanSurvival = !lanSurvival; return; }
             if (g.button("ВІДКРИТИ ДЛЯ МЕРЕЖІ", x, y += step, w, h)) { openLan(); return; }
         }
-        if (net == null && server != null && g.button("ЗАКРИТИ ДЛЯ МЕРЕЖІ", x, y += step, w, h)) { server.close(); server = null; hostView.clear(); say("Світ закрито для мережі."); return; }
+        if (net == null && server != null && g.button("ЗАКРИТИ ДЛЯ МЕРЕЖІ", x, y += step, w, h)) { v.game.players.detach(server.players); server.close(); server = null; hostView.clear(); say("Світ закрито для мережі."); return; }
         if (g.button(net != null ? "ВИЙТИ З ГРИ" : "ЗБЕРЕГТИ Й ВИЙТИ В МЕНЮ", x, y += step + 14, w, h)) leaving = true;
         if (server != null) {
             String info = "Код: " + server.code + "   адреса: " + lanLine() + "   гостей: " + server.guests().size() + "/" + voxelin.net.Protocol.MAX_GUESTS + (server.survival ? " (виживання)" : " (творчий)");
@@ -1512,7 +1541,8 @@ final class PlayScreen {
         if (code != null) code.end();
         if (blocks != null) blocks.end();
         if (invOpen) activeScreen.close();
-        if (server != null) { server.close(); server = null; }
+        if (server != null) { v.game.players.detach(server.players); server.close(); server = null; }
+        v.game.players.detach(hostPlayers);
         if (net != null) net.close();
         for (voxelin.client.look.PlayerModel m : models.values()) m.close();
         models.clear();

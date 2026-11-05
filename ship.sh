@@ -39,26 +39,26 @@ cat > "$PKG/run.sh" << 'RUNEOF'
 #!/bin/bash
 set -e
 cd "$(dirname "$0")"
-java -cp "out:lib/*" voxelin.client.Voxelin
+java -cp "out:lib/*" voxelin.Boot "$@"
 RUNEOF
 chmod +x "$PKG/run.sh"
 cat > "$PKG/run.bat" << 'RUNEOF'
 @echo off
 cd /d "%~dp0"
-java -cp "out;lib/*" voxelin.client.Voxelin
+java -cp "out;lib/*" voxelin.Boot %*
 RUNEOF
 cat > "$PKG/server.sh" << 'RUNEOF'
 #!/bin/bash
 # Сервер без вікна (налаштування - server.properties, створюється з першим запуском; --help - параметри)
 set -e
 cd "$(dirname "$0")"
-java -Djava.awt.headless=true -cp "out:lib/*" voxelin.server.DedicatedServer "$@"
+java -Djava.awt.headless=true -cp "out:lib/*" voxelin.Boot --server "$@"
 RUNEOF
 chmod +x "$PKG/server.sh"
 cat > "$PKG/server.bat" << 'RUNEOF'
 @echo off
 cd /d "%~dp0"
-java -Djava.awt.headless=true -cp "out;lib/*" voxelin.server.DedicatedServer %*
+java -Djava.awt.headless=true -cp "out;lib/*" voxelin.Boot --server %*
 RUNEOF
 # сервер у Docker з готової збірки (у репозиторії - Dockerfile, що збирає з коду)
 cat > "$PKG/Dockerfile" << 'RUNEOF'

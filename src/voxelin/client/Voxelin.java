@@ -21,7 +21,7 @@ import static org.lwjgl.opengl.GL11.*;
  *   --debug  --freeze                     показати F3 одразу / без фізики гравця (для знімків) · --screenshot файл.png   знімок і вихід · --bench СЕКУНД [--bench-out файл.json]   тест швидкодії і вихід
  */
 public final class Voxelin {
-    public static final String VERSION = "1.2.1";
+    public static final String VERSION = "1.3.0";
     public static final double TICK = 0.05;
 
     static final class Options {
@@ -170,11 +170,36 @@ public final class Voxelin {
             v = new Voxelin(o);
             v.run();
         } catch (Throwable t) {
-            t.printStackTrace();
+            crashed = true;
+            Voxelin cv = v;
+            try { if (cv != null) cv.shutdown(); } catch (Throwable ignored) { /* звіт важливіший */ }
+            v = null;
+            voxelin.loader.CrashReport.report(new File("crash-reports"), cv == null ? "запуск гри" : cv.whereNow(), t, cv == null ? null : cv.game.mods, crashContext(cv), System.out::println);
             System.exit(1);
         } finally {
             if (v != null) v.shutdown();
         }
+    }
+
+    static volatile boolean crashed;
+
+    /** Що робилось у момент падіння - для звіту. */
+    String whereNow() {
+        return switch (state) {
+            case PLAYING -> play != null && play.net != null ? "гра по мережі: " + play.net.welcome.where() : "гра у світі" + (play != null ? " «" + play.world.info.name + "»" : "");
+            case LOADING -> "завантаження світу";
+            default -> "меню";
+        };
+    }
+
+    static java.util.Map<String, String> crashContext(Voxelin v) {
+        java.util.Map<String, String> m = new java.util.LinkedHashMap<>();
+        m.put("OpenGL", Window.lastGl);
+        if (v != null) {
+            m.put("Дальність огляду", String.valueOf(v.opts.renderDistance));
+            if (v.play != null && v.play.net != null) m.put("Хост", v.play.net.welcome.hostName() + " (протокол " + v.play.net.protocol + ", вмісту модів хоста: " + v.play.net.content.size() + ")");
+        }
+        return m;
     }
 
     void quit() { running = false; }
@@ -258,10 +283,18 @@ public final class Voxelin {
     int textureSizeNow() { return opts.textureSize == 0 ? Settings.autoTextureSize(window.glRenderer()) : opts.textureSize; }
 
     /** Пересобрати масив текстур, якщо розмір змінили в налаштуваннях (викликається перед відкриттям світу). */
-    private void refreshTextures() {
+    private void refreshTextures() { refreshTextures(game.textures); }
+
+    /** Текстури з цього набору (своя гра - game.textures; гра по мережі з модами хоста - hostGame.textures) потрібного розміру. */
+    private java.util.Map<String, int[][]> texSource;
+    private void refreshTextures(java.util.Map<String, int[][]> src) {
         int want = textureSizeNow();
-        if (textures != null && textures.size != want) { textures.close(); textures = new voxelin.client.render.TextureArray(game.textures, want, new File("textures")); }
+        if (textures != null && (textures.size != want || (texSource != null && texSource != src))) { textures.close(); textures = new voxelin.client.render.TextureArray(src, want, new File("textures")); }
+        texSource = src;
     }
+
+    /** Реєстри останньої гри по мережі: вбудований вміст + моди хоста (див. joinGame); своя гра - game. */
+    private Game hostGame;
 
     private void autoWorld() {
         try {
@@ -347,10 +380,12 @@ public final class Voxelin {
     private voxelin.net.NetClient loadingNet;
 
     void joinGame(voxelin.net.NetClient c) {
-        refreshTextures();
         try {
             voxelin.net.NetClient.Welcome w = c.welcome;
-            World mirror = game.openMirror(w.worldName(), w.seed(), w.type(), w.palette(), w.survival());
+            // світ хоста - з його вмістом: вбудоване + моди хоста даними (свої моди гравця тут не діють, щоб не розходитись із хостом)
+            hostGame = Game.forHost(game.savesDir, c.content);
+            refreshTextures(hostGame.textures);
+            World mirror = hostGame.openMirror(w.worldName(), w.seed(), w.type(), w.palette(), w.survival());
             mirror.info.setPlayer(w.spawn(), w.yaw(), w.pitch());
             c.attach(mirror);
             loadingNet = c;
@@ -418,9 +453,12 @@ public final class Voxelin {
                 state = State.PLAYING;
                 input.clearPressed();
             } catch (Throwable t) {
-                t.printStackTrace();
+                boolean guest = loadingNet != null;
+                voxelin.loader.CrashReport.Explanation e = voxelin.loader.CrashReport.explain(t, game.mods);
+                java.io.File f = voxelin.loader.CrashReport.report(new File("crash-reports"), "відкриття світу", t, game.mods, crashContext(this), System.out::println);
                 dropLoading();
-                state = State.MENU; menus.show(Menus.Screen.WORLDS);
+                state = State.MENU; menus.show(guest ? Menus.Screen.JOIN : Menus.Screen.WORLDS);
+                menus.message("Світ не відкрився: " + e.title() + ". " + e.advice() + (f != null ? " Звіт: crash-reports/" + f.getName() : ""), false);
             }
         } else if (System.currentTimeMillis() - loadingSince > 90_000) {
             System.out.println("[Voxelin] ⚠️ світ не завантажився за 90 с");

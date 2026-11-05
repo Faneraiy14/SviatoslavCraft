@@ -19,7 +19,7 @@ public final class VoxelinApi {
             "registries.blocks", "registries.items", "registries.recipes", "registries.mobs", "registries.loot", "registries.structures", "registries.records", "registries.textures",
             "events.tick", "events.block_change", "events.chunk_generated", "events.world_open",
             "events.mob_death", "events.player_join", "events.player_leave", "events.chat",
-            "commands", "service.config");
+            "commands", "service.config", "service.players", "commands.guests");
 
     public static boolean has(String feature) { return feature != null && FEATURES.contains(feature.trim()); }
 }

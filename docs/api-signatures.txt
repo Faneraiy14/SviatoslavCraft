@@ -20,6 +20,7 @@ C voxelin.api.MobSettings$Part class final
 C voxelin.api.MobSettings$Trade class final
 C voxelin.api.ModConfig interface
 C voxelin.api.ModContext interface
+C voxelin.api.Players interface
 C voxelin.api.RecipeSettings class final
 C voxelin.api.Registries interface
 C voxelin.api.Source interface
@@ -303,6 +304,13 @@ M voxelin.api.ModContext.has(java.lang.String) : boolean default
 M voxelin.api.ModContext.log(java.lang.String) : void
 M voxelin.api.ModContext.modId() : java.lang.String
 M voxelin.api.ModContext.registries() : voxelin.api.Registries
+M voxelin.api.Players.give(java.lang.String, java.lang.String, int) : boolean
+M voxelin.api.Players.isOnline(java.lang.String) : boolean
+M voxelin.api.Players.kick(java.lang.String, java.lang.String) : boolean
+M voxelin.api.Players.message(java.lang.String, java.lang.String) : boolean
+M voxelin.api.Players.online() : java.util.List<java.lang.String>
+M voxelin.api.Players.position(java.lang.String) : long[]
+M voxelin.api.Players.teleport(java.lang.String, long, int, long) : boolean
 M voxelin.api.RecipeSettings.ingredients() : java.util.List<java.lang.String>
 M voxelin.api.RecipeSettings.isShaped() : boolean
 M voxelin.api.RecipeSettings.isSmelting() : boolean

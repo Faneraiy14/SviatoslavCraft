@@ -2,6 +2,7 @@ package voxelin.server;
 
 import voxelin.core.*;
 import voxelin.core.entity.PlayerEntity;
+import voxelin.loader.CrashReport;
 import voxelin.loader.Game;
 import voxelin.net.NetServer;
 import voxelin.net.Protocol;
@@ -128,6 +129,9 @@ public final class DedicatedServer {
         NetServer n;
         try { n = new NetServer(world, cfg.port, cfg.name, "", this::log, cfg.survival, cfg.code, () -> spawn); }
         catch (IOException e) { world.close(); game.close(); throw new IOException("порт " + cfg.port + " зайнятий чи недоступний: " + e.getMessage(), e); }
+        n.setContent(game.mods.content()); // гості бачать вміст модів сервера без самих модів
+        n.setCommands(game.commands); // гість пише /команду мода - виконується тут, з правами гостя
+        game.players.attach(n.players); // моди бачать гостей (сервіс Players)
         net = n;
     }
 
@@ -180,6 +184,8 @@ public final class DedicatedServer {
                 errors = 0;
             } catch (Throwable e) {
                 if (errors++ < 3) { log("⚠️ тік: " + e); e.printStackTrace(System.out); }
+                // нестача пам'яті тощо або тік ламається безперервно (~10 с) - зупинитись чесно: звіт, гостям - чому
+                if (e instanceof VirtualMachineError || errors > 200) fatal(e);
             } finally { world.lock.unlock(); }
             if (now - minute > 60_000_000_000L) { minute = now; worstNs = 0; }
         }
@@ -245,6 +251,18 @@ public final class DedicatedServer {
         // кінець stdin (запуск у фоні, </dev/null) - сервер працює далі, зупинка - сигналом
     }
 
+    /** Чому зупинились (для гостей) і з яким кодом вийти; null - звичайна зупинка. */
+    private volatile String stopReason;
+    volatile int exitCode;
+
+    private void fatal(Throwable e) {
+        CrashReport.Explanation x = CrashReport.explain(e, game.mods);
+        CrashReport.report(new File("crash-reports"), "сервер, світ «" + cfg.world + "»", e, game.mods, Map.of("Гостей", String.valueOf(net.guests().size())), this::log);
+        stopReason = "сервер аварійно зупинився: " + x.title() + ". Спробуй зайти пізніше.";
+        exitCode = 1;
+        running = false;
+    }
+
     /** Зберегти все й закрити (один раз; з циклу або з обробника Ctrl+C). */
     void shutdown() {
         synchronized (closeLock) {
@@ -253,7 +271,7 @@ public final class DedicatedServer {
         }
         world.lock.lock();
         try {
-            net.close();
+            if (stopReason != null) net.close(stopReason); else net.close();
             world.close();
         } finally { world.lock.unlock(); }
         game.close();
@@ -277,8 +295,9 @@ public final class DedicatedServer {
         System.setProperty("java.awt.headless", "true");
         DedicatedServer s;
         try { s = new DedicatedServer(cfg); }
-        catch (IOException | RuntimeException e) { System.out.println("[server] ⚠️ не вдалось запустити: " + e.getMessage()); System.exit(1); return; }
-        s.log("Voxelin " + voxelin.client.Voxelin.VERSION + " · світ «" + cfg.world + "» · модів " + s.game.mods.mods().size());
+        catch (IOException e) { System.out.println("[server] ⚠️ не вдалось запустити: " + e.getMessage()); System.exit(1); return; }
+        catch (Throwable e) { CrashReport.report(new File("crash-reports"), "запуск сервера", e, null, null, System.out::println); System.exit(1); return; }
+        s.log("Voxelin " + voxelin.client.Voxelin.VERSION + " · світ «" + cfg.world + "» · модів " + s.game.mods.mods().size() + (s.net.contentCount() > 0 ? " (їхній вміст гості отримують від сервера: записів " + s.net.contentCount() + ")" : ""));
         s.printInvite();
         s.log("консоль: help - список команд");
         Thread worldThread = new Thread(s::run, "voxelin-world");
@@ -288,6 +307,6 @@ public final class DedicatedServer {
         in.start();
         worldThread.start();
         try { worldThread.join(); } catch (InterruptedException ignored) { }
-        System.exit(0);
+        System.exit(s.exitCode);
     }
 }

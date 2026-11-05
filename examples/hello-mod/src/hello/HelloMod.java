@@ -38,6 +38,15 @@ public final class HelloMod implements VoxelinMod {
         if (ctx.has("events.mob_death")) ctx.events().on(MobDeathEvent.class, e -> { if (!e.mob.startsWith("voxelin:villager")) kills[0]++; });
 
         ctx.commands().register("hello", "", 0, k -> k.reply("Привіт від hello-mod, " + k.source().name() + "! Істот переможено: " + kills[0] + ". Спробуй /setblock ~ ~2 ~ hello:ruby"));
+        // «плагін»: мод лише на сервері, а гості (без мода) пишуть /ruby - і отримують рубін саме собі (з гри 1.3.0)
+        if (ctx.has("service.players")) {
+            Players players = ctx.api(Players.class);
+            ctx.commands().register("ruby", "", 0, k -> {
+                String who = k.source().name();
+                if (!players.give(who, "hello:ruby", 1)) throw new Commands.CommandException("не вдалось дати рубін");
+                players.message(who, "Тримай рубін, " + who + "!");
+            });
+        }
         ctx.log("готово: блок " + ruby.name());
     }
 }

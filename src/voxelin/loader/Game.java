@@ -23,6 +23,8 @@ public final class Game {
     public final RecordRegistry records = new RecordRegistry();
     public final EventBus events = new EventBus();
     public final CommandRegistry commands = new CommandRegistry();
+    /** Гравці для модів (ctx.api(Players.class)): хто відкриває світ - додає своїх (хост, гості). */
+    public final PlayersHub players = new PlayersHub();
     /** Текстури з реєстру (назва -> {пікселі 16x16}); етап «Новий світ» збирає з них атлас. */
     public final Map<String, int[][]> textures = new LinkedHashMap<>();
     public final ModLoader mods = new ModLoader(blocks, items, recipes, mobTypes, loot, structures, records, events, commands, textures);
@@ -30,15 +32,25 @@ public final class Game {
     /** Скрипти NyxilumLang з scripts/ поруч із mods/ (null - гра без теки модів, як у тестах; див. enableScripts). */
     public ScriptHost scripts;
 
-    public Game(File savesDir, File modsDir) {
+    public Game(File savesDir, File modsDir) { this(savesDir, modsDir, null); }
+
+    /**
+     * Гра гостя: вбудований вміст + вміст модів хоста (NetClient.content), без власних модів гравця - світ хоста бачимо таким,
+     * як його бачить хост. Код модів хоста тут не виконується: блоки, предмети, рецепти, текстури й вигляд істот приходять даними.
+     */
+    public static Game forHost(File savesDir, List<ModLoader.ContentOp> hostContent) { return new Game(savesDir, null, hostContent); }
+
+    private Game(File savesDir, File modsDir, List<ModLoader.ContentOp> hostContent) {
         this.savesDir = savesDir;
         // сервіси API - до завантаження модів (ванільний вміст теж їх бачить). Нова частина API - тут один рядок.
         File configDir = new File(modsDir != null ? modsDir.getAbsoluteFile().getParentFile() : savesDir.getAbsoluteFile().getParentFile(), "config");
         Map<String, ModConfig> configs = new HashMap<>();
         mods.services.provide(ModConfig.class, id -> { synchronized (configs) { return configs.computeIfAbsent(id, k -> new ModConfigFile(configDir, k)); } });
+        mods.services.provide(voxelin.api.Players.class, id -> players);
         ModLoader.ModInfo v = mods.load(new VanillaContent(), "voxelin", "(вбудований)");
         if (v.status != ModLoader.Status.OK) throw new IllegalStateException("ванільний вміст не завантажився: " + v.message);
         if (modsDir != null && modsDir.isDirectory()) mods.loadDir(modsDir);
+        if (hostContent != null) loadHostContent(hostContent);
         blocks.freeze();
         items.freeze();
         recipes.freeze(items);
@@ -48,6 +60,33 @@ public final class Game {
         structures.freeze(blocks);
         records.freeze();
         if (modsDir != null) enableScripts(new File(modsDir.getAbsoluteFile().getParentFile(), "scripts"), null);
+    }
+
+    /** Вміст хоста - як «моди» з тими самими id (ті самі перевірки назв і просторів імен); поганий запис пропускається, решта працює. */
+    private void loadHostContent(List<ModLoader.ContentOp> ops) {
+        Map<String, List<ModLoader.ContentOp>> byMod = new LinkedHashMap<>();
+        for (ModLoader.ContentOp op : ops) byMod.computeIfAbsent(op.mod(), k -> new ArrayList<>()).add(op);
+        for (Map.Entry<String, List<ModLoader.ContentOp>> e : byMod.entrySet()) {
+            int[] bad = {0};
+            mods.load(ctx -> {
+                voxelin.api.Registries r = ctx.registries();
+                for (ModLoader.ContentOp op : e.getValue()) {
+                    try {
+                        switch (op.kind()) {
+                            case "block" -> r.block(op.name(), (voxelin.api.BlockSettings) op.data());
+                            case "item" -> r.item(op.name(), (voxelin.api.ItemSettings) op.data());
+                            case "recipe" -> r.recipe(op.name(), (voxelin.api.RecipeSettings) op.data());
+                            case "mob" -> r.mob(op.name(), (voxelin.api.MobSettings) op.data());
+                            case "fuel" -> r.fuel(op.name(), (Float) op.data());
+                            case "tag" -> r.tag(op.name(), (String[]) op.data());
+                            case "texture" -> r.texture(op.name(), (int[]) op.data());
+                            default -> bad[0]++;
+                        }
+                    } catch (RuntimeException ex) { bad[0]++; }
+                }
+                if (bad[0] > 0) ctx.log("з хоста: пропущено записів " + bad[0]);
+            }, e.getKey(), "(з хоста)");
+        }
     }
 
     /** Увімкнути скрипти з теки (створюється, якщо нема). nx - команда інтерпретатора, null - знайти самому. */

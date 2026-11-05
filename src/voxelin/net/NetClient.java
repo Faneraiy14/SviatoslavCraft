@@ -69,10 +69,25 @@ public final class NetClient implements AutoCloseable {
     private float lastYaw, lastPitch;
     private long lastSent;
 
-    private NetClient(Conn conn, Welcome w, String name) { this.conn = conn; welcome = w; this.name = name; }
+    /** Вміст модів хоста (протокол 5): з ним гра будує свої реєстри для цієї гри, і моди хоста гостю не потрібні. Порожньо - хост без модів або старий. */
+    public final List<voxelin.loader.ModLoader.ContentOp> content;
+    /** Протокол, яким говоримо з хостом (старому хосту 1.2 - 4, без вмісту модів). */
+    public final int protocol;
+
+    private NetClient(Conn conn, Welcome w, String name, List<voxelin.loader.ModLoader.ContentOp> content, int protocol) { this.conn = conn; welcome = w; this.name = name; this.content = content; this.protocol = protocol; }
 
     /** Під'єднатись і привітатись (блокує до ~10 с - викликати не з головного потоку). IOException - з поясненням для гравця. */
     public static NetClient connect(String host, int port, String name, String code, String look) throws IOException {
+        try { return connect(host, port, name, code, look, VERSION); }
+        catch (OldHost e) { return connect(host, port, name, code, look, e.version); } // хост 1.2 знає лише протокол 4 - пробуємо ним (без вмісту модів)
+    }
+
+    /** Хост відмовив через новіший протокол гостя, але його протокол ми ще вміємо. */
+    private static final class OldHost extends IOException { final int version; OldHost(String m, int v) { super(m); version = v; } }
+
+    /** Те саме, але певним протоколом (MIN_VERSION..VERSION) - для тестів сумісності. */
+    public static NetClient connect(String host, int port, String name, String code, String look, int ver) throws IOException {
+        if (ver < MIN_VERSION || ver > VERSION) throw new IOException("протокол " + ver + " не підтримується");
         String nm = cleanName(name);
         if (nm == null) throw new IOException("ім'я: 1-16 літер, цифр, _ або -");
         Socket s = new Socket();
@@ -81,10 +96,15 @@ public final class NetClient implements AutoCloseable {
         catch (IOException e) { s.close(); throw new IOException("не вдалось з'єднатись з " + host + ":" + port + " (" + e.getMessage() + ")"); }
         Conn c = new Conn(s);
         try {
-            c.writeNow(frame(C_HELLO, o -> { o.writeInt(VERSION); o.writeUTF(code == null ? "" : code.trim()); o.writeUTF(nm); o.writeUTF(look == null ? "" : look); }));
+            c.writeNow(frame(C_HELLO, o -> { o.writeInt(ver); o.writeUTF(code == null ? "" : code.trim()); o.writeUTF(nm); o.writeUTF(look == null ? "" : look); }));
             byte[] f = c.readNow(HANDSHAKE_MS * 2);
             DataInputStream in = body(f);
-            if (f[0] == S_REJECT) throw new IOException("хост відмовив: " + str(in, 300));
+            if (f[0] == S_REJECT) {
+                String why = str(in, 300);
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("протокол (\\d+), у хоста (\\d+)\\)").matcher(why);
+                if (ver == VERSION && m.find()) { int hv = Integer.parseInt(m.group(2)); if (hv >= MIN_VERSION && hv < VERSION) throw new OldHost(why, hv); }
+                throw new IOException("хост відмовив: " + why);
+            }
             if (f[0] != S_WELCOME) throw new IOException("це не хост Voxelin");
             int id = in.readInt();
             String hostName = str(in, 64), world = str(in, 64);
@@ -102,10 +122,34 @@ public final class NetClient implements AutoCloseable {
             boolean dedicated = false; // хост до 1.2.1 цього не надсилає
             try { dedicated = in.readBoolean(); } catch (EOFException e) { }
             if (spawn == null) throw new IOException("погана точка появи");
-            return new NetClient(c, new Welcome(id, hostName, world, seed, type, pal, spawn, Float.isFinite(yaw) ? yaw : 0, Float.isFinite(pitch) ? pitch : 0, view, survival, dedicated), nm);
+            List<voxelin.loader.ModLoader.ContentOp> content = new ArrayList<>();
+            if (ver >= 5) {
+                int frames = in.readInt();
+                if (frames < 0 || frames > 4096) throw new IOException("поганий вміст модів хоста");
+                long bytes = 0;
+                int textures = 0;
+                for (int i = 0; ; i++) {
+                    byte[] cf = c.readNow(HANDSHAKE_MS * 4);
+                    if (cf[0] == S_CONTENT_END) break;
+                    if (cf[0] != S_CONTENT || i >= frames) throw new IOException("поганий вміст модів хоста");
+                    bytes += cf.length;
+                    List<voxelin.loader.ModLoader.ContentOp> part = ContentCodec.read(cf);
+                    for (var op : part) if (op.kind().equals("texture")) textures++;
+                    content.addAll(part);
+                    if (bytes > ContentCodec.MAX_BYTES || content.size() > ContentCodec.MAX_OPS || textures > ContentCodec.MAX_TEXTURES) throw new IOException("забагато вмісту модів у хоста");
+                }
+            }
+            return new NetClient(c, new Welcome(id, hostName, world, seed, type, pal, spawn, Float.isFinite(yaw) ? yaw : 0, Float.isFinite(pitch) ? pitch : 0, view, survival, dedicated), nm, List.copyOf(content), ver);
         } catch (SocketTimeoutException e) { c.close(); throw new IOException("хост не відповів"); }
         catch (EOFException e) { c.close(); throw new IOException("хост закрив з'єднання"); }
         catch (IOException e) { c.close(); throw e; }
+    }
+
+    /** З'єднання зникло без прощання хоста - пояснити людською мовою (технічна причина - у дужках). */
+    private String lost(String err) {
+        String tech = err == null || err.isBlank() || err.equals("закрито") ? "" : " (" + err + ")";
+        return "зв'язок із " + (welcome.dedicated() ? "сервером" : "хостом") + " обірвався" + tech + ": "
+                + (welcome.dedicated() ? "сервер вимкнули чи він аварійно зупинився" : "хост вийшов із гри або його гра закрилась") + ", або пропав інтернет. Спробуй зайти ще раз.";
     }
 
     private String who() { return welcome.dedicated() ? "сервер" : "хост"; }
@@ -137,7 +181,7 @@ public final class NetClient implements AutoCloseable {
         if (refused.size() > 512) refused.clear();
         smooth();
         if (started && System.currentTimeMillis() - lastSent > 1000) sendPos(lastPos != null ? lastPos : welcome.spawn(), lastYaw, lastPitch);
-        if (kicked == null && conn.closed()) kicked = conn.error() == null ? "з'єднання розірвано" : conn.error();
+        if (kicked == null && conn.closed()) kicked = lost(conn.error());
         if (kicked == null && System.currentTimeMillis() - conn.lastRecv > TIMEOUT_MS) { kicked = who() + " не відповідає"; conn.close(); }
     }
 

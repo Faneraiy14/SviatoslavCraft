@@ -12,7 +12,9 @@ import java.security.SecureRandom;
 public final class Protocol {
     private Protocol() {}
 
-    public static final int VERSION = 4, DEFAULT_PORT = 24555, MAX_FRAME = 1 << 20, MAX_GUESTS = 8, TIMEOUT_MS = 15_000, HANDSHAKE_MS = 5_000;
+    /** VERSION - протокол цієї гри; MIN_VERSION - найстаріший, якого хост ще приймає (гість 4 грає без вмісту модів сервера). */
+    public static final int MIN_VERSION = 4;
+    public static final int VERSION = 5, DEFAULT_PORT = 24555, MAX_FRAME = 1 << 20, MAX_GUESTS = 8, TIMEOUT_MS = 15_000, HANDSHAKE_MS = 5_000;
     /** Найбільша дальність, яку хост дає гостю (чанків): кожен гість завантажує хосту світ довкола себе. */
     public static final int MAX_VIEW = 6;
     public static final int MAX_CHAT = 200, MAX_NAME = 16, CODE_LEN = 6;
@@ -23,6 +25,8 @@ public final class Protocol {
     public static final int C_HELLO = 1, C_POS = 2, C_CHUNK = 3, C_BREAK = 4, C_PLACE = 5, C_CHAT = 6, C_BYE = 7, C_STATE = 8, C_INV = 9, C_OPEN = 10, C_MENU = 11, C_CLOSE = 12;
     // хост -> гість
     public static final int S_WELCOME = 64, S_REJECT = 65, S_CHUNK = 66, S_NOCHUNK = 67, S_BLOCK = 68, S_TIME = 69, S_PLAYERS = 70, S_CHAT = 71, S_KICK = 72, S_TELEPORT = 73, S_MOBS = 74, S_GIVE = 75, S_HURT = 76, S_INV = 77, S_MENU = 78, S_MENU_END = 79;
+    /** Протокол 5: вміст модів сервера одразу після S_WELCOME (кілька S_CONTENT, потім S_CONTENT_END) - гостю не треба мати моди. */
+    public static final int S_CONTENT = 80, S_CONTENT_END = 81;
 
     public interface Body { void write(DataOutputStream out) throws IOException; }
 

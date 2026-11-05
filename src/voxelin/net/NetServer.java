@@ -179,6 +179,12 @@ public final class NetServer implements AutoCloseable {
     }
 
     /** Відкрити світ для мережі на порту (0 - будь-який вільний). chatOut - що показати в чаті хоста. */
+    /** Вміст модів, який отримує кожен гість протоколу 5+ (ModLoader.content(); задає власник одразу після створення). */
+    private volatile List<byte[]> contentFrames = List.of();
+    private volatile int contentCount;
+    public void setContent(List<voxelin.loader.ModLoader.ContentOp> ops) { contentFrames = ContentCodec.frames(ops); contentCount = ops.size(); }
+    public int contentCount() { return contentCount; }
+
     public NetServer(World world, int port, String hostName, String hostLook, Consumer<String> chatOut) throws IOException { this(world, port, hostName, hostLook, chatOut, false); }
 
     public NetServer(World world, int port, String hostName, String hostLook, Consumer<String> chatOut, boolean survival) throws IOException { this(world, port, hostName, hostLook, chatOut, survival, null, null); }
@@ -215,6 +221,34 @@ public final class NetServer implements AutoCloseable {
     }
 
     public List<Guest> guests() { return Collections.unmodifiableList(guests); }
+
+    /** Команди гри: гість пише «/...» - виконується від його імені з правами гостя (лише команди для всіх; задає власник). null - команд нема. */
+    private volatile CommandRegistry commands;
+    public void setCommands(CommandRegistry c) { commands = c; }
+
+    private Guest guest(String name) { for (Guest g : guests) if (g.name.equalsIgnoreCase(name)) return g; return null; }
+
+    /** Гості для сервісу Players модів (Game.players.attach). */
+    public final voxelin.api.Players players = new voxelin.api.Players() {
+        public List<String> online() { List<String> out = new ArrayList<>(); for (Guest g : guests) out.add(g.name); return out; }
+        public boolean isOnline(String name) { return name != null && guest(name) != null; }
+        public long[] position(String name) {
+            Guest g = guest(name);
+            return g == null ? null : new long[]{g.pos.blockX(), (int) Math.floor(g.pos.y - voxelin.core.entity.PlayerEntity.EYE + 0.05), g.pos.blockZ()};
+        }
+        public boolean teleport(String name, long x, int y, long z) {
+            Guest g = guest(name);
+            if (g == null || y < 0 || y > world.height() + 64) return false;
+            Pos to = Pos.ofBlock(x, y + voxelin.core.entity.PlayerEntity.EYE, z);
+            if (!World.inRange(to.cx, to.cz)) return false;
+            g.pos.cx = to.cx; g.pos.cz = to.cz; g.pos.x = to.x; g.pos.y = to.y; g.pos.z = to.z;
+            g.conn.send(frame(S_TELEPORT, o -> writePos(o, to)));
+            return true;
+        }
+        public boolean message(String name, String text) { Guest g = guest(name); if (g == null) return false; g.conn.send(chatFrame(cleanChat(text))); return true; }
+        public boolean give(String name, String item, int count) { Guest g = guest(name); if (g == null || world.itemTypes.get(item) == null) return false; NetServer.this.give(g, item, count, 0); return true; }
+        public boolean kick(String name, String reason) { return guest(name) != null && NetServer.this.kick(name, reason); }
+    };
 
     /** Адреси цього комп'ютера в локальній мережі (для підказки хосту). */
     public static List<String> lanAddresses() {
@@ -285,7 +319,7 @@ public final class NetServer implements AutoCloseable {
         DataInputStream in = body(f);
         int ver = in.readInt();
         String code = str(in, 16), name = cleanName(str(in, 64)), look = str(in, 400);
-        if (ver != VERSION) return "інша версія гри (протокол " + ver + ", у хоста " + VERSION + ")";
+        if (ver < MIN_VERSION || ver > VERSION) return "інша версія гри (протокол " + ver + ", у хоста " + VERSION + ")";
         long[] w = wrong.get(c.address());
         long now = System.currentTimeMillis();
         if (w != null && now - w[1] > LOCK_MS) { wrong.remove(c.address()); w = null; }
@@ -318,7 +352,9 @@ public final class NetServer implements AutoCloseable {
             o.writeInt(MAX_VIEW);
             o.writeBoolean(survival);
             o.writeBoolean(dedicated()); // з 1.2.1, у кінці: старі клієнти його просто не читають
+            if (ver >= 5) o.writeInt(contentFrames.size()); // протокол 5: скільки кадрів вмісту модів іде далі
         }));
+        if (ver >= 5) { for (byte[] cf : contentFrames) c.send(cf); c.send(frame(S_CONTENT_END, null)); }
         c.send(timeFrame());
         Pos back = dedicated() ? loadPos(name) : null; // сервер без вікна: повернути туди, де гість вийшов (відродження - як і раніше на точці появи)
         if (back != null) { g.pos.cx = back.cx; g.pos.cz = back.cz; g.pos.x = back.x; g.pos.y = back.y; g.pos.z = back.z; c.send(frame(S_TELEPORT, o -> writePos(o, back))); }
@@ -391,8 +427,16 @@ public final class NetServer implements AutoCloseable {
             case C_CHAT -> {
                 String text = cleanChat(str(in, 1000));
                 if (text.isEmpty()) return;
-                if (text.startsWith("/")) { g.conn.send(chatFrame("Команди в чужому світі недоступні.")); return; }
                 if (g.chats <= 0) { g.conn.send(chatFrame("Не так швидко.")); return; }
+                if (text.startsWith("/")) {
+                    CommandRegistry cr = commands;
+                    if (cr == null) { g.conn.send(chatFrame("Команди в чужому світі недоступні.")); return; }
+                    g.chats--;
+                    long[] feet = players.position(g.name);
+                    chatOut.accept(g.name + ": " + text); // хост/консоль бачить, хто що виконує
+                    for (String r : cr.execute(g.src, world, feet, text)) g.conn.send(chatFrame(r.length() > MAX_CHAT ? r.substring(0, MAX_CHAT) : r));
+                    return;
+                }
                 g.chats--;
                 if (world.events().post(new voxelin.api.event.ChatEvent(world, g.name, text, true)).isCancelled()) return; // мод не пропустив
                 announce("<" + g.name + "> " + text);
@@ -703,13 +747,16 @@ public final class NetServer implements AutoCloseable {
     public boolean closed() { return closed; }
 
     /** Закрити гру для мережі: гостям - «хост закрив гру». */
-    @Override public void close() {
+    @Override public void close() { close(dedicated() ? "сервер зупинено" : "хост закрив гру"); }
+
+    /** Закрити з поясненням для гостей (сервер аварійно зупинився - вони побачать, чому). */
+    public void close(String why) {
         if (closed) return;
         closed = true;
         for (Guest g : guests) farewell(g);
-        for (Guest g : guests) { g.conn.send(frame(S_KICK, o -> o.writeUTF("хост закрив гру"))); g.conn.closeAfterSend(); }
+        for (Guest g : guests) { g.conn.send(frame(S_KICK, o -> o.writeUTF(why))); g.conn.closeAfterSend(); }
         for (Guest g : guests) if (g.target != null) world.removeTarget(g.target);
-        for (Guest g : guests) world.events().post(new voxelin.api.event.PlayerLeaveEvent(world, g.name, true, "хост закрив гру"));
+        for (Guest g : guests) world.events().post(new voxelin.api.event.PlayerLeaveEvent(world, g.name, true, why));
         guests.clear();
         for (Conn c : handshakes) c.close();
         handshakes.clear();

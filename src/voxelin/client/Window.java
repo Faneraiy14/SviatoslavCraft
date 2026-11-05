@@ -15,6 +15,8 @@ public final class Window {
     private long handle;
     private int width, height, fbWidth, fbHeight;
     private String glVersion = "?", glRenderer = "?";
+    /** Для звіту про падіння (останнє створене вікно). */
+    static volatile String lastGl = "не ініціалізовано";
 
     public void create(String title, int w, int h, int msaa, boolean vsync, boolean takeFocus) {
         width = w; height = h;
@@ -33,6 +35,7 @@ public final class Window {
         var caps = GL.createCapabilities();
         glVersion = glGetString(GL_VERSION); glRenderer = glGetString(GL_RENDERER);
         System.out.println("[Voxelin] OpenGL " + glVersion + " / " + glRenderer);
+        lastGl = glVersion + " / " + glRenderer;
         if (!caps.OpenGL30) throw new IllegalStateException("Потрібен OpenGL 3.0 або новіший, а відеокарта дає " + glVersion + ". Онови драйвер відеокарти.");
         glfwSwapInterval(vsync ? 1 : 0);
         int[] fw = new int[1], fh = new int[1];

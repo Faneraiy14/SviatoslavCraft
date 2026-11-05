@@ -26,7 +26,7 @@ public final class EndGenerator implements Generator {
     private int topAt(long x, long z) {
         double d = Math.sqrt((double) x * x + (double) z * z);
         double ang = Math.atan2(z, x);
-        double r = MAIN_RADIUS + 5 * edge.fractal2(Math.round(Math.cos(ang) * 64) + 1000, Math.round(Math.sin(ang) * 64) + 1000, 8, 2);
+        double r = MAIN_RADIUS + 5 * edge.fractal2(Math.round(StrictMath.cos(ang) * 64) + 1000, Math.round(StrictMath.sin(ang) * 64) + 1000, 8, 2);
         if (d < r) return TOP + (int) Math.round(thick.fractal2(x, z, 14, 2) * 1.6);
         // малі острівці: у клітинці 160x160 один, з імовірністю 0.6, далі за 150 від початку
         if (d < 150) return -1;
@@ -46,7 +46,7 @@ public final class EndGenerator implements Generator {
         double d = Math.sqrt((double) x * x + (double) z * z);
         if (d >= 150) return 6; // острівці тонкі
         double f = Math.max(0, 1 - d / (MAIN_RADIUS + 4));
-        return 3 + (int) Math.round(12 * Math.pow(f, 0.6));
+        return 3 + (int) Math.round(12 * StrictMath.pow(f, 0.6));
     }
 
     @Override public void generate(Chunk c) {
@@ -61,7 +61,7 @@ public final class EndGenerator implements Generator {
         // обсидіанові вежі
         for (int k = 0; k < 8; k++) {
             double a = k * Math.PI / 4 + 0.2;
-            long px = Math.round(Math.cos(a) * PILLAR_RING), pz = Math.round(Math.sin(a) * PILLAR_RING);
+            long px = Math.round(StrictMath.cos(a) * PILLAR_RING), pz = Math.round(StrictMath.sin(a) * PILLAR_RING);
             if (px + 3 < bx || px - 3 >= bx + 16 || pz + 3 < bz || pz - 3 >= bz + 16) continue;
             int h = 14 + (int) ((Noise.mix(seed + k * 77L) >>> 20) % 13), base = surfaceY(px, pz);
             for (long x = px - 2; x <= px + 2; x++) for (long z = pz - 2; z <= pz + 2; z++) {

@@ -179,7 +179,7 @@ public final class StructurePlacer {
         int houses = 0;
         for (int attempt = 0; attempt < count * 4 && doors.size() < count; attempt++) {
             double ang = (attempt + r.nextDouble() * 0.6) * Math.PI * 2 / count, rad = 15 + r.nextDouble() * 13;
-            long px = cx + Math.round(Math.cos(ang) * rad), pz = cz + Math.round(Math.sin(ang) * rad);
+            long px = cx + Math.round(StrictMath.cos(ang) * rad), pz = cz + Math.round(StrictMath.sin(ang) * rad);
             String role = (attempt == 0 && roles.containsKey("hall") && r.nextInt(2) == 0) ? "hall" : (houses >= 3 && roles.containsKey("farm") && r.nextInt(4) == 0 ? "farm" : "house");
             StructureTemplate t = pick(role, r);
             if (t == null) continue;

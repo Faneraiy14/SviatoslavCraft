@@ -72,7 +72,7 @@ public final class BetweenGenerator implements Generator {
 
     private int depth(Island is, long x, long z) {
         double f = Math.max(0, 1 - Math.hypot(x - is.x, z - is.z) / (is.r + 2));
-        return 2 + (int) Math.round(is.r * 0.9 * Math.pow(f, 0.6));
+        return 2 + (int) Math.round(is.r * 0.9 * StrictMath.pow(f, 0.6));
     }
 
     @Override public int surfaceY(long x, long z) {

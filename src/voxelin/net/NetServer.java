@@ -15,7 +15,8 @@ import static voxelin.net.Protocol.*;
 /**
  * Хост мережевої гри: відкритий для мережі світ гравця. Працює на головному потоці гри (tick() щотіку), сокети - у своїх потоках.
  * Гості у творчому режимі чи у виживанні (обирає хост): бачать світ, гравців, істот, час доби; ламають і ставлять блоки, пишуть у чат.
- * У виживанні дроп зламаного блока хост надсилає гостю в інвентар (S_GIVE); інвентар, здоров'я й голод гостя живуть у гостя. Хост перевіряє
+ * У виживанні дроп зламаного блока хост надсилає гостю в інвентар (S_GIVE); інвентар, здоров'я й голод гостя живуть у гостя (крім часу, поки
+ * відкрита скриня чи піч - тоді слоти веде хост, див. Session). Хост перевіряє
  * кожен запит: код запрошення, ім'я, відстань до блока, частоту дій, стрибки позиції, розмір кадрів. Гості не виконують команд, їх не
  * атакують істоти, вони не ходять у інші виміри.
  */
@@ -37,11 +38,34 @@ public final class NetServer implements AutoCloseable {
         long lastInvSave;
         /** Ціль для істот і стріл (лише у виживанні): удар іде гостю кадром S_HURT, броню й поштовх рахує він. */
         PlayerTarget target;
+        /** Відкрита скриня чи піч (одна за раз). */
+        Session session;
+        /** Останній інвентар від гостя (C_INV) - записується при виході, навіть якщо щойно було збереження. */
+        String[] invLines;
         Guest(int id, String name, String look, Conn conn, Pos at) {
             this.id = id; this.name = name; this.look = look; this.conn = conn; this.pos = at.copy(); this.spawn = at.copy();
             src = Sources.of(name, Source.Kind.PLAYER, 0, 16);
         }
     }
+
+    /**
+     * Скриня чи піч, відкрита гостем. Кліки рахує хост: меню над справжньою блок-сутністю й копією інвентаря гостя (36 слотів),
+     * яку гість прислав при відкритті. Поки вікно відкрите, ці слоти в гостя міняє лише хост (S_MENU несе весь стан); при закритті -
+     * S_MENU_END з остаточним інвентарем. Так речі не дублюються й не губляться, навіть коли скриню водночас відкрили кілька гравців.
+     */
+    static final class Session {
+        final long x, z; final int y;
+        final BlockEntity entity;
+        final Inventory inv;
+        final Menu menu;
+        int seq;
+        String last;
+        Session(BlockEntity e, Inventory inv, Menu menu) { x = e.x; y = e.y; z = e.z; entity = e; this.inv = inv; this.menu = menu; }
+        /** Те, що бачить гість (для «чи змінилось»). */
+        String state() { return entity.encode() + (entity instanceof FurnaceEntity f ? "," + f.cookTotal : "") + "#" + String.join(";", Arrays.stream(inv.encode()).map(v -> v == null ? "-" : v).toList()) + "#" + stack(menu.cursor()); }
+    }
+
+    static String stack(Inventory.Stack s) { return s == null ? "" : s.item + "|" + s.count + "|" + s.damage; }
 
     private PlayerTarget targetOf(Guest g) {
         return new PlayerTarget() {
@@ -194,6 +218,7 @@ public final class NetServer implements AutoCloseable {
             if (!g.conn.closed() && System.currentTimeMillis() - g.conn.lastRecv > TIMEOUT_MS) drop(g, "не відповідає");
             if (g.conn.closed()) drop(g, g.conn.error());
         }
+        for (Guest g : guests) if (g.session != null) sessionTick(g);
         sendChunks();
         if (tick % 2 == 0) sendPlayers();
         if (tick % 4 == 0) sendMobs();
@@ -257,6 +282,7 @@ public final class NetServer implements AutoCloseable {
         if (survival) {
             String[] inv = loadInv(name);
             if (inv != null) c.send(frame(S_INV, o -> { o.writeInt(inv.length); for (String l : inv) o.writeUTF(l.length() > 200 ? "" : l); }));
+            g.invLines = inv; // що в гостя зараз (якщо зникне без C_INV, з цим і злиємо вікно скрині)
             g.target = targetOf(g);
             world.addTarget(g.target);
         }
@@ -299,7 +325,10 @@ public final class NetServer implements AutoCloseable {
                 int id = world.blockId(x, y, z);
                 BlockType b = id > 0 ? world.blocks.get(id) : null;
                 int boardCount = b != null && world.boards.isBoards(b) ? Long.bitCount(world.boards.mask(x, y, z)) : 0;
-                if (!mayTouch(g, x, y, z) || !world.harvest(g.src, x, y, z, null, false)) { resend(g, x, y, z); return; }
+                if (!mayTouch(g, x, y, z)) { resend(g, x, y, z); return; }
+                BlockEntity be = survival ? world.detachBlockEntity(x, y, z) : null; // вміст скрині/печі - тому, хто зламав (речі на землі хоста гість не підбере)
+                if (!world.harvest(g.src, x, y, z, null, false)) { if (be != null) world.attachBlockEntity(be); resend(g, x, y, z); return; }
+                if (be != null) for (Inventory.Stack st : be.contents()) give(g, st.item, st.count, st.damage);
                 if (survival && b != null) {
                     if (boardCount > 0) give(g, World.boardItem(b), boardCount, 0);
                     for (Inventory.Stack st : Mining.drops(b, tool, rng)) give(g, st.item, st.count, st.damage);
@@ -331,14 +360,102 @@ public final class NetServer implements AutoCloseable {
                 if (n != Inventory.SIZE + 5) throw new IOException("поганий інвентар");
                 String[] lines = new String[n];
                 for (int i = 0; i < n; i++) lines[i] = str(in, 200).replace("\n", "").replace("\r", "");
+                g.invLines = lines;
                 long now = System.currentTimeMillis();
-                if (!survival || now - g.lastInvSave < 3000) return; // не частіше раз на 3 с
+                if (!survival || now - g.lastInvSave < 3000) return; // не частіше раз на 3 с (решту запише вихід)
                 g.lastInvSave = now;
                 saveInv(g.name, lines);
             }
+            case C_OPEN -> {
+                long x = in.readLong(); int y = in.readInt(); long z = in.readLong();
+                String[] lines = readSlots(in);
+                if (g.session != null) endSession(g);
+                if (!openSession(g, x, y, z, lines)) g.conn.send(frame(S_MENU_END, o -> writeSlots(o, lines))); // не вийшло - гість закриває вікно, речі як були
+            }
+            case C_MENU -> {
+                int seq = in.readInt(), op = in.readUnsignedByte(), slot = in.readInt(), arg = in.readInt();
+                boolean shift = in.readBoolean();
+                Session ss = g.session;
+                if (ss == null) return; // вікно вже закрите (скриню зламали) - S_MENU_END у дорозі
+                ss.seq = seq;
+                if (g.actions > 0 && slot >= 0 && slot < ss.menu.size()) {
+                    g.actions--;
+                    switch (op) {
+                        case Menu.OP_CLICK -> ss.menu.click(slot, arg == 1 ? 1 : 0, shift);
+                        case Menu.OP_DOUBLE -> ss.menu.doubleClick(slot);
+                        case Menu.OP_SWAP -> ss.menu.swapHotbar(slot, arg);
+                        case Menu.OP_SORT -> ss.inv.sortMain();
+                        default -> { }
+                    }
+                }
+                sendMenu(g); // і після відхиленого кліку: гість дізнається, що нічого не змінилось
+            }
+            case C_CLOSE -> { if (g.session != null) endSession(g); }
             case C_BYE -> drop(g, null);
             default -> throw new IOException("невідомий вид " + f[0]);
         }
+    }
+
+    static String[] readSlots(DataInputStream in) throws IOException {
+        int n = in.readInt();
+        if (n != Inventory.SIZE) throw new IOException("погані слоти");
+        String[] l = new String[n];
+        for (int i = 0; i < n; i++) { String v = str(in, 200); l[i] = v.isEmpty() ? null : v; }
+        return l;
+    }
+
+    static void writeSlots(DataOutputStream o, String[] l) throws IOException { o.writeInt(l.length); for (String v : l) o.writeUTF(v == null ? "" : v); }
+
+    private boolean openSession(Guest g, long x, int y, long z, String[] lines) {
+        if (g.dead || !mayTouch(g, x, y, z)) return false;
+        BlockEntity e = world.chestAt(x, y, z);
+        if (e == null) e = world.furnaceAt(x, y, z);
+        if (e == null) return false;
+        // кілька гравців в одній скрині - можна: усі меню над тією самою сутністю, кліки йдуть по черзі на головному потоці
+        Inventory inv = new Inventory(world.itemTypes);
+        inv.decode(lines, 0);
+        Menu m = e instanceof ChestEntity c ? new ChestMenu(world.itemTypes, inv, c) : new FurnaceMenu(world.itemTypes, world.recipes, inv, (FurnaceEntity) e);
+        g.session = new Session(e, inv, m);
+        sendMenu(g);
+        return true;
+    }
+
+    private void sendMenu(Guest g) {
+        Session ss = g.session;
+        ss.last = ss.state();
+        String kind = ss.entity.kind(), data = ss.entity.encode(), cur = stack(ss.menu.cursor());
+        int cook = ss.entity instanceof FurnaceEntity f ? f.cookTotal : 0;
+        String[] slots = ss.inv.encode();
+        g.conn.send(frame(S_MENU, o -> {
+            o.writeInt(ss.seq); o.writeUTF(kind); o.writeLong(ss.x); o.writeInt(ss.y); o.writeLong(ss.z);
+            writeSlots(o, slots); o.writeUTF(cur); o.writeUTF(data); o.writeInt(cook);
+        }));
+    }
+
+    /** Щотіку: вікно ще дійсне (блок на місці, гість поруч і живий)? Вміст змінився (піч горить, інший гравець переклав) - шлемо. */
+    private void sessionTick(Guest g) {
+        Session ss = g.session;
+        boolean ok = !g.dead && world.blockEntityAt(ss.x, ss.y, ss.z) == ss.entity && distance(Pos.ofBlock(ss.x, ss.y + 0.5, ss.z), g.pos) <= REACH + 2;
+        if (!ok) { endSession(g); return; }
+        if (!ss.state().equals(ss.last)) sendMenu(g);
+    }
+
+    /** Закрити вікно гостя: курсор - у його інвентар (що не влізло - у скриню, інакше на землю), гостю - остаточний інвентар. */
+    private void endSession(Guest g) {
+        Session ss = g.session;
+        g.session = null;
+        Inventory.Stack left = ss.menu.closeCursor(ss.inv);
+        if (left != null && ss.entity instanceof ChestEntity c) for (int i = 0; i < ChestEntity.SIZE && left != null; i++) if (c.get(i) == null) { c.set(i, left); left = null; }
+        if (left != null) world.spawnItem(Pos.ofBlock(ss.x, ss.y + 1.2, ss.z), left.item, left.count, left.damage, true);
+        String[] slots = ss.inv.encode();
+        if (g.invLines != null) for (int i = 0; i < Inventory.SIZE; i++) g.invLines[i] = slots[i] == null ? "" : slots[i];
+        if (!g.conn.closed()) g.conn.send(frame(S_MENU_END, o -> writeSlots(o, slots)));
+    }
+
+    /** Гість іде: вікно закривається, останній інвентар - на диск (виживання). */
+    private void farewell(Guest g) {
+        if (g.session != null) endSession(g);
+        if (survival && g.invLines != null) saveInv(g.name, g.invLines);
     }
 
     private void give(Guest g, String item, int count, int damage) {
@@ -478,6 +595,7 @@ public final class NetServer implements AutoCloseable {
 
     private void drop(Guest g, String why) {
         if (!guests.remove(g)) return;
+        farewell(g);
         if (g.target != null) world.removeTarget(g.target);
         if (why != null && !g.conn.closed()) g.conn.send(frame(S_KICK, o -> o.writeUTF(why)));
         g.conn.closeAfterSend();
@@ -490,6 +608,7 @@ public final class NetServer implements AutoCloseable {
     @Override public void close() {
         if (closed) return;
         closed = true;
+        for (Guest g : guests) farewell(g);
         for (Guest g : guests) { g.conn.send(frame(S_KICK, o -> o.writeUTF("хост закрив гру"))); g.conn.closeAfterSend(); }
         for (Guest g : guests) if (g.target != null) world.removeTarget(g.target);
         guests.clear();

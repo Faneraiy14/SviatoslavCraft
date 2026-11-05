@@ -667,6 +667,12 @@ public final class World implements WorldAccess {
         return e instanceof ChestEntity ? (ChestEntity) e : null;
     }
 
+    /** Забрати блок-сутність зі світу (напр. перед тим, як гість зламає скриню й отримає вміст сам); null - нема. */
+    public BlockEntity detachBlockEntity(long x, int y, long z) { return blockEntities.remove(new BlockPos(x, y, z)); }
+
+    /** Повернути забрану сутність (злам не вдався). */
+    public void attachBlockEntity(BlockEntity e) { blockEntities.putIfAbsent(new BlockPos(e.x, e.y, e.z), e); }
+
     private void tickBlockEntities() {
         for (Iterator<BlockEntity> it = blockEntities.values().iterator(); it.hasNext(); ) {
             BlockEntity e = it.next();

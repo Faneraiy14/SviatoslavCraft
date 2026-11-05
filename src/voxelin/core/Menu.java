@@ -23,6 +23,15 @@ public class Menu {
     protected final ItemRegistry items;
     private Inventory.Stack cursor;
 
+    /** Віддалене вікно (гість мережевої гри): дії не виконуються тут, а йдуть хосту; він рахує їх на справжньому вмісті й шле стан назад. */
+    public interface Remote { void op(int op, int slot, int arg, boolean shift); }
+    public static final int OP_CLICK = 0, OP_DOUBLE = 1, OP_SWAP = 2, OP_SORT = 3;
+    /** Не null - вікно віддалене (див. Remote). */
+    public Remote remote;
+
+    /** Курсор зі стану від хоста (віддалене вікно). */
+    public void applyCursor(Inventory.Stack s) { cursor = s; }
+
     public Menu(ItemRegistry items) { this.items = items; }
 
     /** Слоти 0..35 = інвентар гравця. */
@@ -59,6 +68,7 @@ public class Menu {
     /** Клік по слоту. button: 0 - ліва, 1 - права. */
     public void click(int i, int button, boolean shift) {
         if (i < 0 || i >= slots.size()) return;
+        if (remote != null) { remote.op(OP_CLICK, i, button, shift); return; }
         Slot s = slots.get(i);
         if (shift) { shiftClick(i); return; }
         Inventory.Stack st = s.get();
@@ -152,6 +162,7 @@ public class Menu {
     /** Подвійний клік: зібрати в курсор усі однакові предмети з усіх слотів (спершу з неповних стопок), до розміру стопки. */
     public void doubleClick(int i) {
         if (cursor == null) return;
+        if (remote != null) { remote.op(OP_DOUBLE, i, 0, false); return; }
         int max = maxStack(cursor.item);
         for (int pass = 0; pass < 2 && cursor.count < max; pass++) {
             for (Slot s : slots) {
@@ -173,6 +184,7 @@ public class Menu {
      */
     public void swapHotbar(int i, int hot) {
         if (cursor != null || i < 0 || i >= slots.size() || hot < 0 || hot >= Inventory.HOTBAR || i == hot) return;
+        if (remote != null) { remote.op(OP_SWAP, i, hot, false); return; }
         Slot a = slots.get(i), h = slots.get(hot);
         Inventory.Stack sa = a.get(), sh = h.get();
         if (sa == null && sh == null) return;
@@ -183,7 +195,7 @@ public class Menu {
 
     /** Викинути зі слота (клавіша Q): один предмет або весь стек. Повертає викинуте або null. Зі слота «лише брати» - нічого. */
     public Inventory.Stack drop(int i, boolean all) {
-        if (i < 0 || i >= slots.size()) return null;
+        if (i < 0 || i >= slots.size() || remote != null) return null; // гість не викидає з віддаленого вікна (предмети на землі хоста йому не підібрати)
         Slot s = slots.get(i);
         Inventory.Stack st = s.get();
         if (st == null || s.takeOnly()) return null;
@@ -201,7 +213,7 @@ public class Menu {
 
     /** Забрати стек з курсора (клік поза вікном: викинути). one=true - лише один предмет. null - курсор порожній. */
     public Inventory.Stack takeCursor(boolean one) {
-        if (cursor == null) return null;
+        if (cursor == null || remote != null) return null;
         if (!one || cursor.count == 1) { Inventory.Stack c = cursor; cursor = null; return c; }
         cursor.count--;
         return new Inventory.Stack(cursor.item, 1, cursor.damage);
@@ -211,7 +223,7 @@ public class Menu {
     public Inventory.Stack closeCursor(Inventory inv) {
         Inventory.Stack c = cursor;
         cursor = null;
-        if (c == null) return null;
+        if (c == null || remote != null) return null; // віддалене вікно: курсор у інвентар кладе хост і шле готовий інвентар
         int left = inv.add(c.item, c.count, c.damage);
         return left > 0 ? new Inventory.Stack(c.item, left, c.damage) : null;
     }

@@ -215,6 +215,69 @@ public class VoxelinNetTest {
         sv.sendInv(gi);
         tickAll(5);
         check(new File(host.dir, "guests/шахтар.inv").isFile(), "інвентар гостя записано в теку світу");
+        // скриня: кліки рахує хост, гість отримує готовий стан
+        long cx = hostPos.blockX() + 1, cz = hostPos.blockZ() + 1; int cy = ground + 1;
+        host.setBlock(Sources.player("Хост"), cx, cy, cz, host.blocks.byName("voxelin:chest"));
+        tickAll(3);
+        sv.openContainer(cx, cy, cz, gi);
+        NetClient.MenuState[] ms = new NetClient.MenuState[1];
+        java.util.function.Predicate<java.util.function.Predicate<NetClient.MenuState>> menuWhere = cond -> { NetClient.MenuState x = sv.takeMenu(); if (x != null) ms[0] = x; return ms[0] != null && cond.test(ms[0]); };
+        run(() -> menuWhere.test(x -> true), 60);
+        check(ms[0].kind().equals("chest") && "voxelin:dirt|7|0".equals(ms[0].slots()[0]) && ms[0].data().startsWith("-;"), "гість відкрив скриню хоста");
+        sv.menuOp(Menu.OP_CLICK, 0, 0, true); // shift: земля в скриню
+        run(() -> menuWhere.test(x -> x.slots()[0] == null), 60);
+        check(host.chestAt(cx, cy, cz).get(0) != null && host.chestAt(cx, cy, cz).get(0).count == 7 && ms[0].data().startsWith("voxelin:dirt|7|0"), "shift-клік: земля в скрині хоста");
+        host.chestAt(cx, cy, cz).set(5, new Inventory.Stack("voxelin:stone", 3)); // хост (інший гравець) поклав своє - гість бачить
+        run(() -> menuWhere.test(x -> x.data().contains("voxelin:stone|3")), 20);
+        check(true, "зміна скрині хостом дійшла до відкритого вікна гостя");
+        sv.menuOp(Menu.OP_CLICK, ChestMenu.CHEST + 5, 0, false); // камінь - у курсор
+        run(() -> menuWhere.test(x -> x.cursor().equals("voxelin:stone|3|0")), 20);
+        check(host.chestAt(cx, cy, cz).get(5) == null, "камінь у курсорі гостя, зі скрині зник");
+        sv.menuOp(Menu.OP_CLICK, 20, 0, false); // камінь у сховище (слот 20), сортування (хост) - на початок сховища (9)
+        run(() -> menuWhere.test(x -> "voxelin:stone|3|0".equals(x.slots()[20])), 20);
+        sv.menuOp(Menu.OP_SORT, 0, 0, false);
+        run(() -> menuWhere.test(x -> "voxelin:stone|3|0".equals(x.slots()[9])), 20);
+        check(true, "сортування у вікні скрині робить хост");
+        sv.menuOp(Menu.OP_CLICK, 9, 0, false); // знову в курсор
+        run(() -> menuWhere.test(x -> x.cursor().equals("voxelin:stone|3|0")), 20);
+        sv.closeContainer();
+        String[][] end = new String[1][];
+        run(() -> (end[0] = sv.takeMenuEnd()) != null, 20);
+        check("voxelin:stone|3|0".equals(end[0][0]) && Arrays.stream(end[0]).filter(Objects::nonNull).count() == 1, "закрив: курсор - в інвентар гостя: " + Arrays.toString(end[0]));
+        // піч: горить у хоста, гість бачить прогрес
+        String ore = host.itemTypes.all().stream().map(t -> t.name).filter(nm -> host.recipes.smeltFor(nm) != null && host.recipes.fuelTicks(nm) == 0).findFirst().orElseThrow();
+        String fuel = host.itemTypes.all().stream().map(t -> t.name).filter(nm -> host.recipes.fuelTicks(nm) > 0 && host.recipes.smeltFor(nm) == null).findFirst().orElseThrow();
+        long fx = cx, fz = cz - 2;
+        host.setBlock(Sources.player("Хост"), fx, cy, fz, host.blocks.byName("voxelin:furnace"));
+        Inventory fi = new Inventory(host.itemTypes);
+        fi.add(ore, 2); fi.add(fuel, 4);
+        tickAll(3);
+        ms[0] = null;
+        sv.openContainer(fx, cy, fz, fi);
+        run(() -> menuWhere.test(x -> x.kind().equals("furnace")), 60);
+        sv.menuOp(Menu.OP_CLICK, 0, 0, true); sv.menuOp(Menu.OP_CLICK, 1, 0, true);
+        run(() -> menuWhere.test(x -> x.slots()[0] == null && x.slots()[1] == null), 40); // руда й паливо пішли кожне у свій слот
+        FurnaceEntity hf = host.furnaceAt(fx, cy, fz);
+        check(hf.input != null && hf.fuel != null || hf.lit(), "руда й паливо - у печі хоста (" + ore + ", " + fuel + ")");
+        for (int i = 0; i < 40; i++) { host.tick(); tickAll(1); }
+        run(() -> menuWhere.test(x -> { FurnaceEntity fe = new FurnaceEntity(0, 0, 0); fe.decode(x.data()); return fe.progress > 0 && x.cookTotal() > 0; }), 40);
+        check(true, "гість бачить, як піч хоста плавить");
+        // хост зламав піч - вікно гостя закривається, інвентар повертається
+        host.setBlock(Sources.player("Хост"), fx, cy, fz, host.blocks.air());
+        run(() -> (end[0] = sv.takeMenuEnd()) != null, 20);
+        check(end[0][0] == null, "піч зникла - вікно гостя закрито хостом");
+        // далеко - не відкривається
+        sv.openContainer(cx + 40, cy, cz, gi);
+        run(() -> (end[0] = sv.takeMenuEnd()) != null, 20);
+        check("voxelin:dirt|7|0".equals(end[0][0]), "скриня поза рукою - відмова, речі як були");
+        // гість зламав скриню (виживання): вміст - йому, не на землю хоста
+        host.chestAt(cx, cy, cz).set(2, new Inventory.Stack("voxelin:cobblestone", 9));
+        gifts.clear(); sv.takeGifts();
+        sv.breakBlock(cx, cy, cz, "voxelin:wooden_axe");
+        run(() -> host.blockId(cx, cy, cz) == 0, 40);
+        run(() -> { gifts.addAll(sv.takeGifts()); return gifts.stream().anyMatch(o -> o[0].equals("voxelin:cobblestone")); }, 40);
+        check(gifts.stream().anyMatch(o -> o[0].equals("voxelin:dirt") && (int) o[1] == 7) && gifts.stream().anyMatch(o -> o[0].equals("voxelin:chest")), "скриню зламав гість: вміст і сама скриня - йому");
+        sv.sendInv(gi); tickAll(3); // останній інвентар перед виходом: хост запише його навіть попри «не частіше 3 с»
         sv.close(); srv.close();
         tickAll(2);
         check(host.targets().isEmpty(), "після виходу гостя - не ціль");

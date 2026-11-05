@@ -68,6 +68,9 @@ final class PlayScreen {
     private Mob aimedMob;
     private double attackCd;
     private long openedX, openedZ; private int openedY; private boolean openedBlock; private String openedKind; // відкрите вікно блока (піч)
+    /** Гість: відкрита скриня/піч хоста (кліки йдуть хосту) і її копія для показу; menuEndWait - коли закрили й чекаємо від хоста остаточний інвентар. */
+    private Menu remoteMenu; private BlockEntity remoteEntity; private long menuEndWait;
+    private int devChest; // dev: гість з --open chest - 0 шукає скриню, 1 чекає вміст, 2 зроблено
     // ламання блока: ціль, прогрес 0..1, пауза між блоками
     private long breakX, breakZ; private int breakY; private boolean breaking;
     /** Натяг лука, секунди (-1 - не натягнуто). */
@@ -171,7 +174,7 @@ final class PlayScreen {
         if ("front".equals(v.opts.open)) cam.mode = Camera.Mode.THIRD_FRONT; // знімки моделі гравця
         if ("back".equals(v.opts.open)) cam.mode = Camera.Mode.THIRD_BACK;
         if ("workbench".equals(v.opts.open)) { activeScreen = benchScreen; invOpen = true; }
-        if ("chest".equals(v.opts.open)) { // лише для знімків: скриня з жеребом здобичі
+        if ("chest".equals(v.opts.open) && net == null) { // лише для знімків: скриня з жеребом здобичі (гість - див. devRemoteChest)
             ChestEntity demo = new ChestEntity(0, 0, 0);
             LootTable lt = world.loot.get("dungeon");
             if (lt != null) lt.fill(demo, new java.util.Random(5), world.itemTypes);
@@ -217,6 +220,8 @@ final class PlayScreen {
         world.info.time++; // між оновленнями часу від хоста
         net.poll();
         for (String line : net.takeChat()) say(line);
+        remoteMenuTick();
+        if ("chest".equals(v.opts.open) && devChest < 2 && ticks > 40) devRemoteChest();
         Pos back = net.takeTeleport();
         if (back != null) player.teleport(back);
         if (net.welcome.survival()) {
@@ -377,7 +382,7 @@ final class PlayScreen {
             if (in.pressed(GLFW_KEY_F5)) cam.cycle();
         }
         if (!chatOpen && !vt.dead() && !searching) {
-            if (in.pressed(GLFW_KEY_E)) { if (invOpen) closeInventory(); else { activeScreen = world.creative() ? creativeScreen() : invScreen; invOpen = true; grab(false); } }
+            if (in.pressed(GLFW_KEY_E)) { if (invOpen) closeInventory(); else if (menuEndWait == 0) { activeScreen = world.creative() ? creativeScreen() : invScreen; invOpen = true; grab(false); } }
             if (in.pressed(GLFW_KEY_M) && !invOpen) { // мінікарта: мала -> велика -> вимкнена
                 v.settings.minimap = (v.settings.minimap + 1) % 3; v.settings.save(v.settingsFile);
                 say(new String[]{"Мінікарту вимкнено (M - увімкнути).", "Мінікарта: мала. N - наближення.", "Мінікарта: велика."}[v.settings.minimap]);
@@ -630,6 +635,8 @@ final class PlayScreen {
         boolean sneak = v.input.down(GLFW_KEY_LEFT_SHIFT) || v.input.down(GLFW_KEY_RIGHT_SHIFT);
         BlockType target = hit == null ? null : world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
         if (target != null && "workbench".equals(target.interact) && !sneak) { activeScreen = benchScreen; invOpen = true; grab(false); return; }
+        if (target != null && ("chest".equals(target.interact) || "furnace".equals(target.interact)) && !sneak && !vt.dead()) { openRemote(target.interact, hit.x(), hit.y(), hit.z()); return; }
+        if (menuEndWait != 0) return; // вікно скрині закривається: інвентар ось-ось прийде від хоста
         Inventory.Stack st = inv.selectedStack();
         ItemType t = st == null ? null : world.itemTypes.get(st.item);
         if (t == null || vt.dead()) return;
@@ -1002,6 +1009,60 @@ final class PlayScreen {
     // ------------------------------------------------------------------ чат і команди
 
     private void openChat(String initial) { chatOpen = true; v.input.beginText(initial, true); grab(false); }
+
+    /** Гість: скриня чи піч у світі хоста. Вікно одразу, вміст - коли хост відповість (S_MENU); кожен клік рахує хост. */
+    private void openRemote(String kind, long x, int y, long z) {
+        if (menuEndWait != 0) return; // попереднє вікно ще закривається
+        if (kind.equals("chest")) sounds.self("voxelin:chest.open", 0.8f);
+        net.openContainer(x, y, z, inv);
+        Menu m;
+        if (kind.equals("chest")) { ChestEntity ce = new ChestEntity(x, y, z); remoteEntity = ce; m = new ChestMenu(world.itemTypes, inv, ce); activeScreen = InventoryScreen.container("СКРИНЯ", (ChestMenu) m, inv, world, icons, st -> { }); }
+        else { FurnaceEntity fe = new FurnaceEntity(x, y, z); remoteEntity = fe; m = new FurnaceMenu(world.itemTypes, v.game.recipes, inv, fe); activeScreen = InventoryScreen.furnace((FurnaceMenu) m, inv, world, icons, st -> { }); }
+        m.remote = net::menuOp;
+        remoteMenu = m;
+        openedX = x; openedY = y; openedZ = z; openedBlock = true; openedKind = kind;
+        invOpen = true; grab(false);
+    }
+
+    /** Гість: стан вікна від хоста й закриття. */
+    private void remoteMenuTick() {
+        voxelin.net.NetClient.MenuState ms = net.takeMenu();
+        if (ms != null && remoteMenu != null && remoteEntity != null && ms.x() == remoteEntity.x && ms.y() == remoteEntity.y && ms.z() == remoteEntity.z && ms.kind().equals(remoteEntity.kind())) {
+            inv.decode(ms.slots(), inv.selected());
+            try { remoteEntity.decode(ms.data()); } catch (IllegalArgumentException bad) { /* хост надіслав биту скриню - лишаємо попереднє */ }
+            if (remoteEntity instanceof FurnaceEntity fe) fe.cookTotal = ms.cookTotal();
+            remoteMenu.applyCursor(stackOf(ms.cursor()));
+        }
+        String[] end = net.takeMenuEnd();
+        if (end != null) {
+            inv.decode(end, inv.selected());
+            menuEndWait = 0;
+            if (remoteMenu != null) { remoteMenu = null; remoteEntity = null; if (invOpen && openedBlock) { openedBlock = false; activeScreen.close(); invOpen = false; grab(true);
+        if (remoteMenu != null) { remoteMenu = null; remoteEntity = null; net.closeContainer(); menuEndWait = System.currentTimeMillis(); } } } // хост закрив сам (скриню зламали, відійшли)
+        }
+        if (menuEndWait != 0 && System.currentTimeMillis() - menuEndWait > 3000) menuEndWait = 0; // хост мовчить - не блокуємо назавжди
+    }
+
+    /** dev (--join ... --open chest): відкрити найближчу скриню хоста й перекласти shift-кліком перший слот інвентаря - перевірка всього шляху. */
+    private void devRemoteChest() {
+        if (devChest == 0) {
+            long px = player.pos.blockX(), pz = player.pos.blockZ(); int py = (int) Math.floor(player.pos.y);
+            if (ticks == 100) actions.placeBlock(px + 2, (int) Math.floor(player.pos.y - PlayerEntity.EYE), pz, "voxelin:chest"); // поруч нема - ставимо свою (через хоста)
+            for (int dx = -4; dx <= 4 && devChest == 0; dx++) for (int dz = -4; dz <= 4 && devChest == 0; dz++) for (int dy = -3; dy <= 2 && devChest == 0; dy++) {
+                int id = world.blockId(px + dx, py + dy, pz + dz);
+                if (id > 0 && "chest".equals(world.blocks.get(id).interact)) { openRemote("chest", px + dx, py + dy, pz + dz); devChest = 1; System.out.println("[net] dev: скриня " + (px + dx) + " " + (py + dy) + " " + (pz + dz)); }
+            }
+        } else if (remoteMenu != null && remoteEntity instanceof ChestEntity ce && inv.get(0) != null && ticks % 20 == 0) { remoteMenu.click(0, 0, true); }
+        else if (remoteEntity instanceof ChestEntity ce && !ce.isEmpty()) { devChest = 2; System.out.println("[net] dev: у скрині хоста: " + ce.encode()); }
+    }
+
+    /** «назва|кількість|зношення» -> стек (порожньо чи бите - null). */
+    private Inventory.Stack stackOf(String t) {
+        String[] p = t.split("\\|");
+        if (p.length != 3 || world.itemTypes.get(p[0]) == null) return null;
+        try { int c = Integer.parseInt(p[1]), d = Integer.parseInt(p[2]); return c > 0 && c <= 64 && d >= 0 ? new Inventory.Stack(p[0], c, d) : null; }
+        catch (NumberFormatException e) { return null; }
+    }
 
     private void closeInventory() {
         if (code != null && code.openBlocks != null) { String id = code.openBlocks; code.end(); code = null; blocks = new BlocksScreen(v, v.game.scripts, id); return; } // вікно коду -> блоки

@@ -147,7 +147,7 @@ final class InventoryScreen {
         Gui.rect(0, 0, Gui.W, Gui.H, 0, 0, 0, 0.5f);
         panel(px, py, pw, ph);
         Gui.text(title, x0 - 4, py + 18, 3.2f, 1f, 0.85f, 0.35f);
-        if (g.button("СОРТУВАТИ", px + pw - 176, py + 12, 152, 36)) inv.sortMain();
+        if (g.button("СОРТУВАТИ", px + pw - 176, py + 12, 152, 36)) { if (menu.remote != null) menu.remote.op(Menu.OP_SORT, 0, 0, false); else inv.sortMain(); } // віддалене вікно: сортує хост
         // пошук
         float qx = px + pw - 176 - 12 - 230, qy = py + 12;
         boolean qHov = g.over(qx, qy, 230, 36);

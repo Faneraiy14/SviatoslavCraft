@@ -14,6 +14,9 @@ import static voxelin.net.Protocol.*;
  * зламаний чи злий хост не обвалить гру гостя. poll() - на головному потоці щотіку.
  */
 public final class NetClient implements AutoCloseable {
+    /** Стан відкритої скрині/печі від хоста: seq - останній урахований клік, slots - 36 слотів інвентаря, data - BlockEntity.encode(). */
+    public record MenuState(int seq, String kind, long x, int y, long z, String[] slots, String cursor, String data, int cookTotal) {}
+
     /** Що хост сказав при вході. */
     public record Welcome(int id, String hostName, String worldName, long seed, WorldInfo.Type type, List<String> palette, Pos spawn, float yaw, float pitch, int view, boolean survival) {}
 
@@ -51,6 +54,9 @@ public final class NetClient implements AutoCloseable {
     private String[] savedInv;
     private final Map<ChunkPos, Long> refused = new HashMap<>();
     private Pos teleport;
+    private MenuState menu;
+    private String[] menuEnd;
+    private int menuSeq;
     private String kicked;
     private boolean started;
     /** Що надіслати перед виходом (PlayScreen: інвентар). */
@@ -164,6 +170,16 @@ public final class NetClient implements AutoCloseable {
                 for (int i = 0; i < n; i++) l[i] = str(in, 200);
                 savedInv = l;
             }
+            case S_MENU -> {
+                int seq = in.readInt();
+                String kind = str(in, 16);
+                long x = in.readLong(); int y = in.readInt(); long z = in.readLong();
+                String[] slots = NetServer.readSlots(in);
+                String cur = str(in, 200), data = str(in, 4000);
+                int cook = in.readInt();
+                if (kind.equals("chest") || kind.equals("furnace")) menu = new MenuState(seq, kind, x, y, z, slots, cur, data, Math.max(0, Math.min(1_000_000, cook)));
+            }
+            case S_MENU_END -> { menuEnd = NetServer.readSlots(in); menu = null; }
             case S_PLAYERS -> players(in);
             case S_MOBS -> mobs(in);
             default -> { } // новіший хост: невідоме пропускаємо
@@ -262,6 +278,27 @@ public final class NetClient implements AutoCloseable {
         l.add(String.valueOf(inv.selected()));
         conn.send(frame(C_INV, o -> { o.writeInt(l.size()); for (String x : l) o.writeUTF(x); }));
     }
+
+    /** Відкрити скриню/піч хоста: шлемо свій інвентар (36 слотів) - поки вікно відкрите, ці слоти веде хост. */
+    public void openContainer(long x, int y, long z, Inventory inv) {
+        menu = null; menuEnd = null;
+        String[] slots = inv.encode();
+        conn.send(frame(C_OPEN, o -> { o.writeLong(x); o.writeInt(y); o.writeLong(z); NetServer.writeSlots(o, slots); }));
+    }
+
+    /** Клік у віддаленому вікні (Menu.OP_*). */
+    public void menuOp(int op, int slot, int arg, boolean shift) {
+        int seq = ++menuSeq;
+        conn.send(frame(C_MENU, o -> { o.writeInt(seq); o.writeByte(op); o.writeInt(slot); o.writeInt(arg); o.writeBoolean(shift); }));
+    }
+
+    public void closeContainer() { conn.send(frame(C_CLOSE, null)); }
+
+    /** Новий стан вікна (забирається). */
+    public MenuState takeMenu() { MenuState m = menu; menu = null; return m; }
+
+    /** Вікно закрито хостом чи на наше прохання: остаточний інвентар (36 слотів; забирається). */
+    public String[] takeMenuEnd() { String[] l = menuEnd; menuEnd = null; return l; }
 
     /** Хост повернув гостя (стрибок позиції) - куди. */
     public Pos takeTeleport() { Pos p = teleport; teleport = null; return p; }

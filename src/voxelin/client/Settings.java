@@ -18,6 +18,8 @@ public final class Settings {
     public int textureSize = 0, renderDistance = 12, fov = 70, msaa = 2;
     public float mouseSensitivity = 0.12f;
     public boolean vsync = true, outlines = true;
+    /** М'які тіні в кутах (ambient occlusion). */
+    public boolean ao = true;
     /** Гучність у відсотках (0..100, крок 10): загальна, блоки, істоти, оточення, інтерфейс. */
     public int volMaster = 100, volBlocks = 100, volMobs = 100, volAmbient = 80, volUi = 100;
     /** Мінікарта: 0 - вимкнена, 1 - мала, 2 - велика (клавіша M); наближення - індекс Minimap.ZOOMS (клавіша N). */
@@ -57,6 +59,7 @@ public final class Settings {
         try { s.mouseSensitivity = Float.parseFloat(p.getProperty("mouseSensitivity", "0.12").trim()); } catch (NumberFormatException e) { s.mouseSensitivity = 0.12f; }
         s.vsync = !"false".equalsIgnoreCase(p.getProperty("vsync", "true").trim());
         s.outlines = !"false".equalsIgnoreCase(p.getProperty("outlines", "true").trim());
+        s.ao = !"false".equalsIgnoreCase(p.getProperty("ao", "true").trim());
         s.volMaster = intOf(p, "volume.master", s.volMaster); s.volBlocks = intOf(p, "volume.blocks", s.volBlocks); s.volMobs = intOf(p, "volume.mobs", s.volMobs);
         s.volAmbient = intOf(p, "volume.ambient", s.volAmbient); s.volUi = intOf(p, "volume.ui", s.volUi);
         s.fullbright = "true".equalsIgnoreCase(p.getProperty("fullbright", "false").trim());
@@ -80,6 +83,7 @@ public final class Settings {
         p.setProperty("mouseSensitivity", String.format(Locale.ROOT, "%.2f", mouseSensitivity));
         p.setProperty("vsync", String.valueOf(vsync));
         p.setProperty("outlines", String.valueOf(outlines));
+        p.setProperty("ao", String.valueOf(ao));
         p.setProperty("volume.master", String.valueOf(volMaster)); p.setProperty("volume.blocks", String.valueOf(volBlocks)); p.setProperty("volume.mobs", String.valueOf(volMobs));
         p.setProperty("volume.ambient", String.valueOf(volAmbient)); p.setProperty("volume.ui", String.valueOf(volUi));
         p.setProperty("fullbright", String.valueOf(fullbright)); p.setProperty("minimap", String.valueOf(minimap)); p.setProperty("minimap.zoom", String.valueOf(minimapZoom));

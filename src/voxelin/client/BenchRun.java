@@ -61,6 +61,7 @@ final class BenchRun {
         if (phase != Phase.MEASURE) return;
         double dtMs = v.frameDt * 1000.0;
         frameMs.add(dtMs);
+        guiMs.add(ps.guiNs / 1e6);
         double wt = ps.worldTickNs / 1e6; worldMax = Math.max(worldMax, wt); worldSum += wt; worldN++; // тік світу - у своєму потоці (вибірка раз на кадр)
         long gc = gcMillis(); int chunks = ps.world.loadedChunks().size();
         spikes.add(new Spike(dtMs, pTick, pUpd, pRen, pGui, v.swapNs / 1e6, gc - pGc, ps.rend.uploads - pUploads, chunks - pChunks));
@@ -71,6 +72,7 @@ final class BenchRun {
     }
 
     private double worldMax, worldSum; private int worldN;
+    private final List<Double> guiMs = new ArrayList<>();
 
     private static long gcMillis() {
         long t = 0;
@@ -92,10 +94,13 @@ final class BenchRun {
         double avg = sum / n, p99 = sorted.get(Math.min(n - 1, (int) (n * 0.99))), max = sorted.get(n - 1), p50 = sorted.get(n / 2);
         double meshMs = ps.rend.meshCount > meshCount0 ? (ps.rend.meshNanos - meshNanos0) / 1e6 / (ps.rend.meshCount - meshCount0) : 0;
         double genMs = ps.world.genCount > genCount0 ? (ps.world.genNanos - genNanos0) / 1e6 / (ps.world.genCount - genCount0) : 0;
+        List<Double> gs = new ArrayList<>(guiMs); Collections.sort(gs);
+        double gsum = 0; for (double d : gs) gsum += d;
+        double guiAvg = gs.isEmpty() ? 0 : gsum / gs.size(), guiP99 = gs.isEmpty() ? 0 : gs.get(Math.min(gs.size() - 1, (int) (gs.size() * 0.99)));
         String json = String.format(Locale.ROOT,
-                "{\n  \"version\": \"%s\",\n  \"renderDistance\": %d,\n  \"seconds\": %.1f,\n  \"frames\": %d,\n  \"avgFps\": %.1f,\n  \"medianFrameMs\": %.2f,\n  \"avgFrameMs\": %.2f,\n  \"p99FrameMs\": %.2f,\n  \"onePercentLowFps\": %.1f,\n  \"maxFrameMs\": %.2f,\n  \"meshMsPerSection\": %.3f,\n  \"genMsPerChunk\": %.3f,\n  \"sectionsUploaded\": %d,\n  \"loadedChunks\": %d,\n  \"meshes\": %d,\n  \"worldTickMsAvg\": %.3f,\n  \"worldTickMsMax\": %.2f,\n  \"gpu\": \"%s\",\n  \"cpus\": %d\n}\n",
+                "{\n  \"version\": \"%s\",\n  \"renderDistance\": %d,\n  \"seconds\": %.1f,\n  \"frames\": %d,\n  \"avgFps\": %.1f,\n  \"medianFrameMs\": %.2f,\n  \"avgFrameMs\": %.2f,\n  \"p99FrameMs\": %.2f,\n  \"onePercentLowFps\": %.1f,\n  \"maxFrameMs\": %.2f,\n  \"meshMsPerSection\": %.3f,\n  \"genMsPerChunk\": %.3f,\n  \"sectionsUploaded\": %d,\n  \"loadedChunks\": %d,\n  \"meshes\": %d,\n  \"worldTickMsAvg\": %.3f,\n  \"worldTickMsMax\": %.2f,\n  \"guiMsAvg\": %.3f,\n  \"guiMsP99\": %.2f,\n  \"gpu\": \"%s\",\n  \"cpus\": %d\n}\n",
                 Voxelin.VERSION, v.opts.renderDistance, seconds, n, 1000.0 / avg, p50, avg, p99, 1000.0 / p99, max, meshMs, genMs, ps.rend.uploads - uploads0,
-                ps.world.loadedChunks().size(), ps.rend.meshCountLoaded(), worldN == 0 ? 0 : worldSum / worldN, worldMax, v.window.glRenderer().replace('"', '\''), Runtime.getRuntime().availableProcessors());
+                ps.world.loadedChunks().size(), ps.rend.meshCountLoaded(), worldN == 0 ? 0 : worldSum / worldN, worldMax, guiAvg, guiP99, v.window.glRenderer().replace('"', '\''), Runtime.getRuntime().availableProcessors());
         System.out.print("[bench]\n" + json);
         try (FileWriter w = new FileWriter(new File(v.opts.benchOut))) { w.write(json); } catch (IOException e) { System.out.println("[bench] не вдалось записати " + v.opts.benchOut + ": " + e); }
         v.quit();

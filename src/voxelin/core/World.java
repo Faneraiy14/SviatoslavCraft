@@ -860,7 +860,10 @@ public final class World implements WorldAccess {
 
     /** Довантажити чанки навколо (cx,cz) у радіусі, вивантажити дальші. Готові з фону потрапляють у світ саме тут. */
     public void update(long centerCx, long centerCz, int radius) {
-        for (Chunk c; (c = ready.poll()) != null; ) {
+        // готові чанки входять у світ із бюджетом часу: зшивання світла з сусідами (reconcile) - ~0.5 мс на чанк, інколи 3-5 мс,
+        // і пачка з десятка чанків за раз давала помітне підвисання кадру; решта чекає наступного виклику (наступного тіку)
+        long until = System.nanoTime() + INTEGRATE_NS;
+        for (Chunk c; System.nanoTime() < until && (c = ready.poll()) != null; ) {
             pending.remove(c.pos());
             if (closed) continue;
             chunks.put(c.pos(), c);
@@ -953,6 +956,24 @@ public final class World implements WorldAccess {
     private static final boolean PROF = Boolean.getBoolean("voxelin.tickprof");
 
     private int pathBudget = Pathfinder.BUDGET_PER_TICK;
+    /** Скільки часу за один update() можна вводити в світ готові чанки (світло, очікувані зміни, рендер). Хоч один - завжди. */
+    static final long INTEGRATE_NS = 2_000_000;
+
+    /**
+     * Пошук шляху в окремому потоці (гра й сервер вмикають): тік світу не чекає A* (окремий пошук на холодній JVM - до ~25 мс, і весь
+     * цей час кадр стояв на замку світу). Пошук лише читає блоки (blockId безпечний з будь-якого потоку); якщо світ тим часом змінився -
+     * істота наштовхнеться і перерахує (як і зі старим шляхом). Тести лишають false - синхронно й детерміновано.
+     */
+    public volatile boolean asyncPaths;
+    private ExecutorService pathPool;
+
+    /** Шлях у фоні (asyncPaths) або одразу (готовий Future). Аргументи - як у Pathfinder.find. */
+    public java.util.concurrent.Future<long[]> findPath(long sx, int sy, long sz, long gx, int gy, long gz, int height, int maxNodes) {
+        if (!asyncPaths || closed) return java.util.concurrent.CompletableFuture.completedFuture(Pathfinder.find(this, sx, sy, sz, gx, gy, gz, height, maxNodes));
+        synchronized (this) { if (pathPool == null) pathPool = Executors.newSingleThreadExecutor(daemon("voxelin-path")); }
+        try { return pathPool.submit(() -> Pathfinder.find(this, sx, sy, sz, gx, gy, gz, height, maxNodes)); }
+        catch (java.util.concurrent.RejectedExecutionException e) { return java.util.concurrent.CompletableFuture.completedFuture(null); } // світ закривається
+    }
     /** Чи можна ще шукати шлях у цьому тіку (усім істотам разом - не більше Pathfinder.BUDGET_PER_TICK). */
     public boolean takePathBudget() { if (pathBudget <= 0) return false; pathBudget--; return true; }
     /** Скільки пошуків шляху лишилось у цьому тіку (для тестів). */
@@ -1050,6 +1071,7 @@ public final class World implements WorldAccess {
         for (Chunk c : chunks.values()) if (c.modified) saveAsync(c);
         closed = true;
         genPool.shutdownNow();
+        synchronized (this) { if (pathPool != null) pathPool.shutdownNow(); }
         io.execute(this::flushQuiet);
         io.shutdown();
         try { if (!io.awaitTermination(15, TimeUnit.SECONDS)) System.out.println("[Voxelin] ⚠️ збереження не завершилось за 15 с"); }

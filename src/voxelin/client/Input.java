@@ -18,6 +18,8 @@ public final class Input {
     private boolean textCommand;
     private boolean textActive;
     private long bsHeld, bsLast;
+    /** До цього часу (мс) перший надрукований символ ковтається: клавіша, що відкрила чат («/», T), не має потрапити в рядок ще раз. */
+    private long swallowUntil;
     private final Window window;
     /** Вікно коду: усі надруковані символи й натиски (з автоповтором) у черзі, щоб редактор нічого не губив між кадрами. */
     private boolean editActive;
@@ -46,6 +48,7 @@ public final class Input {
         glfwSetCharCallback(h, (w, cp) -> {
             if (editActive) { if (cp >= 32 && cp != 127 && typed.length() < 4096) typed.appendCodePoint(cp); return; }
             if (!textActive || text.length() >= textMax || cp > 0xFFFF) return;
+            if (swallowUntil != 0) { boolean skip = System.currentTimeMillis() < swallowUntil; swallowUntil = 0; if (skip) return; }
             char c = (char) cp;
             boolean ok = textCommand ? (c >= 32 && c != 127) : ((cp < 128 || (cp >= 0x0400 && cp <= 0x04FF)) && (Character.isLetterOrDigit(c) || c == ' '));
             if (ok) text.append(c);
@@ -72,7 +75,9 @@ public final class Input {
         text.setLength(0);
         if (initial != null) text.append(initial.length() > textMax ? initial.substring(0, textMax) : initial);
     }
-    public void endText() { textActive = false; }
+    public void endText() { textActive = false; swallowUntil = 0; }
+    /** Відкрито клавішею: її символ (може прийти й після відкриття - залежить від системи) не друкувати. Діє на один символ, ~150 мс. */
+    public void swallowOpeningChar() { swallowUntil = System.currentTimeMillis() + 150; }
 
     /** Почати/закінчити ввід у вікно коду (черги очищаються). */
     public void beginEdit() { editActive = true; typed.setLength(0); keyEvents.clear(); textActive = false; }

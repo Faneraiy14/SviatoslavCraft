@@ -70,9 +70,9 @@ public class VoxelinMeshTest {
         for (int i = 0; i < r.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) {
             check(r.solid[i] >= 0 && r.solid[i] <= 16 && r.solid[i + 1] >= 0 && r.solid[i + 1] <= 16 && r.solid[i + 2] >= 0 && r.solid[i + 2] <= 16, "вершина в межах секції");
             int pf = (int) r.solid[i + 4];
-            check((pf & 7) <= 5 && (pf >> 3 & 15) == 15 && (pf >> 7) == 0, "номер грані + повне небо без блокового світла: " + pf);
+            check((pf & 7) <= 5 && (pf >> 3 & 15) == 15 && (pf >> 7 & 15) == 0 && (pf >> 11) <= 3, "номер грані + повне небо без блокового світла (+ AO 0..3): " + pf);
         }
-        // світло: грані з різним світлом не зливаються, з однаковим - зливаються; пакування aFace = грань + 8*небо + 128*блок
+        // світло: грані з різним світлом не зливаються, з однаковим - зливаються; пакування aFace = грань + 8*небо + 128*блок + 2048*AO
         p = empty();
         for (int x = 0; x < 4; x++) for (int z = 0; z < 4; z++) set(p, x, 0, z, 1); // плита 4x4, верх дивиться в y=1
         byte[] lp = new byte[18 * 18 * 18];
@@ -83,15 +83,41 @@ public class VoxelinMeshTest {
         r = m.build(p, lp, PROPS);
         check(r.solidQuads > 6, "різне світло ламає склеювання: " + r.solidQuads);
         boolean found = false;
-        for (int i = 0; i < r.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) if ((int) r.solid[i + 4] == 2 + 8 * 5 + 128 * 10) found = true;
+        for (int i = 0; i < r.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) if (((int) r.solid[i + 4] & 2047) == 2 + 8 * 5 + 128 * 10) found = true;
         check(found, "світло запаковане в aFace (верхня грань, небо 5, блок 10)");
         lp[ChunkMesher.index(2, 1, 1)] = (byte) 0xF0;
         ChunkMesher.Props pe = new ChunkMesher.Props(PROPS.opaque(), PROPS.translucent(), PROPS.air(), new int[]{0, 0x808080, 0x804D1A, 0xCFEFF5}, new int[4], new int[4], new int[4]);
         pe.emit = new int[]{0, 12, 0, 0}; // «камінь» тут світиться сам на 12
         r = m.build(p, lp, pe);
         found = false;
-        for (int i = 0; i < r.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) if ((int) r.solid[i + 4] >> 7 == 12) found = true;
+        for (int i = 0; i < r.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) if (((int) r.solid[i + 4] >> 7 & 15) == 12) found = true;
         check(found, "блок, що світиться, сяє й сам (emit піднімає блокове світло граней)");
+        // м'які кути (AO): підлога 16x16 і стовп посередині
+        p = empty();
+        for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) set(p, x, 0, z, 1);
+        r = m.build(p, PROPS);
+        check(r.solidQuads == 6, "рівна підлога з AO - все одно 6 граней (AO однаковий скрізь): " + r.solidQuads);
+        for (int i = 0; i < r.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) check(((int) r.solid[i + 4] >> 11) == 3, "відкрита підлога - без затінення");
+        set(p, 8, 1, 8, 1); set(p, 8, 2, 8, 1);
+        r = m.build(p, PROPS);
+        int floorTop = 0, darkNear = 0, lightFar = 0;
+        for (int i = 0; i < r.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) {
+            int pf = (int) r.solid[i + 4];
+            if ((pf & 7) != 2 || r.solid[i + 1] != 1) continue; // верх підлоги (y = 1)
+            floorTop++;
+            float x = r.solid[i], z = r.solid[i + 2];
+            boolean atPillar = (x == 8 || x == 9) && (z == 8 || z == 9);
+            if (atPillar && (pf >> 11) < 3) darkNear++;
+            if ((x == 0 || x == 16) && (z == 0 || z == 16) && (pf >> 11) == 3) lightFar++;
+        }
+        check(darkNear >= 4, "біля стовпа кути підлоги затінені: " + darkNear);
+        check(lightFar >= 4, "далекі кути підлоги світлі: " + lightFar);
+        check(floorTop / 4 <= 16, "підлога біля стовпа дробиться помірно (не 255 клітинок): " + floorTop / 4);
+        ChunkMesher.Props noAo = new ChunkMesher.Props(PROPS.opaque(), PROPS.translucent(), PROPS.air(), new int[]{0, 0x808080, 0x804D1A, 0xCFEFF5}, new int[4], new int[4], new int[4]);
+        noAo.ao = false;
+        ChunkMesher.Mesh flat = m.build(p, noAo);
+        boolean allLight = true; for (int i = 0; i < flat.solid.length; i += ChunkMesher.FLOATS_PER_VERTEX) if (((int) flat.solid[i + 4] >> 11) != 3) allLight = false;
+        check(allLight && flat.solidQuads < r.solidQuads, "AO вимкнено - усе світле і граней менше: " + flat.solidQuads + " < " + r.solidQuads);
         // ключі секцій: від'ємні й гігантські координати чанків (регресія - з них зникав світ ліворуч від початку)
         long[] cs = {0, 1, -1, 5, -5, 1000, -1000, 8_388_607, -8_388_608, 1L << 40, -(1L << 40), Long.MAX_VALUE >> 5, -(Long.MAX_VALUE >> 5)};
         java.util.Set<SectionPos> set = new java.util.HashSet<>();

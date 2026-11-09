@@ -7,7 +7,8 @@ import static org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT;
 import static org.lwjgl.opengl.GL11.*;
 
 /**
- * Простий інтерфейс «негайного режиму» на віртуальному полотні 1280x720 (старий glBegin - сумісний контекст це дозволяє).
+ * Простий інтерфейс «негайного режиму» на віртуальному полотні 1280x720. Малювання пакетне (Batch2D: один VBO-виклик на кадр,
+ * а не glRectf на кожен прямокутник); хто посеред інтерфейсу малює GL напряму чи міняє матрицю - спершу Gui.flush().
  * begin() готує кадр і зчитує клік; button() малює кнопку й повертає true на клік. Клік з'їдається першою кнопкою під курсором.
  */
 public final class Gui {
@@ -24,6 +25,8 @@ public final class Gui {
     public void begin() {
         mx = in.mouseUiX(); my = in.mouseUiY();
         click = in.clicked(GLFW_MOUSE_BUTTON_LEFT);
+        Batch2D.flush();
+        pxToUi = W / (float) Math.max(1, win.fbWidth());
         glViewport(0, 0, win.fbWidth(), win.fbHeight());
         glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); glOrtho(0, W, H, 0, -1, 1);
         glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
@@ -31,16 +34,22 @@ public final class Gui {
     }
 
     public void end() {
+        Batch2D.endFrame();
         glDisable(GL_BLEND); glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE);
         glPopMatrix(); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW);
     }
 
-    public static void rect(float x, float y, float w, float h, float r, float g, float b, float a) { glColor4f(r, g, b, a); glRectf(x, y, x + w, y + h); }
+    public static void rect(float x, float y, float w, float h, float r, float g, float b, float a) { Batch2D.rect(x, y, w, h, r, g, b, a); }
+    /** Віддати накопичене відеокарті - перед прямим GL (3D-модель, зміна матриці) посеред інтерфейсу. */
+    public static void flush() { Batch2D.flush(); }
+    /** Скільки одиниць полотна в пікселі екрана (товщина рамок - у пікселях екрана, як була в glLineWidth). */
+    private static float pxToUi = 1f;
     public static void rect(float x, float y, float w, float h, int rgb, float a) { rect(x, y, w, h, ((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, a); }
 
     public static void frame(float x, float y, float w, float h, float lw, float r, float g, float b) {
-        glColor4f(r, g, b, 1f); glLineWidth(lw);
-        glBegin(GL_LINE_LOOP); glVertex2f(x, y); glVertex2f(x + w, y); glVertex2f(x + w, y + h); glVertex2f(x, y + h); glEnd();
+        float t = lw * pxToUi, hf = t / 2; // лінія товщиною lw пікселів по центру краю
+        rect(x - hf, y - hf, w + t, t, r, g, b, 1f); rect(x - hf, y + h - hf, w + t, t, r, g, b, 1f);
+        rect(x - hf, y + hf, t, h - t, r, g, b, 1f); rect(x + w - hf, y + hf, t, h - t, r, g, b, 1f);
     }
 
     public static void text(String s, float x, float y, float scale, float r, float g, float b) { GLBitmapFont.draw(s, x, y, scale, r, g, b); }

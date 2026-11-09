@@ -129,6 +129,7 @@ public final class DedicatedServer {
             log("створено світ «" + cfg.world + "» (зерно " + cfg.seed + (cfg.flat ? ", плаский" : "") + ")");
         }
         world = game.openWorld(cfg.world);
+        world.asyncPaths = true; // тік сервера не чекає пошуку шляху
         long[] land = world.findLand(0, 0); // не в морі
         spawnX = land[0]; spawnZ = land[1];
         loadSpawn();

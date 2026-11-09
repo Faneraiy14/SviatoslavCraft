@@ -26,7 +26,7 @@ public class VoxelinPathTest {
     public static void main(String[] a) throws Exception {
         g = new Game(new File(Files.createTempDirectory("vx-path").toFile(), "saves"), null);
         stone = g.blocks.byName("voxelin:stone");
-        unit(); wall(); stairs(); pit(); sealed(); cliff(); budget(); speed();
+        unit(); wall(); asyncWall(); stairs(); pit(); sealed(); cliff(); budget(); speed();
         System.out.println("VoxelinPathTest: " + n + " перевірок OK (" + info + ")");
     }
 
@@ -67,6 +67,23 @@ public class VoxelinPathTest {
         long[] d = Pathfinder.find(w, 0, S + 1, 0, 1, S + 1, 1, 2, 600);
         check(d == null || !(d[0] == 1 && d[2] == 1), "діагональ між двома блоками не проходить");
         w.close();
+    }
+
+    /** Те саме, але пошук у фоновому потоці (як у грі й на сервері): зомбі все одно обходить стіну, тік його не чекає. */
+    static void asyncWall() throws Exception {
+        World w = open();
+        w.asyncPaths = true;
+        fill(w, -8, S + 1, 4, 8, S + 3, 4, stone);
+        Fake f = player(w, 0.5, S + 1, 9.5);
+        Mob z = mob(w, "zombie", 0.5, S + 1, -1.5);
+        long[] bg = w.findPath(0, S + 1, -2, 0, S + 1, 9, 2, 600).get();
+        check(bg != null && bg[bg.length - 3] == 0 && bg[bg.length - 1] == 9, "фоновий findPath знаходить обхід стіни");
+        int t = -1;
+        for (int i = 0; i < 20 * 25 && t < 0; i++) { night(w); w.tick(); Thread.sleep(1); if (f.hits > 0) t = i; } // фон встигає між тіками, як у грі (50 мс на тік)
+        check(t >= 0, "фоновий пошук: зомбі обходить стіну й дістає гравця: " + hd(z, f));
+        info += ", у фоні " + t / 20.0 + " с";
+        w.close();
+        check(w.findPath(0, S + 1, 0, 3, S + 1, 0, 2, 600).get() == null || true, "після закриття світу findPath не падає");
     }
 
     static void wall() throws Exception {

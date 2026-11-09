@@ -10,13 +10,6 @@ import voxelin.core.entity.Vitals;
  * Етап «Новий світ» додасть текстури, руди, біоми й решту блоків.
  */
 public final class VanillaContent implements VoxelinMod {
-    /** Блоки, які гравець отримує в інвентар у новому світі (поки немає видобутку й крафту): 27 стопок по 64. */
-    public static final String[] STARTER = {
-            "voxelin:grass", "voxelin:dirt", "voxelin:stone", "voxelin:cobblestone", "voxelin:stone_bricks", "voxelin:oak_planks", "voxelin:oak_log", "voxelin:glass", "voxelin:lamp",
-            "voxelin:sand", "voxelin:sandstone", "voxelin:gravel", "voxelin:clay", "voxelin:snow", "voxelin:ice", "voxelin:birch_planks", "voxelin:spruce_planks",
-            "voxelin:oak_leaves", "voxelin:birch_log", "voxelin:spruce_log", "voxelin:cactus", "voxelin:deep_stone", "voxelin:mud", "voxelin:pale_grass", "voxelin:sintered_sand",
-            "voxelin:dune_glass", "voxelin:monolith"};
-
     public static final int MAX_FILL = 32768 * 8;
 
     private Registries r;
@@ -662,11 +655,7 @@ public final class VanillaContent implements VoxelinMod {
         });
         c.register("gamemode", "<survival|creative>", 2, k -> {
             if (k.args().size() != 1) throw new Commands.CommandException("Потрібен один аргумент");
-            boolean was = k.world().gameMode().equals("creative");
             if (!k.world().setGameMode(k.args().get(0))) throw new Commands.CommandException("Невідомий режим: " + k.args().get(0));
-            boolean now = k.world().gameMode().equals("creative");
-            ItemHolder h = k.world().items(k.source());
-            if (now && !was && h != null) for (String s : STARTER) h.give(s, 64);
             k.reply("Режим гри: " + k.world().gameMode());
         });
         c.register("gamerule", "[правило] [true|false]", 2, k -> {

@@ -73,7 +73,7 @@ public final class NetServer implements AutoCloseable {
         return new PlayerTarget() {
             public Pos body() { Pos c = g.pos.copy(); c.y = g.pos.y - voxelin.core.entity.PlayerEntity.EYE + voxelin.core.entity.PlayerEntity.HEIGHT / 2; return c; }
             public boolean alive() { return !g.dead && !g.conn.closed(); }
-            public boolean creative() { return false; }
+            public boolean creative() { return !survival; } // творчі гості: істоти хоста їх не чіпають
             public double health() { return g.health; }
             public void notify(String message) { g.conn.send(chatFrame(message)); }
             public void hurt(double damage, double kx, double kz) { hurt(damage, kx, kz, 0); }

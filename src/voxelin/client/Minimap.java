@@ -11,6 +11,7 @@ import voxelin.client.ui.Gui;
 import java.nio.ByteBuffer;
 
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
 
 /**
  * Мінікарта (клієнт-функція з FL Client, переписана нативно): вид згори на N x N клітинок навколо гравця, одна клітинка - ZOOMS[zoom]
@@ -36,6 +37,7 @@ public final class Minimap {
     private int zoom = -1, cursor;
     private boolean cave, dirty;
     private int texture;
+    private java.nio.IntBuffer pixels;
     /** Скільки стовпців пораховано за останній кадр (F3, тест). */
     public int lastWork;
 
@@ -67,7 +69,7 @@ public final class Minimap {
     public void update(long bx, int headY, long bz, int zoomLevel) {
         zoomLevel = Math.max(0, Math.min(ZOOMS.length - 1, zoomLevel));
         boolean caveNow = caveView(bx, headY, bz);
-        if (zoomLevel != zoom || caveNow != cave) { java.util.Arrays.fill(known, false); zoom = zoomLevel; cave = caveNow; }
+        if (zoomLevel != zoom || caveNow != cave) { java.util.Arrays.fill(known, false); zoom = zoomLevel; cave = caveNow; dirty = true; }
         int s = ZOOMS[zoom];
         long ctx = Math.floorDiv(bx, s), ctz = Math.floorDiv(bz, s), x0 = ctx - N / 2, z0 = ctz - N / 2;
         int work = 0;
@@ -77,19 +79,21 @@ public final class Minimap {
                 int k = i + j * N;
                 long tx = x0 + Math.floorMod(i - x0, N);
                 if (known[k] && keyX[k] == tx && keyZ[k] == tz) continue;
+                int was = argb[k];
                 compute(k, tx, tz, s, headY);
+                if (argb[k] != was) dirty = true;
                 work++;
             }
         }
         for (int r = 0; r < REFRESH && work < BUDGET + REFRESH; r++) { // по колу освіжаємо вже відомі клітинки
             int k = cursor; cursor = (cursor + 1) % (N * N);
             if (!known[k]) continue;
-            int i = k % N, j = k / N;
+            int i = k % N, j = k / N, was = argb[k];
             compute(k, x0 + Math.floorMod(i - x0, N), z0 + Math.floorMod(j - z0, N), s, headY);
+            if (argb[k] != was) dirty = true;
             work++;
         }
-        lastWork = work;
-        if (work > 0) dirty = true;
+        lastWork = work; // текстура перезавантажується лише коли картинка справді змінилась (раніше - щокадру через коло оновлення)
     }
 
     /** Печерний зріз: Незер завжди; інакше - коли над головою не видно неба. */
@@ -174,13 +178,13 @@ public final class Minimap {
             dirty = true;
         }
         if (!dirty) return;
-        ByteBuffer buf = MemoryUtil.memAlloc(N * N * 4);
-        try {
-            for (int c : argb) buf.put((byte) (c >> 16)).put((byte) (c >> 8)).put((byte) c).put((byte) 255);
-            buf.flip();
-            glBindTexture(GL_TEXTURE_2D, texture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, N, N, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
-        } finally { MemoryUtil.memFree(buf); }
+        if (pixels == null) pixels = MemoryUtil.memAllocInt(N * N);
+        pixels.clear();
+        for (int c : argb) pixels.put(0xFF000000 | c);
+        pixels.flip();
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, N, N, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels); // int ARGB як є, без перестановки байтів
+        glBindTexture(GL_TEXTURE_2D, 0);
         dirty = false;
     }
 
@@ -197,17 +201,7 @@ public final class Minimap {
         double cu = Math.floorMod(Math.floorDiv(bx, s), N) + (Math.floorMod(bx, s) + fx) / s, cv = Math.floorMod(Math.floorDiv(bz, s), N) + (Math.floorMod(bz, s) + fz) / s;
         float u0 = (float) ((cu - shown / 2.0) / N), v0 = (float) ((cv - shown / 2.0) / N), du = shown / (float) N;
         Gui.rect(x - 3, y - 3, size + 6, size + 6, 0, 0, 0, 0.65f);
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glColor4f(1, 1, 1, 1);
-        glBegin(GL_QUADS);
-        glTexCoord2f(u0, v0); glVertex2f(x, y);
-        glTexCoord2f(u0 + du, v0); glVertex2f(x + size, y);
-        glTexCoord2f(u0 + du, v0 + du); glVertex2f(x + size, y + size);
-        glTexCoord2f(u0, v0 + du); glVertex2f(x, y + size);
-        glEnd();
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glDisable(GL_TEXTURE_2D);
+        voxelin.client.ui.Batch2D.image(texture, x, y, size, size, u0, v0, u0 + du, v0 + du, 1, 1, 1, 1);
         Gui.frame(x - 1, y - 1, size + 2, size + 2, 2, cave ? 0.55f : 0.75f, cave ? 0.45f : 0.7f, cave ? 0.3f : 0.55f);
         float k = size / (shown * (float) s), cx = x + size / 2f, cy = y + size / 2f;
         double half = shown * s / 2.0;
@@ -226,19 +220,21 @@ public final class Minimap {
         // гравець - стрілка за поглядом (yaw 0 - на північ, -Z; 90 - на схід)
         double a = Math.toRadians(yaw), sa = Math.sin(a), ca = Math.cos(a);
         float[][] tri = {{0, -9}, {6, 7}, {0, 3}, {-6, 7}};
-        glBegin(GL_TRIANGLES);
         for (int pass = 0; pass < 2; pass++) {
             float grow = pass == 0 ? 1.45f : 1f;
-            if (pass == 0) glColor4f(0, 0, 0, 0.85f); else glColor4f(1f, 0.95f, 0.6f, 1f);
+            float[] col = pass == 0 ? new float[]{0, 0, 0, 0.85f} : new float[]{1f, 0.95f, 0.6f, 1f};
             int[][] faces = {{0, 1, 2}, {0, 2, 3}};
-            for (int[] f : faces) for (int idx : f) {
-                float px = tri[idx][0] * grow, py = tri[idx][1] * grow + (pass == 0 ? 0.5f : 0);
-                glVertex2f(cx + (float) (px * ca - py * sa), cy + (float) (px * sa + py * ca));
+            for (int[] f : faces) {
+                float[] p = new float[6];
+                for (int j = 0; j < 3; j++) {
+                    float px = tri[f[j]][0] * grow, py = tri[f[j]][1] * grow + (pass == 0 ? 0.5f : 0);
+                    p[2 * j] = cx + (float) (px * ca - py * sa); p[2 * j + 1] = cy + (float) (px * sa + py * ca);
+                }
+                voxelin.client.ui.Batch2D.triangle(p[0], p[1], p[2], p[3], p[4], p[5], col[0], col[1], col[2], col[3]);
             }
         }
-        glEnd();
         Gui.textCentered("Пн", cx, y + 4, 1.6f, 1f, 0.9f, 0.5f);
     }
 
-    public void close() { if (texture != 0) glDeleteTextures(texture); texture = 0; }
+    public void close() { if (texture != 0) glDeleteTextures(texture); texture = 0; if (pixels != null) MemoryUtil.memFree(pixels); pixels = null; }
 }

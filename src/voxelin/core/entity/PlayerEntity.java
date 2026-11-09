@@ -53,6 +53,12 @@ public final class PlayerEntity {
     public boolean wings, gliding;
     private boolean prevJump;
     private double impact;
+    /** Політ (творчий режим): canFly виставляє клієнт щотіку; подвійний пробіл вмикає/вимикає flying, пробіл - вгору, Shift - вниз,
+     *  торкнувся землі - політ закінчується (як заведено). FLY_TAP - тіків між натисками пробілу для «подвійного». */
+    public boolean canFly, flying;
+    private int sinceJumpTap = 99;
+    static final int FLY_TAP = 7;
+    private static final double FLY_SPEED = 11.0, FLY_SPRINT = 2.0, FLY_VERT = 7.5;
 
     public PlayerEntity(Solid world, Pos at) { this(world, (x, y, z) -> false, at); }
     public PlayerEntity(Solid world, Liquid liquid, Pos at) { this.world = world; this.liquid = liquid; teleport(at); }
@@ -85,6 +91,12 @@ public final class PlayerEntity {
         headInWater = liquid.at(bx, (int) Math.floor(pos.y), bz);            // вода на рівні очей
         boolean jumpEdge = jump && !prevJump;
         prevJump = jump;
+        if (!canFly) flying = false;
+        if (jumpEdge) {
+            if (canFly && sinceJumpTap <= FLY_TAP) { flying = !flying; sinceJumpTap = 99; if (flying) { vy = 0; gliding = false; } }
+            else sinceJumpTap = 0;
+        } else if (sinceJumpTap < 99) sinceJumpTap++;
+        if (flying) { fly(dt, dx, dz, jump, sprint && fwd, crouch); return; }
         if (gliding && (onGround || inWater || !wings)) gliding = false;
         else if (!gliding && wings && jumpEdge && !onGround && !inWater && vy < 0) gliding = true; // стрибок у повітрі під час падіння розкриває крила
         if (gliding) { glide(dt); return; }
@@ -113,6 +125,23 @@ public final class PlayerEntity {
         else if (onGround) { if (fall > 0) landedFall = fall; fall = 0; }
         else if (down > 0) fall += down;
         else fall = Math.max(0, fall + down);
+    }
+
+    /** Політ: без гравітації, швидше за біг, пробіл/Shift - вгору/вниз, плавне гальмування. Приземлення вимикає політ. */
+    private void fly(double dt, double dx, double dz, boolean up, boolean sprint, boolean down) {
+        jumped = false;
+        eyeOffset += (0.0 - eyeOffset) * Math.min(1.0, 10.0 * dt);
+        double tvx = 0, tvz = 0;
+        if (dx != 0 || dz != 0) { double len = Math.sqrt(dx * dx + dz * dz), s = FLY_SPEED * (sprint ? FLY_SPRINT : 1.0); tvx = dx / len * s; tvz = dz / len * s; }
+        double tvy = (up ? FLY_VERT : 0) - (down ? FLY_VERT : 0);
+        double t = Math.min(1.0, ACCEL * dt);
+        vx += (tvx - vx) * t; vz += (tvz - vz) * t; vy += (tvy - vy) * Math.min(1.0, 2 * ACCEL * dt);
+        if (Math.abs(vy) < 0.01) vy = 0;
+        if (vy != 0) moveY(vy * dt); else onGround = false;
+        moveH(vx * dt, vz * dt, false);
+        pos.normalize();
+        fall = 0; landedFall = 0;
+        if (onGround) flying = false;
     }
 
     /**

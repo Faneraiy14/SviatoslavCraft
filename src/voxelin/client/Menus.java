@@ -125,12 +125,14 @@ final class Menus {
         logo("VOXELIN", 92, 13f);
         // сплеш: жовтий рядок під кутом, що «дихає» (як у Minecraft)
         float k = 1f + 0.06f * (float) Math.abs(Math.sin(sec * 3.5));
+        Gui.flush(); // матриця міняється - накопичене малюється зі старою
         org.lwjgl.opengl.GL11.glPushMatrix();
         org.lwjgl.opengl.GL11.glTranslatef(Gui.W / 2f + 250, 178, 0);
         org.lwjgl.opengl.GL11.glRotatef(-12, 0, 0, 1);
         org.lwjgl.opengl.GL11.glScalef(k, k, 1);
         Gui.text(splash, -Gui.textWidth(splash, 2.4f) / 2f + 2, 2, 2.4f, 0.25f, 0.22f, 0);
         Gui.text(splash, -Gui.textWidth(splash, 2.4f) / 2f, 0, 2.4f, 1f, 1f, 0.2f);
+        Gui.flush();
         org.lwjgl.opengl.GL11.glPopMatrix();
         float x = 440, w = 400, y = 270;
         String last = lastWorld();
@@ -161,6 +163,7 @@ final class Menus {
         if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Згладжування (перезапуск)", st.msaa == 0 ? "вимкнено" : st.msaa + "x")) st.msaa = cycle(Settings.MSAA_VALUES, st.msaa, stepDir);
         if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Верт. синхр. (перезапуск)", st.vsync ? "увімкнено" : "вимкнено")) st.vsync = !st.vsync;
         if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Контури блоків", st.outlines ? "увімкнено" : "вимкнено")) st.outlines = !st.outlines;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "М'які тіні в кутах", st.ao ? "увімкнено" : "вимкнено")) st.ao = !st.ao;
         st.clampAll();
         Gui.textCentered("Розмір текстур застосується при наступному відкритті світу. Власні PNG - тека textures/.", Gui.W / 2f, y0 + row[0] * (h + gap) + 6, 1.9f, 0.7f, 0.75f, 0.9f);
         if (g.button("ЗВУК", 330, 640, 300, 56)) { v.saveSettings(); show(Screen.SOUND); return; }

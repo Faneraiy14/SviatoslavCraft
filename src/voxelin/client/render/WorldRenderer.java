@@ -26,14 +26,15 @@ public final class WorldRenderer implements World.Listener {
             #version 130
             in vec3 aPos; in vec4 aColor; in float aFace; in float aLayer;
             uniform mat4 uProjView; uniform vec3 uOffset; uniform float uScale; uniform vec3 uCam; uniform float uSky; uniform float uAmbient;
-            flat out float vLight;
+            flat out float vLight; out float vAo;
             out vec4 vColor; out vec3 vBlock; flat out int vFace; out float vDist; out vec2 vUv; flat out float vLayer;
             void main() {
                 vec3 b = aPos + uOffset;
                 vec3 w = b * uScale;
                 int pf = int(aFace + 0.5);
                 int f = pf & 7;
-                int sky = (pf >> 3) & 15, blk = pf >> 7;
+                int sky = (pf >> 3) & 15, blk = (pf >> 7) & 15, ao = pf >> 11;
+                vAo = ao == 3 ? 1.0 : ao == 2 ? 0.82 : ao == 1 ? 0.66 : 0.52; // м'які кути
                 float ls = sky == 0 ? 0.0 : pow(0.8, float(15 - sky)) * uSky;
                 float lb = blk == 0 ? 0.0 : pow(0.8, float(15 - blk));
                 vLight = max(max(ls, lb), uAmbient);
@@ -52,7 +53,7 @@ public final class WorldRenderer implements World.Listener {
             """;
     private static final String FS = """
             #version 130
-            flat in float vLight; in vec4 vColor; in vec3 vBlock; flat in int vFace; in float vDist; in vec2 vUv; flat in float vLayer;
+            flat in float vLight; in float vAo; in vec4 vColor; in vec3 vBlock; flat in int vFace; in float vDist; in vec2 vUv; flat in float vLayer;
             uniform vec3 uFogColor; uniform float uFogStart; uniform float uFogEnd; uniform float uOutline; uniform float uCutout;
             uniform sampler2DArray uTex;
             out vec4 fragColor;
@@ -66,7 +67,7 @@ public final class WorldRenderer implements World.Listener {
                 float aa = fwidth(m) + 0.0001;
                 float line = 1.0 - smoothstep(0.02, 0.02 + aa, e);
                 vec4 base = t * vColor;
-                vec3 c = base.rgb * vLight * mix(1.0, 0.8, line * uOutline);
+                vec3 c = base.rgb * vLight * vAo * mix(1.0, 0.8, line * uOutline);
                 float fog = clamp((vDist - uFogStart) / max(1.0, uFogEnd - uFogStart), 0.0, 1.0);
                 fragColor = vec4(mix(c, uFogColor, fog), base.a);
             }
@@ -402,6 +403,13 @@ public final class WorldRenderer implements World.Listener {
     }
 
     public int meshCountLoaded() { return meshes.size(); }
+
+    /** М'які кути (налаштування): зміна перебудовує всі секції (у фоні, як при появі чанків). */
+    public void setAo(boolean on) {
+        if (props.ao == on) return;
+        props.ao = on;
+        events.add(() -> { for (SectionPos k : meshes.keySet()) dirty.add(k); });
+    }
     public int pending() { return dirty.size() + inFlight.size() + urgent.size() + events.size(); }
 
     public void close() {

@@ -1,5 +1,6 @@
 package voxelin.client.render;
 
+import voxelin.client.ui.Batch2D;
 import org.lwjgl.system.MemoryUtil;
 import voxelin.core.*;
 
@@ -68,13 +69,9 @@ public final class IconAtlas {
         if (m[0] == 2) {
             ItemType t = world.itemTypes.get(item);
             int rgb = t == null ? 0xFF00FF : t.color;
-            glColor4f(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, 1f);
-            glRectf(x + size * 0.15f, y + size * 0.15f, x + size * 0.85f, y + size * 0.85f);
+            Batch2D.rect(x + size * 0.15f, y + size * 0.15f, size * 0.7f, size * 0.7f, ((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, 1f);
             return;
         }
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, id);
-        glBegin(GL_QUADS);
         if (m[0] == 0) quad(m[1], 1f, x, y, x + size, y, x + size, y + size, x, y + size);
         else {
             float cx = x + size / 2, h = size * 0.5f, q = size * 0.25f, y0 = y + size * 0.06f;
@@ -83,9 +80,6 @@ public final class IconAtlas {
             quad(m[2], 0.78f, x, y0 + q, cx, y0 + h, cx, y0 + h + h, x, y0 + q + h);
             quad(m[2], 0.55f, cx, y0 + h, x + size, y0 + q, x + size, y0 + q + h, cx, y0 + h + h);
         }
-        glEnd();
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glDisable(GL_TEXTURE_2D);
     }
 
     private float u(int layer, float f) { return ((layer % COLS) + f) / COLS; }
@@ -93,19 +87,11 @@ public final class IconAtlas {
 
     /** Квад із вершинами (за годинниковою від лівого верхнього) і текстурою [0,1]^2. */
     private void quad(int layer, float shade, float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3) {
-        glColor4f(shade, shade, shade, 1f);
-        glTexCoord2f(u(layer, 0), v(layer, 0)); glVertex2f(x0, y0);
-        glTexCoord2f(u(layer, 1), v(layer, 0)); glVertex2f(x1, y1);
-        glTexCoord2f(u(layer, 1), v(layer, 1)); glVertex2f(x2, y2);
-        glTexCoord2f(u(layer, 0), v(layer, 1)); glVertex2f(x3, y3);
+        Batch2D.quad(id, x0, y0, u(layer, 0), v(layer, 0), x1, y1, u(layer, 1), v(layer, 0), x2, y2, u(layer, 1), v(layer, 1), x3, y3, u(layer, 0), v(layer, 1), shade, shade, shade, 1f);
     }
 
     /** Верхня грань: ромб із вершинами T,R,B,L; текстура лягає «ромбом» (лівий верх - у T). */
     private void quadIso(int layer, float shade, float tx, float ty, float rx, float ry, float bx, float by, float lx, float ly) {
-        glColor4f(shade, shade, shade, 1f);
-        glTexCoord2f(u(layer, 0), v(layer, 0)); glVertex2f(tx, ty);
-        glTexCoord2f(u(layer, 1), v(layer, 0)); glVertex2f(rx, ry);
-        glTexCoord2f(u(layer, 1), v(layer, 1)); glVertex2f(bx, by);
-        glTexCoord2f(u(layer, 0), v(layer, 1)); glVertex2f(lx, ly);
+        Batch2D.quad(id, tx, ty, u(layer, 0), v(layer, 0), rx, ry, u(layer, 1), v(layer, 0), bx, by, u(layer, 1), v(layer, 1), lx, ly, u(layer, 0), v(layer, 1), shade, shade, shade, 1f);
     }
 }

@@ -6,6 +6,7 @@ WORKDIR /src
 COPY build.sh ./
 COPY lib lib
 COPY src src
+COPY res res
 COPY boot boot
 RUN ./build.sh && rm -f lib/*natives-windows*.jar
 

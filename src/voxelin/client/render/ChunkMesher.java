@@ -7,6 +7,12 @@ package voxelin.client.render;
  * Вхід - «обгорнутий» масив 18^3 (секція + шар сусідів): індекс (x+1) + (z+1)*18 + (y+1)*324, x,y,z у -1..16.
  * Незавантажений сусід передається як непрозорий блок - на межі не з'являються дірки; після завантаження сусіда секція перебудовується.
  * Вершина: x,y,z (у блоках відносно секції), колір RGBA (int у float-бітах), номер грані 0..5, шар текстури - 6 float, 24 байти.
+ * «Номер грані» несе ще світло й м'які кути: грань + 8*небо + 128*блок + 2048*AO (AO 0..3 - 3 світло, 0 - глибокий кут).
+ *
+ * М'які кути (ambient occlusion): кожна вершина грані темніша, якщо біля неї суцільні блоки (два боки й кут - стандартна схема 0..3).
+ * Склеювання не ламається: AO чотирьох кутів клітинки входить у ключ злиття, тож зливаються лише клітинки з однаковим візерунком -
+ * відкрита рівнина лишається одним прямокутником, дробиться лише біля стін і в кутах. Квад із «косим» AO повертається на одну вершину,
+ * щоб діагональ трикутників ішла вздовж градієнта (інакше видно смугу).
  */
 public final class ChunkMesher {
     public static final int P = 18, FLOATS_PER_VERTEX = 6;
@@ -20,6 +26,8 @@ public final class ChunkMesher {
         public boolean[] air() { return air; }
         /** Власне світло блока (0..15) - лампа сяє й сама; null - ні в кого. */
         public int[] emit;
+        /** М'які кути (налаштування «М'ЯКЕ СВІТЛО»); false - як раніше, кожна грань рівна. */
+        public volatile boolean ao = true;
         /** Блоки не-куби: коробки по 6 чисел {x0,y0,z0,x1,y1,z1} у частках блока (null - повний куб); null - таких нема. */
         public float[][] box;
         /** Блоки, чиї коробки залежать від клітинки (дошки): їх питаємо в CellBoxes. */
@@ -73,7 +81,8 @@ public final class ChunkMesher {
                         if (visible) {
                             int lv = light == null ? 0xF0 : light[index(pos[0], pos[1], pos[2])] & 0xFF; // світло клітинки, у яку дивиться грань
                             if (props.emit != null && props.emit[id] > (lv & 15)) lv = (lv & 0xF0) | props.emit[id];
-                            m = id | (lv << 16);
+                            int ao = props.ao ? aoPattern(padded, props, pos, u, v) : 0xFF; // pos - клітинка перед гранню
+                            m = id | (lv << 16) | (ao << 24);
                         }
                     }
                     mask[a + b * 16] = m;
@@ -82,7 +91,7 @@ public final class ChunkMesher {
                 for (int b = 0; b < 16; b++) for (int a = 0; a < 16; ) {
                     int key = mask[a + b * 16];
                     if (key == 0) { a++; continue; }
-                    int id = key & 0xFFFF, lv = key >>> 16;
+                    int id = key & 0xFFFF, lv = (key >>> 16) & 0xFF, ao = key >>> 24;
                     int w = 1;
                     while (a + w < 16 && mask[a + w + b * 16] == key) w++;
                     int h = 1;
@@ -92,7 +101,7 @@ public final class ChunkMesher {
                         h++;
                     }
                     for (int hh = 0; hh < h; hh++) for (int k = 0; k < w; k++) mask[a + k + (b + hh) * 16] = 0;
-                    quad(props.translucent[id] ? trans : solid, face, axis, u, v, positive ? s + 1 : s, a, b, a + w, b + h, color(props, id, face), layer(props, id, face), face + 8 * (lv >> 4) + 128 * (lv & 15));
+                    quad(props.translucent[id] ? trans : solid, face, axis, u, v, positive ? s + 1 : s, a, b, a + w, b + h, color(props, id, face), layer(props, id, face), face + 8 * (lv >> 4) + 128 * (lv & 15), ao);
                     a += w;
                 }
             }
@@ -124,7 +133,7 @@ public final class ChunkMesher {
                 for (int face = 0; face < 6; face++) {
                     int axis = face >> 1, u = (axis + 1) % 3, v = (axis + 2) % 3;
                     boolean positive = (face & 1) == 0;
-                    quadF(out, face, axis, u, v, positive ? hi[axis] : lo[axis], lo[u], lo[v], hi[u], hi[v], color(props, id, face), layer(props, id, face), face + 8 * (lv >> 4) + 128 * (lv & 15));
+                    quadF(out, face, axis, u, v, positive ? hi[axis] : lo[axis], lo[u], lo[v], hi[u], hi[v], color(props, id, face), layer(props, id, face), face + 8 * (lv >> 4) + 128 * (lv & 15) + 2048 * 3); // коробки - без AO
                 }
             }
         }
@@ -153,16 +162,42 @@ public final class ChunkMesher {
     /** Шар текстури для грані: +Y - верх, -Y - низ, решта - бік. */
     private static int layer(Props p, int id, int face) { return face == 2 ? p.layerTop[id] : (face == 3 ? p.layerBottom[id] : p.layerSide[id]); }
 
-    /** Чотирикутник проти годинникової стрілки, якщо дивитись ззовні (для відсікання задніх граней). */
-    private static void quad(FloatList out, int face, int axis, int u, int v, int plane, int u0, int v0, int u1, int v1, int rgba, int layer, int faceLight) {
-        int[][] corners = (face & 1) == 0
-                ? new int[][]{{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}}
-                : new int[][]{{u0, v0}, {u0, v1}, {u1, v1}, {u1, v0}};
+    /**
+     * AO чотирьох кутів грані, що дивиться в клітинку c (сусід блока): по 2 біти, кут (-u,-v) - біти 0-1, (+u,-v) - 2-3, (+u,+v) - 4-5,
+     * (-u,+v) - 6-7. Значення 3 - світло, 0 - обидва боки суцільні. Усе в межах обгорнутого масиву (c по u, v - 0..15, плюс/мінус 1).
+     */
+    private static int aoPattern(short[] padded, Props props, int[] c, int u, int v) {
+        int r = 0;
+        int[] q = new int[3];
+        for (int k = 0; k < 4; k++) {
+            int du = k == 1 || k == 2 ? 1 : -1, dv = k >= 2 ? 1 : -1;
+            q[0] = c[0]; q[1] = c[1]; q[2] = c[2]; q[u] += du; boolean s1 = solidCube(padded, props, q);
+            q[u] -= du; q[v] += dv; boolean s2 = solidCube(padded, props, q);
+            q[u] += du; boolean cr = solidCube(padded, props, q);
+            int ao = s1 && s2 ? 0 : 3 - ((s1 ? 1 : 0) + (s2 ? 1 : 0) + (cr ? 1 : 0));
+            r |= ao << (2 * k);
+        }
+        return r;
+    }
+
+    private static boolean solidCube(short[] padded, Props props, int[] q) {
+        int id = padded[index(q[0], q[1], q[2])];
+        return id > 0 && props.opaque[id] && (props.box == null || props.box[id] == null);
+    }
+
+    /** Чотирикутник проти годинникової стрілки, якщо дивитись ззовні (для відсікання задніх граней). ao - візерунок aoPattern. */
+    private static void quad(FloatList out, int face, int axis, int u, int v, int plane, int u0, int v0, int u1, int v1, int rgba, int layer, int faceLight, int ao) {
+        // кути у термінах (u,v): 0 (-,-), 1 (+,-), 2 (+,+), 3 (-,+); додатна грань обходить 0,1,2,3, від'ємна - 0,3,2,1
+        int[][] uv = {{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}};
+        int[] order = (face & 1) == 0 ? new int[]{0, 1, 2, 3} : new int[]{0, 3, 2, 1};
+        int a0 = ao & 3, a1 = (ao >> 2) & 3, a2 = (ao >> 4) & 3, a3 = (ao >> 6) & 3;
+        int start = a0 + a2 < a1 + a3 ? 1 : 0; // трикутники 0-1-2 і 0-2-3: діагональ між найсвітлішою парою кутів
         float colorBits = Float.intBitsToFloat(rgba);
         float[] p = new float[3];
-        for (int[] c : corners) {
-            p[axis] = plane; p[u] = c[0]; p[v] = c[1];
-            out.add(p[0]); out.add(p[1]); out.add(p[2]); out.add(colorBits); out.add(faceLight); out.add(layer);
+        for (int i = 0; i < 4; i++) {
+            int k = order[(i + start) & 3];
+            p[axis] = plane; p[u] = uv[k][0]; p[v] = uv[k][1];
+            out.add(p[0]); out.add(p[1]); out.add(p[2]); out.add(colorBits); out.add(faceLight + 2048 * ((ao >> (2 * k)) & 3)); out.add(layer);
         }
     }
 

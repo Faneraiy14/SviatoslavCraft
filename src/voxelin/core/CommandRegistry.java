@@ -31,6 +31,22 @@ public final class CommandRegistry {
 
     public Collection<Entry> all() { return Collections.unmodifiableCollection(map.values()); }
 
+    /**
+     * Підказки для рядка чату, який починається з «/»: поки назва не дописана (нема пробілу) - команди, чия назва починається
+     * з набраного (за абеткою), без пробілу -> точний збіг теж у списку; після пробілу - лише сама команда (щоб показати використання).
+     * maxPermission - найвищий рівень прав, команди понад нього не пропонуються (світ без читів: 0).
+     */
+    public synchronized List<Entry> suggest(String line, int maxPermission) {
+        List<Entry> out = new ArrayList<>();
+        if (line == null || !line.startsWith("/")) return out;
+        String s = line.substring(1);
+        int sp = s.indexOf(' ');
+        if (sp >= 0) { Entry e = map.get(s.substring(0, sp).toLowerCase(Locale.ROOT)); if (e != null && e.permission <= maxPermission) out.add(e); return out; }
+        String pre = s.toLowerCase(Locale.ROOT);
+        for (Entry e : map.values()) if (e.name.startsWith(pre) && e.permission <= maxPermission) out.add(e);
+        return out;
+    }
+
     /** Виконати. Повертає повідомлення для чату/консолі (помилка теж повідомлення, а не виняток). */
     public List<String> execute(Source src, WorldAccess world, long[] origin, String line) {
         List<String> out = new ArrayList<>();

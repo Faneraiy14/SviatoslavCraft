@@ -50,6 +50,10 @@ public final class Mob {
     private long goalX, goalZ;
     private int goalY;
     private boolean noPath, pathJump;
+    /** Шлях, що рахується у фоні (World.asyncPaths), і ціль, під яку його замовили. */
+    private java.util.concurrent.Future<long[]> pathJob;
+    private long jobX, jobZ;
+    private int jobY;
     public static final int REPATH = 20, STUCK = 30;
     /** Поточний шлях (для тестів і налагодження) або null. */
     public long[] path() { return path; }
@@ -209,11 +213,24 @@ public final class Mob {
         boolean moved = mdx * mdx + mdz * mdz > 2.25 || Math.abs(gy - goalY) > 1;
         boolean done = path == null || pathIdx * 3 >= path.length;
         boolean newGoal = mdx * mdx + mdz * mdz > 64; // зовсім інша ціль (інша гілка поведінки) - не чекаємо таймера
-        if ((onGround || inWater) && (path == null && !noPath || newGoal || repathTimer <= 0 && (moved || done || stuckTicks > STUCK)) && w.takePathBudget()) {
-            path = Pathfinder.find(w, pos.blockX(), fy, pos.blockZ(), gx, gy, gz, (int) Math.ceil(type.height), Pathfinder.DEFAULT_NODES);
-            pathIdx = 0; goalX = gx; goalY = gy; goalZ = gz; repathTimer = REPATH; stuckTicks = 0;
+        if (pathJob != null && pathJob.isDone()) { // фоновий пошук готовий
+            long[] got;
+            try { got = pathJob.get(); } catch (Exception e) { got = null; }
+            pathJob = null;
+            path = got; pathIdx = 0; goalX = jobX; goalY = jobY; goalZ = jobZ;
             noPath = path == null && Pathfinder.standable(w, pos.blockX(), fy, pos.blockZ(), (int) Math.ceil(type.height));
-            if (path == null) return false;
+        }
+        if (pathJob == null && (onGround || inWater) && (path == null && !noPath || newGoal || repathTimer <= 0 && (moved || done || stuckTicks > STUCK)) && w.takePathBudget()) {
+            pathJob = w.findPath(pos.blockX(), fy, pos.blockZ(), gx, gy, gz, (int) Math.ceil(type.height), Pathfinder.DEFAULT_NODES);
+            jobX = gx; jobY = gy; jobZ = gz; repathTimer = REPATH; stuckTicks = 0;
+            if (pathJob.isDone()) { // синхронно (тести) - як раніше, одразу
+                long[] got;
+                try { got = pathJob.get(); } catch (Exception e) { got = null; }
+                pathJob = null;
+                path = got; pathIdx = 0; goalX = gx; goalY = gy; goalZ = gz;
+                noPath = path == null && Pathfinder.standable(w, pos.blockX(), fy, pos.blockZ(), (int) Math.ceil(type.height));
+                if (path == null) return false;
+            }
         }
         if (path == null) return false;
         long ox = pos.cx * 16, oz = pos.cz * 16;

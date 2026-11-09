@@ -12,13 +12,13 @@ public class VoxelinSettingsTest {
         File dir = Files.createTempDirectory("vx-set").toFile();
         File f = new File(dir, "settings.properties");
         Settings d = Settings.load(f);
-        check(d.textureSize == 0 && d.renderDistance == 12 && d.fov == 70 && d.msaa == 2 && Math.abs(d.mouseSensitivity - 0.12f) < 1e-6 && d.vsync && d.outlines, "типові значення без файла");
+        check(d.textureSize == 0 && d.renderDistance == 12 && d.fov == 70 && d.msaa == 2 && Math.abs(d.mouseSensitivity - 0.12f) < 1e-6 && d.vsync && d.outlines && d.ao, "типові значення без файла (м'які тіні увімкнено)");
         Settings s = new Settings();
-        s.textureSize = 32; s.renderDistance = 18; s.fov = 90; s.msaa = 4; s.mouseSensitivity = 0.2f; s.vsync = false; s.outlines = false; s.fullbright = true; s.minimap = 2; s.minimapZoom = 0;
+        s.textureSize = 32; s.renderDistance = 18; s.fov = 90; s.msaa = 4; s.mouseSensitivity = 0.2f; s.vsync = false; s.outlines = false; s.ao = false; s.fullbright = true; s.minimap = 2; s.minimapZoom = 0;
         s.save(f);
         check(f.isFile() && !new File(f.getPath() + ".tmp").exists(), "файл записано атомарно (без .tmp)");
         Settings r = Settings.load(f);
-        check(r.textureSize == 32 && r.renderDistance == 18 && r.fov == 90 && r.msaa == 4 && Math.abs(r.mouseSensitivity - 0.2f) < 1e-6 && !r.vsync && !r.outlines && r.fullbright && r.minimap == 2 && r.minimapZoom == 0, "запис -> читання");
+        check(r.textureSize == 32 && r.renderDistance == 18 && r.fov == 90 && r.msaa == 4 && Math.abs(r.mouseSensitivity - 0.2f) < 1e-6 && !r.vsync && !r.outlines && !r.ao && r.fullbright && r.minimap == 2 && r.minimapZoom == 0, "запис -> читання");
         s.textureSize = 0; s.save(f);
         check(Settings.load(f).textureSize == 0 && new String(Files.readAllBytes(f.toPath())).contains("textureSize=auto"), "авто зберігається як auto");
         Files.write(f.toPath(), ("textureSize=999\nrenderDistance=-5\nfov=abc\nmsaa=7\nmouseSensitivity=NaN\nvsync=maybe\noutlines=false\n").getBytes());

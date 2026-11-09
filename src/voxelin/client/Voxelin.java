@@ -18,7 +18,7 @@ import static org.lwjgl.opengl.GL11.*;
  *   --autoworld НАЗВА[:flat] [--seed N]   одразу зайти у світ (створити, якщо нема)
  *   --menu worlds|create|rename            показати екран меню (з --screenshot)
  *   --tp X,Z,YAW,PITCH,ВИСОТА (X,Z - цілі до ±9e18, можна 1e15)             поставити гравця (блоки) · --cmd "/fill ...;/setblock ..."   команди після завантаження
- *   --debug  --freeze                     показати F3 одразу / без фізики гравця (для знімків) · --screenshot файл.png   знімок і вихід · --bench СЕКУНД [--bench-out файл.json]   тест швидкодії і вихід
+ *   --debug  --freeze                     показати F3 одразу / без фізики гравця (для знімків) · --screenshot файл.png   знімок і вихід · --ui inventory|chat:ТЕКСТ   відкрити екран перед знімком · --bench СЕКУНД [--bench-out файл.json]   тест швидкодії і вихід
  */
 public final class Voxelin {
     /** Версія гри - з voxelin.core.GameVersion (одне місце для клієнта, сервера й світів). */
@@ -41,6 +41,8 @@ public final class Voxelin {
         double dayMinutes = -1; // --day-minutes N: довжина доби (інакше - зі світу, типово 30)
         long seed = 12345L;
         String autoWorld, screenshot, benchOut = "bench-result.json";
+        /** dev (для знімків): відкрити екран у світі - inventory, або chat:ТЕКСТ (рядок чату з набраним текстом). */
+        String ui;
         boolean autoFlat, debug, freeze;
         String menuScreen;
         /** dev: --lan - одразу відкрити світ для мережі (код - у stdout); --join АДРЕСА/КОД - зайти гостем без меню. --name ІМ'Я - ім'я гравця (лаунчер передає нік). */
@@ -93,6 +95,7 @@ public final class Voxelin {
                         }
                         case "--cmd" -> { for (String c : a[++i].split(";")) if (!c.trim().isEmpty()) o.cmds.add(c.trim()); }
                         case "--screenshot" -> o.screenshot = a[++i];
+                        case "--ui" -> o.ui = a[++i];
                         case "--bench" -> o.benchSeconds = Double.parseDouble(a[++i]);
                         case "--bench-out" -> o.benchOut = a[++i];
                         default -> System.out.println("[Voxelin] невідомий параметр " + k);

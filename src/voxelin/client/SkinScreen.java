@@ -118,6 +118,7 @@ final class SkinScreen {
 
     /** Модель у 2D-інтерфейсі: власна ортопроєкція з глибиною, ноги в (cx, feetY), k пікселів екрана на піксель скіна. */
     private void model(float cx, float feetY, float k, float yaw, PlayerModel.Pose pose) {
+        Gui.flush(); // фон і кнопки під моделлю - намалювати до неї
         glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); glOrtho(0, Gui.W, Gui.H, 0, -1000, 1000);
         glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
         glClear(GL_DEPTH_BUFFER_BIT);

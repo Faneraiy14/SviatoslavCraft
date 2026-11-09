@@ -71,7 +71,7 @@ public final class GLBitmapFont {
         // запас "з'їдав" половину й так небагатьох реальних пікселів
         // літери. 0.92 - товщі літери, ближче до жирного вигляду
         // старого рукописного шрифту.
-        Font font = new Font(Font.SANS_SERIF, Font.BOLD, (int) (CELL * 0.92));
+        Font font = bundledFont((int) (CELL * 0.92));
         g.setFont(font);
         g.setColor(Color.WHITE);
         FontMetrics fm = g.getFontMetrics();
@@ -117,6 +117,20 @@ public final class GLBitmapFont {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, atlasW, atlasH, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        Batch2D.setFont(textureId);
+    }
+
+    /**
+     * Шрифт, що їде з грою (DejaVu Sans Bold, ліцензія поруч - DejaVu-LICENSE.txt): однаковий на будь-якій системі. Раніше брався
+     * системний логічний SansSerif - на Windows без потрібних шрифтів (перевірено під wine) замість тексту були квадратики,
+     * навіть цифри. Якщо файла нема (зібрано без res/) - як раніше, системний.
+     */
+    private static Font bundledFont(int size) {
+        try (java.io.InputStream in = GLBitmapFont.class.getResourceAsStream("DejaVuSans-Bold.ttf")) {
+            if (in != null) return Font.createFont(Font.TRUETYPE_FONT, in).deriveFont(Font.PLAIN, (float) size);
+        } catch (Exception e) { System.out.println("[Voxelin] ⚠️ вбудований шрифт не завантажився: " + e); }
+        return new Font(Font.SANS_SERIF, Font.BOLD, size);
     }
 
     // 2D-текст в ортографічній проєкції (викликач вже мусить бути в
@@ -125,16 +139,11 @@ public final class GLBitmapFont {
     // texture env mode - множить колір і альфу текстури на glColor).
     public static void draw(String text, float x, float y, float scale, float r, float g, float b) {
         ensureInitialized();
-        glEnable(GL_TEXTURE_2D);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glBindTexture(GL_TEXTURE_2D, textureId);
-        glColor4f(r, g, b, 1f);
 
         float glyphW = 6 * scale, glyphH = 7 * scale;
         float cursorX = x;
-        glBegin(GL_QUADS);
-        for (char c : text.toCharArray()) {
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
             // Регістр тепер зберігається (Sviatoslav попросив) - шрифт
             // реальний, малі й великі літери мають ОКРЕМІ клітинки в
             // атласі, примусового toUpperCase тут більше нема.
@@ -143,15 +152,8 @@ public final class GLBitmapFont {
             // трохи всередину клітинки, щоб сусідні символи не просвічували по краях
             float u0 = (cell[0] * (float) CELL + 1.5f) / atlasW, v0 = (cell[1] * (float) CELL + 1.5f) / atlasH;
             float u1 = ((cell[0] + 1) * (float) CELL - 1.5f) / atlasW, v1 = ((cell[1] + 1) * (float) CELL - 1.5f) / atlasH;
-            glTexCoord2f(u0, v0); glVertex2f(cursorX, y);
-            glTexCoord2f(u1, v0); glVertex2f(cursorX + glyphW, y);
-            glTexCoord2f(u1, v1); glVertex2f(cursorX + glyphW, y + glyphH);
-            glTexCoord2f(u0, v1); glVertex2f(cursorX, y + glyphH);
+            if (c != ' ') Batch2D.image(textureId, cursorX, y, glyphW, glyphH, u0, v0, u1, v1, r, g, b, 1f);
             cursorX += glyphW;
         }
-        glEnd();
-
-        
-        glDisable(GL_TEXTURE_2D);
     }
 }

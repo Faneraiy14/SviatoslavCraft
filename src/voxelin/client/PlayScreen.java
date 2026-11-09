@@ -97,12 +97,14 @@ final class PlayScreen {
 
     PlayScreen(Voxelin v, World world, voxelin.net.NetClient net) {
         this.v = v; this.world = world; this.net = net;
+        world.asyncPaths = true; // пошук шляху істот - у фоні, кадр його не чекає
         sounds = new voxelin.client.audio.GameSounds(v.audio, world);
         world.sound = sounds;
         rend = new WorldRenderer(world, v.textures);
         minimap = new Minimap(world, Minimap.palette(world, n -> v.textures.pixels(v.textures.layer(n))));
         rend.renderDistance = viewDistance();
         rend.outlines = v.settings.outlines;
+        rend.setAo(v.settings.ao);
         cam.fov = v.settings.fov;
         if (v.opts.dayMinutes > 0) world.info.dayMinutes = Math.max(DayCycle.MIN_MINUTES, Math.min(DayCycle.MAX_MINUTES, v.opts.dayMinutes));
         actions = net != null ? new RemoteActions(net) : new LocalActions(world, v.game.commands, playerSrc);
@@ -150,7 +152,6 @@ final class PlayScreen {
             int feet = (int) Math.floor(p.y - PlayerEntity.EYE + 0.05);
             if (world.isSolid(fx, feet, fz) || world.isSolid(fx, p.blockY(), fz)) player.teleport(findSpawn(fx, fz)); // світ змінився - не лишати гравця в блоці
         }
-        if (world.creative() && inv.isEmpty()) for (String s : VanillaContent.STARTER) inv.add(s, 64);
         if (v.opts.hasTp) { // X, Z (long, блоки), кути, висота над землею
             Pos sp = findSpawn(v.opts.tpX, v.opts.tpZ);
             sp.add(0, v.opts.tpH, 0);
@@ -391,6 +392,8 @@ final class PlayScreen {
         Input in = v.input;
         boolean active = grabbed && !chatOpen && !invOpen && !vt.dead();
         player.wings = inv.canGlide(world.itemTypes);
+        player.canFly = world.creative() && !vt.dead();
+        if (vt.god() != world.creative()) vt.setGod(world.creative()); // творчий: не гине й не голодує (і в гостя, чий режим приходить від хоста пізніше)
         if (bench != null && bench.active()) bench.move(player);
         else if (!v.opts.freeze) player.tick(Voxelin.TICK, active && in.down(GLFW_KEY_W), active && in.down(GLFW_KEY_S), active && in.down(GLFW_KEY_A), active && in.down(GLFW_KEY_D),
                 active && in.down(GLFW_KEY_SPACE), active && (in.down(GLFW_KEY_LEFT_CONTROL) || in.down(GLFW_KEY_RIGHT_CONTROL)), active && in.down(GLFW_KEY_LEFT_SHIFT));
@@ -498,9 +501,9 @@ final class PlayScreen {
             }
             if (in.pressed(GLFW_KEY_K) && !invOpen) { if (net != null) say(net.welcome.dedicated() ? "Скрипти працюють на сервері - тут їх не змінити." : "Скрипти працюють у світі хоста - тут їх не змінити."); else { code = new CodeScreen(v, v.game.scripts, null); invOpen = true; grab(false); } }
             if (in.pressed(GLFW_KEY_J) && !invOpen) { journal = new JournalScreen(world); invOpen = true; grab(false); }
-            if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); }
+            if (in.pressed(GLFW_KEY_T) || in.pressed(GLFW_KEY_SLASH)) { boolean slash = in.down(GLFW_KEY_SLASH); openChat(slash ? "/" : ""); in.swallowOpeningChar(); }
         }
-        if (chatOpen) { in.updateText(); if (in.pressed(GLFW_KEY_ENTER)) sendChat(); } // не залежить від F1 (HUD)
+        if (chatOpen) { in.updateText(); chatKeys(in); if (in.pressed(GLFW_KEY_ENTER)) sendChat(); } // не залежить від F1 (HUD)
         boolean play = grabbed && !chatOpen && !invOpen && !vt.dead() && !paused;
         boolean zooming = play && in.down(GLFW_KEY_C);
         zoomNow += ((zooming ? zoomFactor : 1f) - zoomNow) * Math.min(1f, (float) v.frameDt * 14f); // плавно, ~0.1 с
@@ -1113,7 +1116,59 @@ final class PlayScreen {
 
     // ------------------------------------------------------------------ чат і команди
 
-    private void openChat(String initial) { chatOpen = true; v.input.beginText(initial, true); grab(false); }
+    private void openChat(String initial) { chatOpen = true; suggestPick = 0; v.input.beginText(initial, true); grab(false); }
+
+    // ------------------------------------------------------------------ підказки команд у чаті
+
+    private int suggestPick;
+    private String suggestFor = "";
+
+    /** Підказки до набраного «/...» (команди гри й модів). Світ без читів - лише ті, що доступні без читів. Гість - усі (права рахує хост). */
+    private List<voxelin.core.CommandRegistry.Entry> suggestions() {
+        String t = v.input.text();
+        int perm = net != null ? Integer.MAX_VALUE : world.info.cheats ? playerSrc.permission() : 0;
+        return v.game.commands.suggest(t, perm);
+    }
+
+    /** Tab - дописати вибрану команду, стрілки вгору/вниз - вибір. Новий текст - вибір з початку. */
+    private void chatKeys(Input in) {
+        String t = in.text();
+        if (!t.equals(suggestFor)) { suggestFor = t; suggestPick = 0; }
+        List<voxelin.core.CommandRegistry.Entry> s = suggestions();
+        boolean naming = t.startsWith("/") && t.indexOf(' ') < 0;
+        if (s.isEmpty() || !naming) { in.pressed(GLFW_KEY_TAB); in.pressed(GLFW_KEY_UP); in.pressed(GLFW_KEY_DOWN); return; }
+        if (in.pressed(GLFW_KEY_UP)) suggestPick = (suggestPick + s.size() - 1) % s.size();
+        if (in.pressed(GLFW_KEY_DOWN)) suggestPick = (suggestPick + 1) % s.size();
+        if (in.pressed(GLFW_KEY_TAB)) {
+            in.beginText("/" + s.get(Math.min(suggestPick, s.size() - 1)).name + " ", true);
+            suggestFor = in.text();
+        }
+    }
+
+    /** Список над рядком чату: «/назва використання»; вибрана - підсвічена. Після пробілу - підказка використання однієї команди. */
+    private void drawSuggestions(Input in) {
+        List<voxelin.core.CommandRegistry.Entry> s = suggestions();
+        if (s.isEmpty()) return;
+        String t = in.text();
+        boolean naming = t.indexOf(' ') < 0;
+        int max = 8, pick = Math.min(suggestPick, s.size() - 1), first = Math.max(0, Math.min(pick - max + 1, s.size() - max));
+        int n = Math.min(max, s.size());
+        float rowH = 24, y0 = Gui.H - 116 - n * rowH - (s.size() > max ? rowH : 0);
+        float w = 0;
+        for (int i = first; i < first + n; i++) w = Math.max(w, Gui.textWidth("/" + s.get(i).name + "  " + s.get(i).usage, 2.0f));
+        w = Math.max(w, Gui.textWidth("Tab - дописати", 1.7f)) + 20;
+        Gui.rect(10, y0 - 4, w, n * rowH + (s.size() > max ? rowH : 0) + 6, 0.03f, 0.03f, 0.06f, 0.98f); // непрозорий - історія чату під ним не заважає
+        for (int i = 0; i < n; i++) {
+            voxelin.core.CommandRegistry.Entry e = s.get(first + i);
+            float y = y0 + i * rowH;
+            boolean sel = naming && first + i == pick;
+            if (sel) Gui.rect(12, y - 2, w - 4, rowH, 0.25f, 0.3f, 0.5f, 0.75f);
+            Gui.text("/" + e.name, 18, y + 2, 2.0f, sel ? 1f : 0.9f, sel ? 1f : 0.9f, sel ? 0.6f : 0.9f);
+            Gui.text(e.usage, 18 + Gui.textWidth("/" + e.name + "  ", 2.0f), y + 2, 2.0f, 0.6f, 0.65f, 0.72f);
+        }
+        if (s.size() > max) Gui.text("... ще " + (s.size() - n) + " (стрілки)", 18, y0 + n * rowH + 2, 1.7f, 0.6f, 0.65f, 0.72f);
+        else if (naming) Gui.text("Tab - дописати", w - Gui.textWidth("Tab - дописати", 1.7f), y0 - 24, 1.7f, 0.6f, 0.65f, 0.72f);
+    }
 
     /** Гість: скриня чи піч у світі хоста. Вікно одразу, вміст - коли хост відповість (S_MENU); кожен клік рахує хост. */
     private void openRemote(String kind, long x, int y, long z) {
@@ -1175,7 +1230,8 @@ final class PlayScreen {
         if (code != null || blocks != null) { if (code != null) code.end(); if (blocks != null) blocks.end(); code = null; blocks = null; invOpen = false; grab(true); return; }
         if (trade != null || journal != null || keeper != null || credits != null) { trade = null; journal = null; keeper = null; credits = null; invOpen = false; grab(true); return; } openedBlock = false; activeScreen.close(); invOpen = false; grab(true); }
 
-    private void closeChat() { chatOpen = false; v.input.endText(); grab(!invOpen); }
+    /** Закрити чат. Натиски, що накопичились під час набору (літера «e» в команді - клавіша інвентаря), скидаються. */
+    private void closeChat() { chatOpen = false; v.input.endText(); v.input.clearPressed(); grab(!invOpen); }
 
     private void sendChat() {
         String line = v.input.text().trim();
@@ -1253,6 +1309,7 @@ final class PlayScreen {
         if (chatOpen) {
             Gui.rect(8, Gui.H - 112, 1264, 30, 0, 0, 0, 0.7f);
             Gui.text("> " + in.text() + ((now / 500) % 2 == 0 ? "_" : ""), 14, Gui.H - 107, 2.4f, 1, 1, 0.8f);
+            drawSuggestions(in);
         }
         if (invOpen) {
             if (credits != null) { credits.draw(g); if (credits.close) { if (credits.toMenu) leaving = true; closeInventory(); } }
@@ -1356,7 +1413,7 @@ final class PlayScreen {
     }
 
     private void vitalsHud() {
-        if (vt.dead()) return;
+        if (vt.dead() || world.creative()) return; // у творчому серця й голод не показуються
         float size = 54, gap = 6, total = 9 * (size + gap) - gap, x0 = (Gui.W - total) / 2f, px = ICON_PX, step = ICON_STEP;
         float rowW = 9 * step + 9 * px, pad = 6, ph = 8 * px + 2 * pad, py = Gui.H - size - 14 - 8 - 8 - ph; // підкладки на 8 px вище плити хотбара
         long now = System.currentTimeMillis();
@@ -1392,6 +1449,7 @@ final class PlayScreen {
     /** Верх найвищої підкладки над хотбаром (броня/повітря або здоров'я) - щоб назва предмета не налазила. */
     private float vitalsTop() {
         float ph = 8 * ICON_PX + 12, py = Gui.H - 54 - 14 - 16 - ph;
+        if (world.creative()) return Gui.H - 54 - 14 - 8;
         return inv.armorPoints(world.itemTypes) > 0 || vt.air() < Vitals.MAX_AIR ? py - ph - 4 : py;
     }
 
@@ -1438,6 +1496,7 @@ final class PlayScreen {
     private void applyLiveSettings() {
         rend.renderDistance = viewDistance();
         rend.outlines = v.settings.outlines;
+        rend.setAo(v.settings.ao);
         cam.fov = v.settings.fov;
     }
 
@@ -1513,6 +1572,8 @@ final class PlayScreen {
 
     // ------------------------------------------------------------------ dev: команди, знімок, тест швидкодії
 
+    private boolean uiDone;
+
     private void devHooks() {
         boolean settled = rend.pending() == 0 && world.loadedChunks().size() > 4;
         quietFrames = settled ? quietFrames + 1 : 0;
@@ -1523,6 +1584,11 @@ final class PlayScreen {
             System.out.println("[cmd] виконано за " + (System.nanoTime() - t0) / 1_000_000 + " мс");
         }
         boolean cmdsReady = v.opts.cmds.isEmpty() || cmdsDone;
+        if (cmdsReady && !uiDone && quietFrames > 20 && v.opts.ui != null) {
+            uiDone = true; quietFrames = 0;
+            if (v.opts.ui.startsWith("chat:")) openChat(v.opts.ui.substring(5));
+            else if (v.opts.ui.equals("inventory")) { activeScreen = world.creative() ? creativeScreen() : invScreen; invOpen = true; grab(false); }
+        }
         boolean guestsReady = !v.opts.lan || server == null || (!server.guests().isEmpty() && quietFrames > 80); // dev --lan: знімок, коли зайшов гість
         if (v.opts.screenshot != null && !shotDone && cmdsReady && guestsReady && (quietFrames > 40 || v.frames > 60 * 60)) {
             shotDone = true; Screenshot.save(v.window, v.opts.screenshot); v.quit();

@@ -204,7 +204,7 @@ public class VoxelinMiningTest {
         check(w.inventory(p).isEmpty(), "/clear: " + o);
         // /gamemode
         o = g2.commands.execute(p, w, null, "/gamemode creative");
-        check(w.creative() && w.vitals(p).god() && !w.inventory(p).isEmpty() && o.get(0).contains("creative"), "креатив: стартовий набір і безсмертя: " + o);
+        check(w.creative() && w.vitals(p).god() && w.inventory(p).isEmpty() && o.get(0).contains("creative"), "креатив: безсмертя, а блоки лише з творчого меню (інвентар не наповнюється): " + o);
         g2.commands.execute(p, w, null, "/hurt 10");
         check(w.vitals(p).health() == 20, "у креативі шкоди нема");
         o = g2.commands.execute(p, w, null, "/gamemode survival");

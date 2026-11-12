@@ -119,8 +119,12 @@ public final class GameSounds implements SoundSink {
         return true;
     }
 
+    /** Шум дощу (0 - тиша): викликати кілька разів на секунду. */
+    public void rain(float vol) { audio.loop("rain", "voxelin:ambient.rain", vol); }
+
     /** Світ закрито: петлі згасають. */
     public void close() {
+        audio.loop("rain", "voxelin:ambient.rain", 0);
         if (ambientKey != null) audio.loop("ambient", ambientKey, 0);
         audio.loop("glide", "voxelin:ambient.glide", 0);
     }

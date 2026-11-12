@@ -45,7 +45,7 @@ public final class WorldRenderer implements World.Listener {
                 else if (f == 1) uv = vec2(b.z, -b.y);
                 else if (f == 2) uv = vec2(b.x, b.z);
                 else if (f == 3) uv = vec2(b.x, -b.z);
-                else if (f == 4) uv = vec2(b.x, -b.y);
+                else if (f == 4 || f == 6) uv = vec2(b.x, -b.y);
                 else uv = vec2(-b.x, -b.y);
                 vUv = uv;
                 gl_Position = uProjView * vec4(w, 1.0);
@@ -54,18 +54,23 @@ public final class WorldRenderer implements World.Listener {
     private static final String FS = """
             #version 130
             flat in float vLight; in float vAo; in vec4 vColor; in vec3 vBlock; flat in int vFace; in float vDist; in vec2 vUv; flat in float vLayer;
-            uniform vec3 uFogColor; uniform float uFogStart; uniform float uFogEnd; uniform float uOutline; uniform float uCutout;
+            uniform vec3 uFogColor; uniform float uFogStart; uniform float uFogEnd; uniform float uOutline; uniform float uCutout; uniform float uPlantFar;
             uniform sampler2DArray uTex;
             out vec4 fragColor;
             void main() {
                 vec4 t = texture(uTex, vec3(vUv, floor(vLayer)));
                 if (uCutout > 0.5 && t.a < 0.5) discard; // листя й інші «дірчасті» текстури
+                if (vFace >= 6) { // трава й квіти тануть на відстані (решіткою пікселів - без змішування)
+                    float k = (vDist - uPlantFar * 0.75) / (uPlantFar * 0.25);
+                    vec2 g = floor(gl_FragCoord.xy);
+                    if (k > fract(sin(dot(g, vec2(12.9898, 78.233))) * 43758.5453)) discard;
+                }
                 vec2 q = vFace < 2 ? vBlock.yz : (vFace < 4 ? vBlock.zx : vBlock.xy);
                 vec2 f = abs(fract(q) - 0.5);
                 float m = max(f.x, f.y);
                 float e = 0.5 - m;
                 float aa = fwidth(m) + 0.0001;
-                float line = 1.0 - smoothstep(0.02, 0.02 + aa, e);
+                float line = vFace >= 6 ? 0.0 : 1.0 - smoothstep(0.02, 0.02 + aa, e); // рослини - без контуру
                 vec4 base = t * vColor;
                 vec3 c = base.rgb * vLight * vAo * mix(1.0, 0.8, line * uOutline);
                 float fog = clamp((vDist - uFogStart) / max(1.0, uFogEnd - uFogStart), 0.0, 1.0);
@@ -76,7 +81,7 @@ public final class WorldRenderer implements World.Listener {
     private static final class SectionMesh {
         final long cx, cz;
         final int sy;
-        int vaoS, vboS, quadsS, vaoT, vboT, quadsT;
+        int vaoS, vboS, quadsS, vaoT, vboT, quadsT, vaoP, vboP, quadsP;
         SectionMesh(long cx, int sy, long cz) { this.cx = cx; this.sy = sy; this.cz = cz; }
     }
 
@@ -94,11 +99,13 @@ public final class WorldRenderer implements World.Listener {
     private final ThreadLocal<byte[]> paddedLight = ThreadLocal.withInitial(() -> new byte[ChunkMesher.P * ChunkMesher.P * ChunkMesher.P]);
     private final Shader shader;
     private final TextureArray tex;
-    private final int uProjView, uOffset, uScale, uCam, uFogColor, uFogStart, uFogEnd, uOutline, uCutout, uTex, uSkyU, uAmbientU;
+    private final int uProjView, uOffset, uScale, uCam, uFogColor, uFogStart, uFogEnd, uOutline, uCutout, uTex, uSkyU, uAmbientU, uPlantFarU;
     private int ebo, eboQuads;
     private boolean closed;
 
     public int renderDistance = 12;
+    /** Далі цієї відстані (блоків) трава й квіти не малюються (плавно тануть): їх тисячі, а здалеку їх однаково не видно. */
+    public float plantDistance = 72;
     public boolean outlines = true;
     /** Яскравість неба 0..1 (1 - день); пізніше її змінюватиме час доби. */
     public float skyBrightness = 1f;
@@ -130,6 +137,12 @@ public final class WorldRenderer implements World.Listener {
         for (BlockType t : all) props.emit[t.id] = t.light;
         for (BlockType t : all) { // фігурні блоки: коробки з World.SHAPES; дошки - з маски клітинки
             if (t.shape == null) continue;
+            if (World.isPlant(t)) {
+                if (props.box == null) { props.box = new float[all.length][]; props.perCell = new boolean[all.length]; }
+                if (props.cross == null) props.cross = new boolean[all.length];
+                props.box[t.id] = new float[0]; props.cross[t.id] = true;
+                continue;
+            }
             double[] d = World.SHAPES.get(t.shape);
             boolean cell = world.boards.isBoards(t);
             if (d == null && !cell) continue;
@@ -143,7 +156,7 @@ public final class WorldRenderer implements World.Listener {
         pool = Executors.newFixedThreadPool(poolSize, r -> { Thread t = new Thread(r, "voxelin-mesh"); t.setDaemon(true); t.setPriority(Thread.NORM_PRIORITY - 1); return t; });
         shader = new Shader(VS, FS, "aPos", "aColor", "aFace", "aLayer");
         uProjView = shader.uniform("uProjView"); uOffset = shader.uniform("uOffset"); uScale = shader.uniform("uScale"); uCam = shader.uniform("uCam");
-        uFogColor = shader.uniform("uFogColor"); uFogStart = shader.uniform("uFogStart"); uFogEnd = shader.uniform("uFogEnd"); uOutline = shader.uniform("uOutline"); uCutout = shader.uniform("uCutout"); uTex = shader.uniform("uTex"); uSkyU = shader.uniform("uSky"); uAmbientU = shader.uniform("uAmbient");
+        uFogColor = shader.uniform("uFogColor"); uFogStart = shader.uniform("uFogStart"); uFogEnd = shader.uniform("uFogEnd"); uOutline = shader.uniform("uOutline"); uCutout = shader.uniform("uCutout"); uTex = shader.uniform("uTex"); uSkyU = shader.uniform("uSky"); uAmbientU = shader.uniform("uAmbient"); uPlantFarU = shader.uniform("uPlantFar");
         ebo = glGenBuffers();
         ensureIndices(4096);
         world.setListener(this);
@@ -290,9 +303,10 @@ public final class WorldRenderer implements World.Listener {
         SectionMesh s = meshes.get(k);
         if (m.isEmpty()) { if (s != null) { meshes.remove(k); free(s); } return; }
         if (s == null) meshes.put(k, s = new SectionMesh(k.cx(), k.sy(), k.cz()));
-        ensureIndices(Math.max(m.solidQuads, m.translucentQuads));
+        ensureIndices(Math.max(m.plantQuads, Math.max(m.solidQuads, m.translucentQuads)));
         int[] r = fill(s.vaoS, s.vboS, m.solid, m.solidQuads); s.vaoS = r[0]; s.vboS = r[1]; s.quadsS = m.solidQuads;
         r = fill(s.vaoT, s.vboT, m.translucent, m.translucentQuads); s.vaoT = r[0]; s.vboT = r[1]; s.quadsT = m.translucentQuads;
+        r = fill(s.vaoP, s.vboP, m.plants, m.plantQuads); s.vaoP = r[0]; s.vboP = r[1]; s.quadsP = m.plantQuads;
         uploads++;
     }
 
@@ -338,17 +352,24 @@ public final class WorldRenderer implements World.Listener {
     private void free(SectionMesh m) {
         if (m.vaoS != 0) { glDeleteVertexArrays(m.vaoS); glDeleteBuffers(m.vboS); }
         if (m.vaoT != 0) { glDeleteVertexArrays(m.vaoT); glDeleteBuffers(m.vboT); }
+        if (m.vaoP != 0) { glDeleteVertexArrays(m.vaoP); glDeleteBuffers(m.vboP); }
     }
 
     // ------------------------------------------------------------------ малювання
 
+    private final List<SectionMesh> transPending = new ArrayList<>();
+
+    /** Непрозорий прохід і рослини поблизу. Напівпрозоре - окремо (renderTranslucent), після неба й хмар. */
     public void render(Camera cam) {
         final float S = Units.BLOCK_SIZE;
         float far = renderDistance * 16 * S;
         float[][] planes = cam.projView.frustumPlanes();
         float s16 = 16 * S;
-        List<SectionMesh> vis = new ArrayList<>(), trans = new ArrayList<>();
+        List<SectionMesh> vis = new ArrayList<>(), plants = new ArrayList<>();
+        List<SectionMesh> trans = transPending;
+        trans.clear();
         final long rcx = cam.eye.cx, rcz = cam.eye.cz; // начало малювання - чанк камери: усі числа малі
+        long plantChunks = (long) Math.ceil(plantDistance / 16) + 1;
         for (SectionMesh m : meshes.values()) {
             long dx = m.cx - rcx, dz = m.cz - rcz;
             if (d2(dx, dz) > (long) renderDistance * renderDistance) continue;
@@ -356,21 +377,13 @@ public final class WorldRenderer implements World.Listener {
             if (!Mat4.boxVisible(planes, x0, y0, z0, x0 + s16, y0 + s16, z0 + s16)) continue;
             if (m.quadsS > 0) vis.add(m);
             if (m.quadsT > 0) trans.add(m);
+            if (m.quadsP > 0 && d2(dx, dz) <= plantChunks * plantChunks) plants.add(m);
         }
         vis.sort(Comparator.comparingDouble(m -> dist2(m, cam))); // від ближніх до дальніх: ранній тест глибини відсікає закрите (менше перемальовування)
         visibleSections = vis.size() + trans.size();
         int quads = 0;
         glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK);
-        glUseProgram(shader.id);
-        glUniformMatrix4fv(uProjView, false, cam.projView.m);
-        glUniform1f(uScale, S);
-        glUniform1f(uSkyU, skyBrightness);
-        glUniform1f(uAmbientU, ambient);
-        glUniform3f(uCam, (float) (cam.eye.x * S), (float) (cam.eye.y * S), (float) (cam.eye.z * S));
-        glUniform3f(uFogColor, fogColor[0], fogColor[1], fogColor[2]);
-        if (underwater) { glUniform1f(uFogStart, 0f); glUniform1f(uFogEnd, 24 * S); } else { glUniform1f(uFogStart, far * 0.65f); glUniform1f(uFogEnd, far * 0.98f); }
-        glUniform1f(uOutline, outlines ? 1f : 0f);
-        glActiveTexture(GL_TEXTURE0); tex.bind(); glUniform1i(uTex, 0);
+        begin(cam, far);
         glUniform1f(uCutout, 1f); // непрозорий прохід: відкидати прозорі пікселі листя
         for (SectionMesh m : vis) {
             glUniform3f(uOffset, (m.cx - rcx) * 16, m.sy * 16, (m.cz - rcz) * 16);
@@ -378,22 +391,58 @@ public final class WorldRenderer implements World.Listener {
             glDrawElements(GL_TRIANGLES, m.quadsS * 6, GL_UNSIGNED_INT, 0);
             quads += m.quadsS;
         }
-        if (!trans.isEmpty()) { // напівпрозоре - від дальнього до ближнього, без запису глибини
-            trans.sort(Comparator.comparingDouble(m -> -dist2(m, cam)));
-            glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(false); glDisable(GL_CULL_FACE);
-            glUniform1f(uCutout, 0f);
-            for (SectionMesh m : trans) {
-                glUniform3f(uOffset, (m.cx - rcx) * 16, m.sy * 16, (m.cz - rcz) * 16);
-                glBindVertexArray(m.vaoT);
-                glDrawElements(GL_TRIANGLES, m.quadsT * 6, GL_UNSIGNED_INT, 0);
-                quads += m.quadsT;
-            }
-            glDepthMask(true); glDisable(GL_BLEND); glEnable(GL_CULL_FACE);
+        for (SectionMesh m : plants) {
+            glUniform3f(uOffset, (m.cx - rcx) * 16, m.sy * 16, (m.cz - rcz) * 16);
+            glBindVertexArray(m.vaoP);
+            glDrawElements(GL_TRIANGLES, m.quadsP * 6, GL_UNSIGNED_INT, 0);
+            quads += m.quadsP;
         }
+        end();
+        drawnQuads = quads;
+    }
+
+    /** Напівпрозоре (вода, скло) - від дальнього до ближнього, без запису глибини. Після render() того ж кадру. */
+    public void renderTranslucent(Camera cam) {
+        List<SectionMesh> trans = transPending;
+        if (trans.isEmpty()) return;
+        final long rcx = cam.eye.cx, rcz = cam.eye.cz;
+        trans.sort(Comparator.comparingDouble(m -> -dist2(m, cam)));
+        glEnable(GL_DEPTH_TEST);
+        begin(cam, renderDistance * 16 * Units.BLOCK_SIZE);
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(false); glDisable(GL_CULL_FACE);
+        glUniform1f(uCutout, 0f);
+        int quads = 0;
+        for (SectionMesh m : trans) {
+            glUniform3f(uOffset, (m.cx - rcx) * 16, m.sy * 16, (m.cz - rcz) * 16);
+            glBindVertexArray(m.vaoT);
+            glDrawElements(GL_TRIANGLES, m.quadsT * 6, GL_UNSIGNED_INT, 0);
+            quads += m.quadsT;
+        }
+        glDepthMask(true); glDisable(GL_BLEND); glEnable(GL_CULL_FACE);
+        end();
+        drawnQuads += quads;
+        trans.clear();
+    }
+
+    private void begin(Camera cam, float far) {
+        final float S = Units.BLOCK_SIZE;
+        glUseProgram(shader.id);
+        glUniformMatrix4fv(uProjView, false, cam.projView.m);
+        glUniform1f(uScale, S);
+        glUniform1f(uSkyU, skyBrightness);
+        glUniform1f(uAmbientU, ambient);
+        glUniform1f(uPlantFarU, plantDistance * S);
+        glUniform3f(uCam, (float) (cam.eye.x * S), (float) (cam.eye.y * S), (float) (cam.eye.z * S));
+        glUniform3f(uFogColor, fogColor[0], fogColor[1], fogColor[2]);
+        if (underwater) { glUniform1f(uFogStart, 0f); glUniform1f(uFogEnd, 24 * S); } else { glUniform1f(uFogStart, far * 0.65f); glUniform1f(uFogEnd, far * 0.98f); }
+        glUniform1f(uOutline, outlines ? 1f : 0f);
+        glActiveTexture(GL_TEXTURE0); tex.bind(); glUniform1i(uTex, 0);
+    }
+
+    private void end() {
         glBindVertexArray(0);
         glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
         glUseProgram(0);
-        drawnQuads = quads;
     }
 
     private static double dist2(SectionMesh m, Camera c) {

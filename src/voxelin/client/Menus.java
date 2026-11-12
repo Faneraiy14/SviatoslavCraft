@@ -12,7 +12,7 @@ import static org.lwjgl.glfw.GLFW.*;
 
 /** Меню: головне, список світів, створення й перейменування світу. Малює й обробляє ввід у кадрі (Gui - негайний режим). */
 final class Menus {
-    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS, SOUND, SKIN, IMPORT, JOIN }
+    enum Screen { MAIN, WORLDS, CREATE, RENAME, SETTINGS, SOUND, GRAPHICS, SKIN, IMPORT, JOIN }
 
     private final Voxelin v;
     Screen screen = Screen.MAIN;
@@ -67,8 +67,8 @@ final class Menus {
     /** Налаштування чи звук поверх гри (з меню паузи). false - гравець натиснув «Готово»/Esc, треба повернутись у паузу. */
     boolean overlay(Gui g) {
         Gui.rect(0, 0, Gui.W, Gui.H, 0.04f, 0.05f, 0.1f, 0.88f);
-        switch (screen) { case SETTINGS -> settings(g); case SOUND -> sound(g); default -> { } }
-        return screen == Screen.SETTINGS || screen == Screen.SOUND;
+        switch (screen) { case SETTINGS -> settings(g); case SOUND -> sound(g); case GRAPHICS -> graphics(g); default -> { } }
+        return screen == Screen.SETTINGS || screen == Screen.SOUND || screen == Screen.GRAPHICS;
     }
 
     void frame() {
@@ -81,6 +81,7 @@ final class Menus {
             case CREATE -> create(g);
             case RENAME -> rename(g);
             case SETTINGS -> settings(g);
+            case GRAPHICS -> graphics(g);
             case SOUND -> sound(g);
             case SKIN -> { if (!skin.draw(g)) show(Screen.MAIN); }
             case IMPORT -> importScreen(g);
@@ -166,8 +167,25 @@ final class Menus {
         if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "М'які тіні в кутах", st.ao ? "увімкнено" : "вимкнено")) st.ao = !st.ao;
         st.clampAll();
         Gui.textCentered("Розмір текстур застосується при наступному відкритті світу. Власні PNG - тека textures/.", Gui.W / 2f, y0 + row[0] * (h + gap) + 6, 1.9f, 0.7f, 0.75f, 0.9f);
-        if (g.button("ЗВУК", 330, 640, 300, 56)) { v.saveSettings(); show(Screen.SOUND); return; }
-        if (g.button("ГОТОВО", 650, 640, 300, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { v.saveSettings(); show(Screen.MAIN); }
+        if (g.button("ГРАФІКА", 170, 640, 300, 56)) { v.saveSettings(); show(Screen.GRAPHICS); return; }
+        if (g.button("ЗВУК", 490, 640, 300, 56)) { v.saveSettings(); show(Screen.SOUND); return; }
+        if (g.button("ГОТОВО", 810, 640, 300, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { v.saveSettings(); show(Screen.MAIN); }
+    }
+
+    /** Жива поверхня: що малювати. Усе діє одразу (на слабкій відеокарті можна вимкнути зайве). */
+    private void graphics(Gui g) {
+        Settings st = v.settings;
+        Gui.textCentered("ГРАФІКА", Gui.W / 2f, 36, 5f, 1f, 0.85f, 0.3f);
+        final float x = 250, w = 780, h = 50, gap = 10, y0 = 130;
+        int[] row = {0};
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Небо", st.skyDetail ? "сонце, місяць, зірки" : "просте (колір)")) st.skyDetail = !st.skyDetail;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Хмари", st.clouds ? "увімкнено" : "вимкнено")) st.clouds = !st.clouds;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Дощ", st.rainDrops ? "краплі" : "лише хмурне небо")) st.rainDrops = !st.rainDrops;
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Частинки", st.particles == 0 ? "вимкнено" : st.particles == 1 ? "мало" : "усі")) st.particles = Math.floorMod(st.particles + stepDir, 3);
+        if (stepper(g, x, y0 + row[0]++ * (h + gap), w, h, "Трава й квіти видно до", st.plantDistance + " блоків")) st.plantDistance = cycle(Settings.PLANT_DISTANCES, st.plantDistance, stepDir);
+        st.clampAll();
+        Gui.textCentered("Якщо гра пригальмовує - вимкніть хмари, краплі дощу й зменште дальність трави.", Gui.W / 2f, y0 + row[0] * (h + gap) + 6, 1.9f, 0.7f, 0.75f, 0.9f);
+        if (g.button("НАЗАД", 445, 640, 390, 56) || v.input.pressed(GLFW_KEY_ESCAPE)) { v.saveSettings(); show(Screen.SETTINGS); }
     }
 
     private void sound(Gui g) {

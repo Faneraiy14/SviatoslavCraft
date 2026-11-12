@@ -8,6 +8,7 @@ package voxelin.client.render;
  * Незавантажений сусід передається як непрозорий блок - на межі не з'являються дірки; після завантаження сусіда секція перебудовується.
  * Вершина: x,y,z (у блоках відносно секції), колір RGBA (int у float-бітах), номер грані 0..5, шар текстури - 6 float, 24 байти.
  * «Номер грані» несе ще світло й м'які кути: грань + 8*небо + 128*блок + 2048*AO (AO 0..3 - 3 світло, 0 - глибокий кут).
+ * Грані 6 і 7 - лицьовий і зворотний бік площини рослини (UV за X і Y, без контуру блока).
  *
  * М'які кути (ambient occlusion): кожна вершина грані темніша, якщо біля неї суцільні блоки (два боки й кут - стандартна схема 0..3).
  * Склеювання не ламається: AO чотирьох кутів клітинки входить у ключ злиття, тож зливаються лише клітинки з однаковим візерунком -
@@ -16,7 +17,7 @@ package voxelin.client.render;
  */
 public final class ChunkMesher {
     public static final int P = 18, FLOATS_PER_VERTEX = 6;
-    private static final float[] SHADE = {0.70f, 0.70f, 1.0f, 0.5f, 0.85f, 0.85f}; // +X -X +Y -Y +Z -Z
+    private static final float[] SHADE = {0.70f, 0.70f, 1.0f, 0.5f, 0.85f, 0.85f, 0.92f, 0.92f}; // +X -X +Y -Y +Z -Z, рослина з двох боків
 
     /** Властивості блоків за id (знімок реєстру; незмінні). */
     public static final class Props {
@@ -32,6 +33,8 @@ public final class ChunkMesher {
         public float[][] box;
         /** Блоки, чиї коробки залежать від клітинки (дошки): їх питаємо в CellBoxes. */
         public boolean[] perCell;
+        /** Рослини-хрест (трава, квіти): дві діагональні площини з обох боків; box[id] для них теж не null (щоб не малювались кубом). */
+        public boolean[] cross;
         final int[] color, layerTop, layerSide, layerBottom;
         /** color - множник кольору (білий для блоків із текстурою); layer* - шар масиву текстур для верху/боків/низу (0 - біла плитка). */
         public Props(boolean[] opaque, boolean[] translucent, boolean[] air, int[] color, int[] layerTop, int[] layerSide, int[] layerBottom) {
@@ -39,11 +42,11 @@ public final class ChunkMesher {
         }
     }
 
-    /** Результат: вершини для непрозорого й напівпрозорого проходів. */
+    /** Результат: вершини для непрозорого, рослинного (лише поблизу) і напівпрозорого проходів. */
     public static final class Mesh {
-        public float[] solid, translucent;
-        public int solidQuads, translucentQuads;
-        public boolean isEmpty() { return solidQuads == 0 && translucentQuads == 0; }
+        public float[] solid, translucent, plants = new float[0];
+        public int solidQuads, translucentQuads, plantQuads;
+        public boolean isEmpty() { return solidQuads == 0 && translucentQuads == 0 && plantQuads == 0; }
     }
 
     public static int index(int x, int y, int z) { return (x + 1) + (z + 1) * P + (y + 1) * P * P; }
@@ -51,7 +54,7 @@ public final class ChunkMesher {
     /** Світло невідомого/«все небо»: небо 15, блоки 0. */
     public static final byte FULL_SKY = (byte) 0xF0;
     private final int[] mask = new int[16 * 16];
-    private FloatList solid = new FloatList(), trans = new FloatList();
+    private FloatList solid = new FloatList(), trans = new FloatList(), plantList = new FloatList();
 
     /** Коробки клітинки секції (локальні 0..15) у частках блока - для блоків perCell. */
     public interface CellBoxes { double[] at(int x, int y, int z); }
@@ -63,7 +66,7 @@ public final class ChunkMesher {
     public Mesh build(short[] padded, byte[] light, Props props) { return build(padded, light, props, null); }
 
     public Mesh build(short[] padded, byte[] light, Props props, CellBoxes cells) {
-        solid.clear(); trans.clear();
+        solid.clear(); trans.clear(); plantList.clear();
         int[] pos = new int[3], step = new int[3];
         for (int face = 0; face < 6; face++) {
             int axis = face >> 1, u = (axis + 1) % 3, v = (axis + 2) % 3;
@@ -110,6 +113,7 @@ public final class ChunkMesher {
         Mesh r = new Mesh();
         r.solid = solid.toArray(); r.solidQuads = r.solid.length / (4 * FLOATS_PER_VERTEX);
         r.translucent = trans.toArray(); r.translucentQuads = r.translucent.length / (4 * FLOATS_PER_VERTEX);
+        r.plants = plantList.toArray(); r.plantQuads = r.plants.length / (4 * FLOATS_PER_VERTEX);
         return r;
     }
 
@@ -128,12 +132,36 @@ public final class ChunkMesher {
             int lv = light == null ? 0xF0 : light[idx] & 0xFF;
             if (props.emit != null && props.emit[id] > (lv & 15)) lv = (lv & 0xF0) | props.emit[id];
             FloatList out = props.translucent[id] ? trans : solid;
+            if (props.cross != null && props.cross[id]) { cross(plantList, x, y, z, props, id, lv); continue; } // окремо: малюються лише поблизу
             for (int k = 0; k + 5 < b.length; k += 6) {
                 float[] lo = {x + b[k], y + b[k + 1], z + b[k + 2]}, hi = {x + b[k + 3], y + b[k + 4], z + b[k + 5]};
                 for (int face = 0; face < 6; face++) {
                     int axis = face >> 1, u = (axis + 1) % 3, v = (axis + 2) % 3;
                     boolean positive = (face & 1) == 0;
                     quadF(out, face, axis, u, v, positive ? hi[axis] : lo[axis], lo[u], lo[v], hi[u], hi[v], color(props, id, face), layer(props, id, face), face + 8 * (lv >> 4) + 128 * (lv & 15) + 2048 * 3); // коробки - без AO
+                }
+            }
+        }
+    }
+
+    /**
+     * Рослина: площини (0,0)-(1,1) і (1,0)-(0,1) по X/Z, кожна з двох боків (грань 6 - лице, 7 - зворот із протилежним обходом).
+     * Невеликий зсув за хешем клітинки - щоб поле трави не стояло ідеальною сіткою.
+     */
+    private static void cross(FloatList out, int x, int y, int z, Props props, int id, int lv) {
+        int h = (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+        float ox = ((h & 7) - 3.5f) / 40f, oz = (((h >> 3) & 7) - 3.5f) / 40f;
+        float x0 = x + 0.07f + ox, x1 = x + 0.93f + ox, z0 = z + 0.07f + oz, z1 = z + 0.93f + oz, y0 = y, y1 = y + 1f;
+        float[][] planes = {{x0, z0, x1, z1}, {x0, z1, x1, z0}};
+        for (float[] pl : planes) {
+            for (int side = 0; side < 2; side++) {
+                int face = 6 + side;
+                float colorBits = Float.intBitsToFloat(color(props, id, face));
+                float fl = face + 8 * (lv >> 4) + 128 * (lv & 15) + 2048 * 3, layer = props.layerSide[id];
+                float[][] v = {{pl[0], y0, pl[1]}, {pl[2], y0, pl[3]}, {pl[2], y1, pl[3]}, {pl[0], y1, pl[1]}};
+                for (int i = 0; i < 4; i++) {
+                    float[] c = v[side == 0 ? i : (4 - i) & 3];
+                    out.add(c[0]); out.add(c[1]); out.add(c[2]); out.add(colorBits); out.add(fl); out.add(layer);
                 }
             }
         }

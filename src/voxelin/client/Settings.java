@@ -20,6 +20,13 @@ public final class Settings {
     public boolean vsync = true, outlines = true;
     /** М'які тіні в кутах (ambient occlusion). */
     public boolean ao = true;
+    /** Екран «Графіка» (жива поверхня): детальне небо (сонце, місяць, зірки) чи лише колір; хмари; дощ з краплями чи лише хмурне небо. */
+    public boolean skyDetail = true, clouds = true, rainDrops = true;
+    /** Частинки: 0 - вимкнено, 1 - мало (лише уламки й удари), 2 - усі (ще вогники, дим, бризки дощу). */
+    public int particles = 2;
+    /** До якої відстані (блоків) видно траву й квіти. */
+    public static final int[] PLANT_DISTANCES = {16, 32, 48, 72, 96};
+    public int plantDistance = 48;
     /** Гучність у відсотках (0..100, крок 10): загальна, блоки, істоти, оточення, інтерфейс. */
     public int volMaster = 100, volBlocks = 100, volMobs = 100, volAmbient = 80, volUi = 100;
     /** Мінікарта: 0 - вимкнена, 1 - мала, 2 - велика (клавіша M); наближення - індекс Minimap.ZOOMS (клавіша N). */
@@ -42,6 +49,8 @@ public final class Settings {
         volMaster = vol(volMaster); volBlocks = vol(volBlocks); volMobs = vol(volMobs); volAmbient = vol(volAmbient); volUi = vol(volUi);
         if (voxelin.net.Protocol.cleanName(playerName) == null) playerName = "Гравець";
         if (voxelin.net.Protocol.parseAddress(lastHost) == null) lastHost = "";
+        particles = clamp(particles, 0, 2);
+        { int best = PLANT_DISTANCES[0]; for (int d : PLANT_DISTANCES) if (Math.abs(d - plantDistance) < Math.abs(best - plantDistance)) best = d; plantDistance = best; }
         minimap = clamp(minimap, 0, 2); minimapZoom = clamp(minimapZoom, 0, Minimap.ZOOMS.length - 1);
         mouseSensitivity = Math.max(0.04f, Math.min(0.30f, Math.round(mouseSensitivity * 100) / 100f));
     }
@@ -60,6 +69,11 @@ public final class Settings {
         s.vsync = !"false".equalsIgnoreCase(p.getProperty("vsync", "true").trim());
         s.outlines = !"false".equalsIgnoreCase(p.getProperty("outlines", "true").trim());
         s.ao = !"false".equalsIgnoreCase(p.getProperty("ao", "true").trim());
+        s.skyDetail = !"false".equalsIgnoreCase(p.getProperty("sky.detail", "true").trim());
+        s.clouds = !"false".equalsIgnoreCase(p.getProperty("clouds", "true").trim());
+        s.rainDrops = !"false".equalsIgnoreCase(p.getProperty("rain.drops", "true").trim());
+        s.particles = intOf(p, "particles", s.particles);
+        s.plantDistance = intOf(p, "plants.distance", s.plantDistance);
         s.volMaster = intOf(p, "volume.master", s.volMaster); s.volBlocks = intOf(p, "volume.blocks", s.volBlocks); s.volMobs = intOf(p, "volume.mobs", s.volMobs);
         s.volAmbient = intOf(p, "volume.ambient", s.volAmbient); s.volUi = intOf(p, "volume.ui", s.volUi);
         s.fullbright = "true".equalsIgnoreCase(p.getProperty("fullbright", "false").trim());
@@ -84,6 +98,8 @@ public final class Settings {
         p.setProperty("vsync", String.valueOf(vsync));
         p.setProperty("outlines", String.valueOf(outlines));
         p.setProperty("ao", String.valueOf(ao));
+        p.setProperty("sky.detail", String.valueOf(skyDetail)); p.setProperty("clouds", String.valueOf(clouds)); p.setProperty("rain.drops", String.valueOf(rainDrops));
+        p.setProperty("particles", String.valueOf(particles)); p.setProperty("plants.distance", String.valueOf(plantDistance));
         p.setProperty("volume.master", String.valueOf(volMaster)); p.setProperty("volume.blocks", String.valueOf(volBlocks)); p.setProperty("volume.mobs", String.valueOf(volMobs));
         p.setProperty("volume.ambient", String.valueOf(volAmbient)); p.setProperty("volume.ui", String.valueOf(volUi));
         p.setProperty("fullbright", String.valueOf(fullbright)); p.setProperty("minimap", String.valueOf(minimap)); p.setProperty("minimap.zoom", String.valueOf(minimapZoom));

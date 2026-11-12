@@ -455,7 +455,7 @@ public class VoxelinCoreTest {
             for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
                 long wx = pos[0] * 16 + x, wz = pos[1] * 16 + z;
                 int sy = tg.surfaceY(wx, wz);
-                int top = 0; for (int y = Chunk.HEIGHT - 1; y > 0; y--) { int id = ch.get(x, y, z); if (id != 0 && id != g.blocks.byName("voxelin:water").id && id != g.blocks.byName("voxelin:oak_leaves").id && id != g.blocks.byName("voxelin:birch_leaves").id && id != g.blocks.byName("voxelin:spruce_leaves").id && id != g.blocks.byName("voxelin:oak_log").id && id != g.blocks.byName("voxelin:birch_log").id && id != g.blocks.byName("voxelin:spruce_log").id && id != g.blocks.byName("voxelin:pale_log").id && id != g.blocks.byName("voxelin:cactus").id && id != g.blocks.byName("voxelin:dune_glass").id && id != g.blocks.byName("voxelin:monolith").id) { top = y; break; } }
+                int top = 0; for (int y = Chunk.HEIGHT - 1; y > 0; y--) { int id = ch.get(x, y, z); if (id != 0 && id != g.blocks.byName("voxelin:water").id && id != g.blocks.byName("voxelin:oak_leaves").id && id != g.blocks.byName("voxelin:birch_leaves").id && id != g.blocks.byName("voxelin:spruce_leaves").id && id != g.blocks.byName("voxelin:oak_log").id && id != g.blocks.byName("voxelin:birch_log").id && id != g.blocks.byName("voxelin:spruce_log").id && id != g.blocks.byName("voxelin:pale_log").id && id != g.blocks.byName("voxelin:cactus").id && id != g.blocks.byName("voxelin:dune_glass").id && id != g.blocks.byName("voxelin:monolith").id && !World.isPlant(g.blocks.get(id))) { top = y; break; } }
                 check(top == sy, "поверхня чанка = surfaceY у " + wx + "," + wz + ": " + top + " проти " + sy);
             }
         }

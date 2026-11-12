@@ -34,6 +34,8 @@ public final class TerrainGenerator implements Generator {
     private final int air = 0, stone, deepStone, bedrock, grass, dirt, sand, sandstone, gravel, clay, snow, water, mud, paleGrass, sintered, duneGlass,
             oakLog, oakLeaves, birchLog, birchLeaves, spruceLog, spruceLeaves, paleLog, cactus, monolith,
             coal, iron, copper, gold, diamond, liminite, lava, obsidian;
+    /** Трава й квіти (-1 - у реєстрі нема, тоді без них). */
+    private final int tallGrass, poppy, dandelion, cornflower;
     /** Печери до цієї висоти залиті лавою (як у Minecraft); на березі лави - обсидіан (для порталу в Незер). */
     public static final int LAVA_Y = 10;
 
@@ -53,6 +55,7 @@ public final class TerrainGenerator implements Generator {
         mud = id(reg, "mud"); paleGrass = id(reg, "pale_grass"); sintered = id(reg, "sintered_sand"); duneGlass = id(reg, "dune_glass");
         oakLog = id(reg, "oak_log"); oakLeaves = id(reg, "oak_leaves"); birchLog = id(reg, "birch_log"); birchLeaves = id(reg, "birch_leaves");
         spruceLog = id(reg, "spruce_log"); spruceLeaves = id(reg, "spruce_leaves"); paleLog = id(reg, "pale_log"); cactus = id(reg, "cactus"); monolith = id(reg, "monolith");
+        tallGrass = idOr(reg, "tall_grass"); poppy = idOr(reg, "poppy"); dandelion = idOr(reg, "dandelion"); cornflower = idOr(reg, "cornflower");
         if (structures.isEmpty()) placer = null;
         else {
             boolean[] liquid = new boolean[reg.size()];
@@ -61,6 +64,8 @@ public final class TerrainGenerator implements Generator {
         }
         coal = id(reg, "coal_ore"); iron = id(reg, "iron_ore"); copper = id(reg, "copper_ore"); gold = id(reg, "gold_ore"); diamond = id(reg, "diamond_ore"); liminite = id(reg, "liminite_ore");
     }
+
+    private static int idOr(BlockRegistry r, String n) { voxelin.core.BlockType b = r.byName("voxelin:" + n); return b == null ? -1 : b.id; }
 
     private static int id(BlockRegistry r, String n) {
         if (r.byName("voxelin:" + n) == null) throw new IllegalStateException("генератору потрібен блок voxelin:" + n + " (ванільний вміст не завантажено?)");
@@ -218,6 +223,39 @@ public final class TerrainGenerator implements Generator {
         for (int x = 3; x < 13; x++) for (int z = 3; z < 13; z++) feature(c, x, z, surf[x + z * 16], biomes[x + z * 16], hash(seed, bx + x, bz + z, 2));
         // 6) структури (руїни, підземелля, шахти): лише клітинки шаблонів, що лежать у цьому чанку
         if (placer != null) placer.apply(c, reg);
+        // 7) трава й квіти - останніми: лише на дерні під відкритим повітрям (після споруд і дерев нічого не перекривають)
+        if (tallGrass >= 0 && type != WorldInfo.Type.FLAT) plants(c, bx, bz, surf, biomes);
+    }
+
+    /**
+     * Трава плямами (шум - галявини густіші, місцями пусто) і рідкісні квіти: на рівнинах кущики макових чи кульбабових полянок,
+     * волошки - у березняках і лісі. Ставиться лише там, де під клітинкою дерен, а сама клітинка порожня.
+     */
+    private void plants(Chunk c, long bx, long bz, int[] surf, Biome[] biomes) {
+        for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
+            int s = surf[x + z * 16];
+            if (s <= SEA || s + 1 >= Chunk.HEIGHT || c.get(x, s, z) != grass || c.get(x, s + 1, z) != air) continue;
+            Biome b = biomes[x + z * 16];
+            double grassP, flowerP;
+            switch (b) {
+                case PLAINS: grassP = 0.30; flowerP = 0.035; break;
+                case FOREST: grassP = 0.16; flowerP = 0.012; break;
+                case BIRCH: grassP = 0.22; flowerP = 0.02; break;
+                case SWAMP: grassP = 0.25; flowerP = 0.0; break;
+                case TAIGA: grassP = 0.08; flowerP = 0.0; break;
+                default: continue;
+            }
+            long wx = bx + x, wz = bz + z;
+            double patch = nFloor.fractal2(wx + 9001, wz - 7001, 28, 2); // -1..1: галявини й проплішини
+            long h = hash(seed, wx, wz, 11);
+            double roll = ((h >>> 11) & 0xFFFFF) / (double) 0x100000;
+            double flowers = nFloor.fractal2(wx - 4321, wz + 1234, 18, 1); // квіти - полянками
+            if (flowerP > 0 && flowers > 0.35 && roll < flowerP * 6) {
+                int kind = (int) ((h >>> 40) & 7);
+                int f = b == Biome.PLAINS ? (flowers > 0.5 ? poppy : dandelion) : (kind < 5 ? cornflower : dandelion);
+                c.set(x, s + 1, z, f);
+            } else if (roll < grassP * (1 + 1.6 * patch)) c.set(x, s + 1, z, tallGrass);
+        }
     }
 
     /** Дно океану: органічні плями піску, гравію й глини за шумом (а не квадрати). */

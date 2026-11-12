@@ -27,6 +27,15 @@ final class PlayScreen {
     private final Voxelin v;
     final World world;
     final WorldRenderer rend;
+    final voxelin.client.render.SkyRenderer skyRend;
+    final voxelin.client.render.Particles particles;
+    final voxelin.client.render.RainRenderer rainRend;
+    /** Дощ зараз: сила неба (хмурість) і видимий (0 у сухому біомі, під водою, поза верхнім світом). */
+    private double rainSky, rainVisible, biomeCheck;
+    private boolean dryBiome;
+    /** Кадр: малювати небо верхнього світу (сонце, місяць, зірки, хмари) і з якими параметрами. */
+    private boolean overSky;
+    private double skyPhase, skyLevelNow, skyGlow;
     /** Мінікарта (M - розмір/вимкнути, N - наближення). */
     final Minimap minimap;
     /** Зум FL Client: тримати C; коліщатко під час зуму - сильніше/слабше. zoomNow плавно йде до zoomWant (1 - без зуму). */
@@ -101,8 +110,12 @@ final class PlayScreen {
         sounds = new voxelin.client.audio.GameSounds(v.audio, world);
         world.sound = sounds;
         rend = new WorldRenderer(world, v.textures);
+        skyRend = new voxelin.client.render.SkyRenderer();
+        particles = new voxelin.client.render.Particles(world, v.textures);
+        rainRend = new voxelin.client.render.RainRenderer(world);
         minimap = new Minimap(world, Minimap.palette(world, n -> v.textures.pixels(v.textures.layer(n))));
         rend.renderDistance = viewDistance();
+        rend.plantDistance = v.settings.plantDistance;
         rend.outlines = v.settings.outlines;
         rend.setAo(v.settings.ao);
         cam.fov = v.settings.fov;
@@ -538,13 +551,22 @@ final class PlayScreen {
         boolean endDim = world.dimension().equals("end"), betweenDim = world.dimension().equals(Dimensions.BETWEEN), netherDim = world.info.type == WorldInfo.Type.NETHER;
         rend.ambient = v.settings.fullbright ? FULLBRIGHT : netherDim ? 0.16f : 0.04f;
         double phase = world.dayPhase(), sky = v.opts.sky >= 0 ? Math.max(DayCycle.NIGHT_SKY, v.opts.sky) : (endDim || betweenDim || netherDim ? world.skyLevel() : DayCycle.sky(phase));
+        boolean overworld = !endDim && !betweenDim && !netherDim;
+        rainSky = !overworld ? 0 : v.opts.rain >= 0 ? v.opts.rain : Weather.rain(world.info.seed, world.info.time);
+        if (overworld && (biomeCheck -= v.frameDt) <= 0) { biomeCheck = 1; try { dryBiome = !Weather.wetBiome(world.biomeAt(cam.pos.blockX(), cam.pos.blockZ())); } catch (RuntimeException e) { dryBiome = false; } }
+        rainVisible = under || dryBiome ? 0 : rainSky;
+        sky *= 1 - 0.35 * rainSky; // у дощ темніше (і на блоках)
         rend.skyBrightness = (float) sky;
         float[] horizon = endDim ? (world.info.ritualStage >= 2 ? new float[]{0.30f, 0.27f, 0.42f} : new float[]{0.10f, 0.05f, 0.16f}) : netherDim ? new float[]{0.24f, 0.06f, 0.05f} : betweenDim ? betweenSky() : DayCycle.skyColor(sky, v.opts.sky >= 0 ? 0 : DayCycle.glow(phase));
+        if (rainSky > 0 && overworld) { float g = (float) (0.65 * rainSky), gr = (horizon[0] + horizon[1] + horizon[2]) / 3f * 0.85f; // хмурне небо - сіріше
+            horizon = new float[]{horizon[0] + (gr - horizon[0]) * g, horizon[1] + (gr - horizon[1]) * g, horizon[2] + (gr * 1.05f - horizon[2]) * g}; }
         double gloom = world.infection.gloom(); // зараження: небо темніє й сивіє (попередження з DESIGN.md)
         if (gloom > 0) { float k = (float) (1 - gloom), gr = (horizon[0] + horizon[1] + horizon[2]) / 3f;
             horizon = new float[]{(horizon[0] * 0.5f + gr * 0.5f) * k + 0.04f * (float) gloom, (horizon[1] * 0.5f + gr * 0.5f) * k, (horizon[2] * 0.5f + gr * 0.5f) * k + 0.06f * (float) gloom}; }
         if (under) { float k = (float) Math.max(0.25, sky); rend.fogColor = new float[]{UNDER_FOG[0] * k, UNDER_FOG[1] * k, UNDER_FOG[2] * k}; }
         else rend.fogColor = horizon;
+        overSky = !under && !endDim && !betweenDim && !netherDim;
+        skyPhase = v.opts.sky >= 0 ? 0.3 : phase; skyLevelNow = sky; skyGlow = v.opts.sky >= 0 ? 0 : DayCycle.glow(phase);
         long dn = world.dayNumber();
         if (dn != bannerDay) { if (bannerDay >= 0) bannerAt = System.currentTimeMillis(); bannerDay = dn; }
         if (vt.health() < prevHealth - 0.01) { hurtFlash = 1; sounds.self("voxelin:player.hurt", 1f); }
@@ -581,6 +603,17 @@ final class PlayScreen {
             rend.update(cam);
             t1 = System.nanoTime();
             rend.render(cam);
+            if (overSky) { // небо й хмари - після непрозорого світу, лише на вільних пікселях (налаштування «Графіка»)
+                if (v.settings.skyDetail) skyRend.renderSky(cam, skyPhase, rend.fogColor, skyLevelNow, skyGlow * (1 - rainSky), rainSky, nowNs / 1e9);
+                if (v.settings.clouds) skyRend.renderClouds(cam, world.info.time, rend.fogColor, skyLevelNow, skyGlow * (1 - rainSky), rainSky);
+            }
+            rend.renderTranslucent(cam);
+            particles.sky = rend.skyBrightness; particles.ambient = rend.ambient; particles.level = v.settings.particles;
+            if (!paused) { if (particles.level >= 2) ambientParticles(dt); particles.update(dt); }
+            float pfar = rend.renderDistance * 16 * Units.BLOCK_SIZE;
+            particles.render(cam, rend.fogColor, under ? 0f : pfar * 0.65f, under ? 24 * Units.BLOCK_SIZE : pfar * 0.98f);
+            if (v.settings.rainDrops) rainRend.render(cam, rainVisible, rend.skyBrightness, nowNs / 1e9, paused ? 0 : dt, particles);
+            if (v.frames % 10 == 0) sounds.rain((float) (rainVisible * (roofed() ? 0.3 : 0.8)));
         } finally { for (int i = 0; i < holds; i++) world.lock.lock(); }
         overlay3d();
         long t2 = System.nanoTime();
@@ -626,18 +659,71 @@ final class PlayScreen {
         double secs = Mining.seconds(bt, tool, world.creative());
         if (secs == Double.POSITIVE_INFINITY) return;
         breakProgress = secs <= 0 ? 1 : breakProgress + dt / secs;
-        if (breakProgress < 1) { if (hitSoundCd <= 0) { hitSoundCd = 0.25; sounds.block(bt, breakX, breakY, breakZ, "hit"); } return; }
+        if (breakProgress < 1) { if (hitSoundCd <= 0) { hitSoundCd = 0.25; sounds.block(bt, breakX, breakY, breakZ, "hit"); particles.blockHit(bt, breakX, breakY, breakZ, breakX + hit.fx(), breakY + hit.fy(), breakZ + hit.fz()); } return; }
         int bit = world.boards.isBoards(bt) ? Boards.partAt(world.boards.mask(breakX, breakY, breakZ), hit.fx() - faceIn(0), hit.fy() - faceIn(1), hit.fz() - faceIn(2)) : -1;
         boolean ok = bit >= 0 ? actions.breakBoard(breakX, breakY, breakZ, bit, !world.creative()) : actions.breakBlock(breakX, breakY, breakZ, tool == null ? null : tool.name, !world.creative());
         breaking = false; breakProgress = 0; breakCooldown = 0.2;
         if (!ok) return;
         sounds.block(bt, breakX, breakY, breakZ, "break");
+        particles.blockBroken(bt, breakX, breakY, breakZ);
         vt.exhaust(0.005);
         if (!world.creative() && tool != null) inv.wearSelected(tool.durability);
     }
 
     /** Крок усередину від грані влучання по осі a (щоб точка на межі дошки потрапила в саму дошку). */
     private double faceIn(int a) { return hit.face() / 2 != a ? 0 : hit.face() % 2 == 0 ? 0.01 : -0.01; }
+
+    private final java.util.Random fxRng = new java.util.Random();
+
+    /** Над камерою дах (непрозорий блок у 24 клітинках угору) - дощ чути глухо. */
+    private boolean roofed() {
+        long x = cam.pos.blockX(), z = cam.pos.blockZ();
+        int y = cam.pos.blockY();
+        for (int k = 1; k <= 24; k++) { int id = world.blockId(x, y + k, z); if (id > 0 && world.blocks.get(id).opaque) return true; }
+        return false;
+    }
+
+    /** Джерела вогників поруч (x, y, z, вид: 0 смолоскип, 1 лава) - оновлюються раз на пів секунди. */
+    private long[] emitters = new long[0];
+    private int emitterCount;
+    private double emitterScan;
+
+    /**
+     * Вигляд світу навколо: раз на пів секунди - пошук смолоскипів і лави під повітрям у кубі 29^3 навколо камери, далі щокадру
+     * кожен смолоскип пускає вогник і дим, лава - рідкісні іскри; палаючі істоти горять. Лише вигляд, на гру не впливає.
+     */
+    private void ambientParticles(double dt) {
+        emitterScan -= dt;
+        if (emitterScan <= 0) {
+            emitterScan = 0.5;
+            long bx = cam.eye.cx * 16 + (long) Math.floor(cam.eye.x), bz = cam.eye.cz * 16 + (long) Math.floor(cam.eye.z);
+            int by = (int) Math.floor(cam.eye.y), n = 0;
+            long[] e = new long[4 * 512];
+            for (int dy = -14; dy <= 14 && n < 512; dy++) {
+                int y = by + dy;
+                if (y < 0 || y >= Chunk.HEIGHT) continue;
+                for (int dx = -14; dx <= 14 && n < 512; dx++) for (int dz = -14; dz <= 14 && n < 512; dz++) {
+                    int id = world.blockId(bx + dx, y, bz + dz);
+                    if (id <= 0) continue;
+                    BlockType b = world.blocks.get(id);
+                    int kind = "torch".equals(b.shape) ? 0 : b.name.equals(World.LAVA) && world.blockId(bx + dx, y + 1, bz + dz) == 0 ? 1 : -1;
+                    if (kind < 0 || (kind == 1 && fxRng.nextInt(4) != 0)) continue; // лави буває багато - чверть
+                    e[4 * n] = bx + dx; e[4 * n + 1] = y; e[4 * n + 2] = bz + dz; e[4 * n + 3] = kind; n++;
+                }
+            }
+            emitters = e; emitterCount = n;
+        }
+        for (int k = 0; k < emitterCount; k++) {
+            long x = emitters[4 * k], z = emitters[4 * k + 2];
+            int y = (int) emitters[4 * k + 1];
+            if (emitters[4 * k + 3] == 0) { if (fxRng.nextDouble() < dt * 2.5) particles.flame(x + 0.5, y + 0.66, z + 0.5, 0.06); }
+            else if (fxRng.nextDouble() < dt * 0.3) particles.flame(x + fxRng.nextDouble(), y + 1.0, z + fxRng.nextDouble(), 0.2);
+        }
+        for (Mob m : world.mobs()) if (m.burning && fxRng.nextDouble() < dt * 12) {
+            double w = m.type.width;
+            particles.flame(m.pos.cx * 16 + m.pos.x + (fxRng.nextDouble() - 0.5) * w, m.pos.y + fxRng.nextDouble() * m.type.height, m.pos.cz * 16 + m.pos.z + (fxRng.nextDouble() - 0.5) * w, 0.1);
+        }
+    }
 
     /** Удар по істоті: шкода від предмета в руці (рука - 1), відкидання, зношення зброї, кулдаун 0.4 с. */
     private void attackMob(Mob m) {
@@ -648,6 +734,7 @@ final class PlayScreen {
         boolean hurt = Combat.attack(world, m, dmg, bodyPos());
         sounds.self(hurt ? "voxelin:player.attack" : "voxelin:player.swing", 0.8f);
         if (hurt) {
+            particles.sparks(m.pos.cx * 16 + m.pos.x, m.pos.y + m.type.height * 0.6, m.pos.cz * 16 + m.pos.z, 0xD03030, 8);
             vt.exhaust(0.1);
             if (!world.creative() && tool != null) inv.wearSelected(tool.durability);
         }
@@ -732,8 +819,8 @@ final class PlayScreen {
             if (vt.hunger() < Vitals.MAX && !vt.dead()) { vt.feed(t.food); sounds.self("voxelin:player.eat", 0.9f); if (!world.creative()) inv.takeSelected(); }
         } else if (hit != null && t.placesBlock != null && world.boards.isBoards(world.blocks.byName(t.placesBlock))) {
             if (placeBoard(t.placesBlock) && !world.creative()) inv.takeSelected();
-        } else if (hit != null && t.placesBlock != null && !player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
-            sounds.block(world.blocks.get(Math.max(0, world.blockId(hit.px(), hit.py(), hit.pz()))), hit.px(), hit.py(), hit.pz(), "place");
+        } else if (hit != null && t.placesBlock != null && placeHere(t.placesBlock)) {
+            sounds.block(world.blocks.byName(t.placesBlock), plx, ply, plz, "place");
             if (!world.creative()) inv.takeSelected();
         }
     }
@@ -755,10 +842,21 @@ final class PlayScreen {
         }
         if (hit == null || t.placesBlock == null) return;
         if (world.boards.isBoards(world.blocks.byName(t.placesBlock))) { say(net.welcome.dedicated() ? "Дошки на сервері гості не ставлять." : "Дошки в чужому світі ставить лише хост."); return; }
-        if (!player.overlapsBlock(hit.px(), hit.py(), hit.pz()) && actions.placeBlock(hit.px(), hit.py(), hit.pz(), t.placesBlock)) {
-            sounds.block(world.blocks.byName(t.placesBlock), hit.px(), hit.py(), hit.pz(), "place");
+        if (placeHere(t.placesBlock)) {
+            sounds.block(world.blocks.byName(t.placesBlock), plx, ply, plz, "place");
             if (!world.creative()) inv.takeSelected(); // хост поставить (або поверне справжній стан блока)
         }
+    }
+
+    /** Куди ставити блок: у саму ціль, якщо це рослина (трава заміняється), інакше - у клітинку перед гранню. */
+    private long plx, plz;
+    private int ply;
+    private boolean placeHere(String block) {
+        boolean plant = World.isPlant(world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z()))));
+        plx = plant ? hit.x() : hit.px(); ply = plant ? hit.y() : hit.py(); plz = plant ? hit.z() : hit.pz();
+        BlockType bt = world.blocks.byName(block);
+        boolean passable = bt != null && !bt.solid; // траву можна садити й під собою
+        return (passable || !player.overlapsBlock(plx, ply, plz)) && actions.placeBlock(plx, ply, plz, block);
     }
 
     private InventoryScreen creativeScr;
@@ -1495,6 +1593,7 @@ final class PlayScreen {
     /** Після налаштувань у грі: застосувати те, що можна без перезаходу (дальність, поле зору, контури). */
     private void applyLiveSettings() {
         rend.renderDistance = viewDistance();
+        rend.plantDistance = v.settings.plantDistance;
         rend.outlines = v.settings.outlines;
         rend.setAo(v.settings.ao);
         cam.fov = v.settings.fov;
@@ -1589,6 +1688,13 @@ final class PlayScreen {
             if (v.opts.ui.startsWith("chat:")) openChat(v.opts.ui.substring(5));
             else if (v.opts.ui.equals("inventory")) { activeScreen = world.creative() ? creativeScreen() : invScreen; invOpen = true; grab(false); }
         }
+        Raycast.Hit dh = uiDone && "particles".equals(v.opts.ui) && v.frames % 6 == 0 ? Raycast.cast(cam.pos, cam.yaw, cam.pitch, 8, aimView) : null;
+        if (dh != null) { // dev: частинки на знімку - уламки з блока під прицілом
+            Raycast.Hit hit = dh;
+            BlockType bt = world.blocks.get(Math.max(0, world.blockId(hit.x(), hit.y(), hit.z())));
+            particles.blockBroken(bt, hit.x(), hit.y(), hit.z());
+            particles.blockHit(bt, hit.x(), hit.y(), hit.z(), hit.x() + hit.fx(), hit.y() + hit.fy(), hit.z() + hit.fz());
+        }
         boolean guestsReady = !v.opts.lan || server == null || (!server.guests().isEmpty() && quietFrames > 80); // dev --lan: знімок, коли зайшов гість
         if (v.opts.screenshot != null && !shotDone && cmdsReady && guestsReady && (quietFrames > 40 || v.frames > 60 * 60)) {
             shotDone = true; Screenshot.save(v.window, v.opts.screenshot); v.quit();
@@ -1615,6 +1721,9 @@ final class PlayScreen {
         if (vt.dead()) player.teleport(spawn); // збереження в момент смерті: гравець з'явиться на спавні
         world.info.setPlayer(player.pos, player.yaw, player.pitch);
         rend.close();
+        skyRend.close();
+        particles.close();
+        rainRend.close();
         minimap.close();
         icons.close();
         skins.close();

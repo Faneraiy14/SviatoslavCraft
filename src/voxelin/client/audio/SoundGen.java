@@ -163,6 +163,7 @@ public final class SoundGen {
         b.register("voxelin:ambient.between", s(droneLoop(r, 8, 73, 0.08f, 1200)));
         b.register("voxelin:ambient.between_dark", s(droneLoop(r, 8, 49, 0.12f, 500)));
         b.register("voxelin:ambient.glide", s(windLoop(r, 3, 1800, 0.6f)));
+        b.register("voxelin:ambient.rain", s(rainLoop(r, 8)));
         return b;
     }
 
@@ -176,6 +177,17 @@ public final class SoundGen {
         float[] a = buf(sec + 1); noise(a, r, 1); lowpass(a, cut); lowpass(a, cut); highpass(a, 40);
         wobble(a, 0.17, 0.6f, 0); wobble(a, 0.41, 0.3f, 1.3);
         return norm(loopable(a, 1), amp);
+    }
+
+    /** Дощ: рівний шелест (шум у смузі) і густі дрібні краплі-клацання різної гучності. */
+    static float[] rainLoop(Random r, double sec) {
+        float[] a = buf(sec + 1); noise(a, r, 0.5f); band(a, 500, 7000); lowpass(a, 5000);
+        for (double t = 0; t < sec; t += 0.004 + r.nextDouble() * 0.02) {
+            float[] d = buf(0.012); noise(d, r, 0.6f + r.nextFloat() * 0.6f); band(d, 1500 + r.nextDouble() * 3000, 8000); env(d, 0.0008, 0.006);
+            add(a, d, (int) (t * R), 0.25f + r.nextFloat() * 0.5f);
+        }
+        wobble(a, 0.23, 0.15f, 0.7);
+        return norm(loopable(a, 1), 0.38f);
     }
 
     static float[] nightLoop(Random r, double sec) {

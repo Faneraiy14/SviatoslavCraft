@@ -225,6 +225,46 @@ public final class TextureGen {
         return speck(rgb(120, 88, 48), 6, 53, x, y);
     }); }
 
+    // ------------------------------------------------------------------ рослини (хрест із двох площин; прозоре - альфа 0)
+
+    /** Висока трава: пучок стебел різної висоти, темніші біля землі. */
+    public static int[] tallGrass() {
+        int[] a = new int[N * N];
+        for (int i = 0; i < 9; i++) {
+            int x0 = 1 + (int) (rnd(301, i, 0) * 14), h = 6 + (int) (rnd(302, i, 0) * 9);
+            double lean = (rnd(303, i, 0) * 2 - 1) * 0.35;
+            for (int k = 0; k < h; k++) {
+                int x = (int) Math.round(x0 + lean * k), y = N - 1 - k;
+                if (x < 0 || x >= N) continue;
+                double t = (double) k / h;
+                a[x + y * N] = speck(rgb((int) (58 + 50 * t), (int) (112 + 60 * t), (int) (34 + 20 * t)), 10, 304, x, y);
+            }
+        }
+        for (int i = 0; i < a.length; i++) if (a[i] == 0) a[i] = argb(0, 80, 140, 44); // колір під прозорим - щоб краї не темніли
+        return a;
+    }
+
+    /** Квітка: стебло з листочками й голівка (petal - колір пелюсток, eye - серединка). */
+    private static int[] flower(int petal, int eye, long seed, boolean round) {
+        int[] a = new int[N * N];
+        int stem = rgb(62, 124, 40);
+        for (int y = 7; y < N; y++) a[7 + y * N] = speck(stem, 8, seed, 7, y);
+        a[6 + 11 * N] = a[5 + 10 * N] = speck(stem, 10, seed + 1, 6, 11);
+        a[8 + 12 * N] = a[9 + 11 * N] = speck(stem, 10, seed + 2, 8, 12);
+        int cx = 7, cy = 5;
+        for (int y = 2; y <= 8; y++) for (int x = 4; x <= 10; x++) {
+            int dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy;
+            boolean in = round ? d2 <= 7 : (d2 <= 9 && (Math.abs(dx) + Math.abs(dy) <= 3 || (dx == 0 || dy == 0)));
+            if (!in) continue;
+            a[x + y * N] = d2 <= 1 ? speck(eye, 12, seed + 3, x, y) : speck(petal, 16, seed + 4, x, y);
+        }
+        for (int i = 0; i < a.length; i++) if (a[i] == 0) a[i] = petal & 0x00FFFFFF;
+        return a;
+    }
+    public static int[] poppy() { return flower(rgb(206, 38, 34), rgb(40, 24, 20), 311, true); }
+    public static int[] dandelion() { return flower(rgb(244, 206, 40), rgb(226, 150, 20), 321, true); }
+    public static int[] cornflower() { return flower(rgb(70, 104, 222), rgb(40, 50, 120), 331, false); }
+
     /** Цегла: червоні цеглини з сірим розчином. */
     public static int[] bricks() { return make((x, y) -> {
         boolean mortar = y % 4 == 3 || ((y / 4) % 2 == 0 ? x % 8 == 7 : x % 8 == 3);

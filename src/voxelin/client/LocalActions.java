@@ -20,7 +20,7 @@ public final class LocalActions implements PlayerActions {
     @Override public boolean placeBlock(long x, int y, long z, String block) {
         BlockType t = world.blocks.byName(block);
         int cur = world.blockId(x, y, z);
-        if (t == null || cur < 0 || (cur != 0 && !world.blocks.get(cur).liquid)) return false;
+        if (t == null || cur < 0 || !world.replaceable(cur) || !world.canStay(t, x, y, z)) return false;
         return world.setBlock(player, x, y, z, t);
     }
 

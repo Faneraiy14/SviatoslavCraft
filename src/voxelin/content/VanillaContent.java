@@ -3,6 +3,7 @@ package voxelin.content;
 import voxelin.api.*;
 import voxelin.core.CommandRegistry;
 import voxelin.core.DayCycle;
+import voxelin.core.Weather;
 import voxelin.core.entity.Vitals;
 
 /**
@@ -54,7 +55,7 @@ public final class VanillaContent implements VoxelinMod {
         tex("oak_log_top", TextureGen.oakLogTop()); tex("birch_log_top", TextureGen.birchLogTop()); tex("spruce_log_top", TextureGen.spruceLogTop()); tex("pale_log_top", TextureGen.paleLogTop());
         tex("cactus_top", TextureGen.cactusTop());
         tex("dragon_egg", ItemTextureGen.dragonEgg());
-        tex("iron_block", TextureGen.ironBlock()); tex("pale_planks", TextureGen.palePlanks()); tex("torch", TextureGen.torch()); tex("bricks", TextureGen.bricks());
+        tex("iron_block", TextureGen.ironBlock()); tex("pale_planks", TextureGen.palePlanks()); tex("torch", TextureGen.torch()); tex("tall_grass", TextureGen.tallGrass()); tex("poppy", TextureGen.poppy()); tex("dandelion", TextureGen.dandelion()); tex("cornflower", TextureGen.cornflower()); tex("bricks", TextureGen.bricks());
         tex("brick", ItemTextureGen.ingot(0xB0583E));
         tex("petrified_log", TextureGen.petrifiedLog()); tex("petrified_log_top", TextureGen.petrifiedLogTop()); tex("seam_mud", TextureGen.seamMud());
         tex("seam_core", ItemTextureGen.seamCore()); tex("seam_growth", ItemTextureGen.seamGrowth()); tex("seam_scar", ItemTextureGen.seamScar());
@@ -153,6 +154,11 @@ public final class VanillaContent implements VoxelinMod {
         block("threshold_bloom", new BlockSettings().texture("threshold_bloom").color(0xD8E8FF).solid(false).translucent(true).light(6).title("Квітка Порогу").hardness(0f));
         block("seam_rift", new BlockSettings().texture("seam_rift").color(0x8A80B0).solid(false).translucent(true).light(8).noItem().interact("rift").title("Розрив Шву").hardness(-1f));
         block("end_portal", new BlockSettings().texture("end_portal").color(0x5A2BB0).solid(false).translucent(true).light(7).noItem().interact("portal").title("Портал").hardness(-1f));
+        // рослини: хрест із двох площин, крізь них можна пройти, ламаються одразу; без опори знизу обсипаються (World.dropUnsupported)
+        block("tall_grass", new BlockSettings().texture("tall_grass").color(0x5C9C34).shape("cross").solid(false).opaque(false).noDrops().sound("grass").title("Висока трава").hardness(0f));
+        block("poppy", new BlockSettings().texture("poppy").color(0xCE2622).shape("cross").solid(false).opaque(false).sound("grass").title("Мак").hardness(0f));
+        block("dandelion", new BlockSettings().texture("dandelion").color(0xF4CE28).shape("cross").solid(false).opaque(false).sound("grass").title("Кульбаба").hardness(0f));
+        block("cornflower", new BlockSettings().texture("cornflower").color(0x4668DE).shape("cross").solid(false).opaque(false).sound("grass").title("Волошка").hardness(0f));
         // --- предмети (не блоки): матеріали, їжа, інструменти
         tex("stick", ItemTextureGen.stick()); tex("coal", ItemTextureGen.coal()); tex("raw_iron", ItemTextureGen.rawOre(0xE0B49A)); tex("raw_copper", ItemTextureGen.rawOre(0xE0803F));
         tex("raw_gold", ItemTextureGen.rawOre(0xF5D13A)); tex("diamond", ItemTextureGen.diamond()); tex("liminite_shard", ItemTextureGen.shard()); tex("apple", ItemTextureGen.apple());
@@ -548,6 +554,13 @@ public final class VanillaContent implements VoxelinMod {
             k.world().batch(() -> { for (long x = fx0; x <= fx1; x++) for (int y = fy0; y <= fy1; y++) for (long z = fz0; z <= fz1; z++) if (k.world().setBlock(k.source(), x, y, z, fb)) cnt[0]++; });
             n = cnt[0];
             k.reply("Заповнено " + n + " з " + (long) vol + " блоків" + (n < (long) vol ? " (решта - чанки не завантажені або ліміт)" : ""));
+        });
+        c.register("weather", "", 0, k -> { // погода - з сіда й часу (Weather), тож лише подивитись
+            WorldAccess w = k.world();
+            double r = Weather.rain(w.seed(), w.time());
+            long left = Weather.ticksToChange(w.seed(), w.time());
+            String now = r >= 0.5 ? "Іде дощ" : "Ясно";
+            k.reply(left < 0 ? now + "." : now + "; " + (r >= 0.5 ? "розпогодиться" : "дощ почнеться") + " приблизно через " + Math.max(1, Math.round(left / 1200.0)) + " хв.");
         });
         c.register("time", "[set <день|ніч|вечір|світанок|північ|полудень|число> | add <число>]", 2, k -> {
             WorldAccess w = k.world();

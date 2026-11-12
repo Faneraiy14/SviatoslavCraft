@@ -55,7 +55,7 @@ public final class CreativeMenu extends Menu {
             if (b.interact != null || b.light > 0 || "torch".equals(b.shape)) return seam ? Tab.SEAM : Tab.USEFUL;
             if (seam) return Tab.SEAM;
             if (n.endsWith("_ore")) return Tab.ORES;
-            if (NATURAL.contains(n) || n.endsWith("_log") || n.endsWith("_leaves") || n.endsWith("_bloom")) return Tab.NATURE;
+            if (NATURAL.contains(n) || "cross".equals(b.shape) || n.endsWith("_log") || n.endsWith("_leaves") || n.endsWith("_bloom")) return Tab.NATURE;
             return Tab.BUILD;
         }
         if ((it.tool != null && it.tool != ToolKind.NONE) || it.attack > 1 || n.equals("bow") || n.equals("arrow") || n.equals("flint_and_steel")) return seam ? Tab.SEAM : Tab.TOOLS;

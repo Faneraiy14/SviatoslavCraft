@@ -328,9 +328,33 @@ public final class World implements WorldAccess {
     /** Коробки фігурних блоків (частки блока): смолоскип - паличка, стіл - стільниця й чотири ніжки. */
     public static final Map<String, double[]> SHAPES = Map.of(
             "torch", new double[]{7 / 16.0, 0, 7 / 16.0, 9 / 16.0, 10 / 16.0, 9 / 16.0},
+            "cross", new double[]{3 / 16.0, 0, 3 / 16.0, 13 / 16.0, 13 / 16.0, 13 / 16.0},
             "table", new double[]{0, 12 / 16.0, 0, 1, 1, 1,
                     1 / 16.0, 0, 1 / 16.0, 4 / 16.0, 12 / 16.0, 4 / 16.0, 12 / 16.0, 0, 1 / 16.0, 15 / 16.0, 12 / 16.0, 4 / 16.0,
                     1 / 16.0, 0, 12 / 16.0, 4 / 16.0, 12 / 16.0, 15 / 16.0, 12 / 16.0, 0, 12 / 16.0, 15 / 16.0, 12 / 16.0, 15 / 16.0});
+
+    /** Рослина-хрест (трава, квіти): прохідна, замінюється блоком, що ставлять у її клітинку, без опори обсипається. */
+    public static boolean isPlant(BlockType b) { return b != null && "cross".equals(b.shape); }
+
+    /** Чи можна поставити блок у клітинку з цим вмістом: повітря, рідина або рослина. */
+    public boolean replaceable(int id) { return id == 0 || (id > 0 && (blocks.get(id).liquid || isPlant(blocks.get(id)))); }
+
+    /** Чи встоїть блок t у клітинці: рослині потрібен повний суцільний блок знизу; решті - завжди. */
+    public boolean canStay(BlockType t, long x, int y, long z) {
+        if (!isPlant(t)) return true;
+        int below = blockId(x, y - 1, z);
+        if (below <= 0) return false;
+        BlockType b = blocks.get(below);
+        return b.solid && b.shape == null && !b.liquid;
+    }
+
+    /** Блок під рослиною змінився: якщо вона більше не стоїть - обсипається з дропом. */
+    private void dropUnsupported(Source src, long x, int y, long z) {
+        if (y >= Chunk.HEIGHT) return;
+        int id = blockId(x, y, z);
+        if (id <= 0 || !isPlant(blocks.get(id)) || canStay(blocks.get(id), x, y, z)) return;
+        harvest(src, x, y, z, null, true);
+    }
 
     /** Вміст клітинки змінився без зміни блока (дошки): перебудувати геометрію. */
     void changed(long x, int y, long z) { Chunk c = chunks.get(new ChunkPos(x >> 4, z >> 4)); if (c != null) c.modified = true; if (listener != null) listener.blockChanged(x, y, z); if (!watchers.isEmpty()) notifyWatchers(x, y, z); }
@@ -832,6 +856,7 @@ public final class World implements WorldAccess {
         if (infect) infection.start(x, y, z);
         if (nb.name.equals(Guard.HEAD) || nb.name.equals(Guard.IRON)) Guard.tryBuild(this, x, y, z); // Т із залізних блоків + лампа = Вартовий
         NetherPortal.changed(this, x, y, z, blocks.get(old), nb); // зламали рамку чи портал - гасне весь
+        dropUnsupported(src, x, y + 1, z); // трава й квіти без опори
         return true;
     }
 

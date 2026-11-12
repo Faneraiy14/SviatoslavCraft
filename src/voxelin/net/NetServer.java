@@ -420,7 +420,7 @@ public final class NetServer implements AutoCloseable {
                 String name = str(in, 96);
                 BlockType t = world.blocks.byName(name);
                 int cur = world.blockId(x, y, z);
-                boolean ok = mayTouch(g, x, y, z) && t != null && placeable(t) && cur >= 0 && (cur == 0 || world.blocks.get(cur).liquid)
+                boolean ok = mayTouch(g, x, y, z) && t != null && placeable(t) && world.replaceable(cur) && world.canStay(t, x, y, z)
                         && !insidePlayer(x, y, z) && world.setBlock(g.src, x, y, z, t);
                 if (!ok) resend(g, x, y, z);
             }

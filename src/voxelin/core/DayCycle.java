@@ -48,6 +48,19 @@ public final class DayCycle {
         return c;
     }
 
+    /**
+     * Кут сонця на небі в радіанах: 0 - схід на горизонті (середина світанку, p=0.975), PI/2 - зеніт, PI - захід (середина вечора,
+     * p=0.65), далі під горизонтом до 2*PI. День і ніч мають різну довжину, тож кут іде рівномірно окремо в кожній половині.
+     * Місяць - навпроти (кут + PI).
+     */
+    public static double sunAngle(double p) {
+        final double rise = 0.975, set = 0.65, day = 1 - rise + set; // 0.675 доби над горизонтом
+        double t = p - rise;
+        if (t < 0) t += 1;
+        if (t < day) return Math.PI * t / day;
+        return Math.PI + Math.PI * (t - day) / (1 - day);
+    }
+
     public static String phaseName(double p) {
         if (p < 0.60) return "день";
         if (p < 0.70) return "вечір";

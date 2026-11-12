@@ -32,6 +32,7 @@ public final class Voxelin {
         final java.util.Set<String> explicit = new java.util.HashSet<>();
         boolean vsync = true;
         float sky = -1f; // --sky 0..1: примусова яскравість неба (інакше - за часом доби)
+        float rain = -1f; // --rain 0..1: примусовий дощ (інакше - Weather за сідом і часом)
         String dimension; // --dimension end: стартувати автосвіт у вимірі (для знімків)
         boolean noSound; // --no-sound
         File skin; // --skin f.png: скін від лаунчера (формат Minecraft 64x64)
@@ -76,6 +77,7 @@ public final class Voxelin {
                         case "--dimension" -> o.dimension = a[++i];
                         case "--show-progress" -> o.showProgress = Math.max(0f, Math.min(1f, Float.parseFloat(a[++i])));
                         case "--day-minutes" -> o.dayMinutes = Double.parseDouble(a[++i]);
+                        case "--rain" -> o.rain = Math.max(0f, Math.min(1f, Float.parseFloat(a[++i])));
                         case "--sky" -> o.sky = Math.max(0f, Math.min(1f, Float.parseFloat(a[++i])));
                         case "--debug" -> o.debug = true;
                         case "--freeze" -> o.freeze = true;
@@ -327,7 +329,7 @@ public final class Voxelin {
         switch (state) {
             case MENU -> {
                 if (opts.menuScreen != null && frames == 2) { // dev: --menu worlds|create|create-more|rename
-                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "create-more" -> { menus.show(Menus.Screen.CREATE); menus.openMore(); } case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); case "sound" -> menus.show(Menus.Screen.SOUND); case "skin" -> menus.show(Menus.Screen.SKIN); case "import" -> menus.show(Menus.Screen.IMPORT); case "join" -> menus.show(Menus.Screen.JOIN); default -> { } }
+                    switch (opts.menuScreen) { case "worlds" -> menus.show(Menus.Screen.WORLDS); case "create" -> menus.show(Menus.Screen.CREATE); case "create-more" -> { menus.show(Menus.Screen.CREATE); menus.openMore(); } case "rename" -> { menus.show(Menus.Screen.WORLDS); menus.show(Menus.Screen.RENAME); } case "settings" -> menus.show(Menus.Screen.SETTINGS); case "sound" -> menus.show(Menus.Screen.SOUND); case "graphics" -> menus.show(Menus.Screen.GRAPHICS); case "skin" -> menus.show(Menus.Screen.SKIN); case "import" -> menus.show(Menus.Screen.IMPORT); case "join" -> menus.show(Menus.Screen.JOIN); default -> { } }
                 }
                 glViewport(0, 0, window.fbWidth(), window.fbHeight());
                 glClearColor(0.08f, 0.11f, 0.22f, 1f);
